@@ -8,9 +8,16 @@ export interface PlacementConfig {
   targetPlacement?: string[];
 }
 
+export interface ComponentBinding {
+  reference: string;
+  target?: string;
+  value: string | null;
+}
+
 export interface NodeData {
   type: string;
   placement?: PlacementConfig;
+  component?: ComponentBinding[];
   content?: string | NodeData | NodeData[];
   props?: Record<string, any>;
   css?: {

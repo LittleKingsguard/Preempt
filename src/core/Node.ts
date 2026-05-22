@@ -45,6 +45,51 @@ export class Node {
     }
 
     Node.appendPlacement(this);
+    this.applyComponents();
+  }
+
+  private applyComponents(): void {
+    if (!this.data.component) return;
+
+    for (const binding of this.data.component) {
+      if (!binding.target) continue;
+
+      let resolvedValue: string | null = binding.value;
+
+      if (resolvedValue === null) {
+        let currentParent = this.parent;
+        while (currentParent) {
+          const parentBinding = currentParent.data.component?.find(b => b.reference === binding.reference);
+          if (parentBinding && parentBinding.value !== null) {
+            resolvedValue = parentBinding.value;
+            break;
+          }
+          currentParent = currentParent.parent;
+        }
+      }
+
+      if (resolvedValue === null) {
+        console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
+        continue;
+      }
+
+      this.applyProperty(binding.target, resolvedValue);
+    }
+  }
+
+  private applyProperty(path: string, value: string): void {
+    if (path === "content") {
+      this.data.content = value;
+    } else if (path.startsWith("props.")) {
+      const propName = path.substring(6);
+      if (!this.data.props) this.data.props = {};
+      this.data.props[propName] = value;
+    } else if (path.startsWith("css.style.")) {
+      const styleName = path.substring(10);
+      if (!this.data.css) this.data.css = {};
+      if (!this.data.css.style) this.data.css.style = {};
+      this.data.css.style[styleName] = value;
+    }
   }
 
   public static appendPlacement(node: Node): void {
