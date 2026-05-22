@@ -45,7 +45,13 @@ export class Node {
     }
 
     Node.appendPlacement(this);
+  }
+
+  public applyComponentsTree(): void {
     this.applyComponents();
+    for (const child of this.children) {
+      child.applyComponentsTree();
+    }
   }
 
   private applyComponents(): void {

@@ -7,6 +7,7 @@ export class Supervisor {
   private static instance: Supervisor | null = null;
   private config: PipelineConfig;
   private rootNode: Node | null = null;
+  private contentNodes: Node[] = [];
   private isMonitoring: boolean = false;
   private mountElementId: string;
 
@@ -15,14 +16,18 @@ export class Supervisor {
     this.mountElementId = mountElementId;
   }
 
-  public static async process(data: NodeData | NodeData[], config: PipelineConfig): Promise<void> {
+  public getContentNodes(): Node[] {
+    return this.contentNodes;
+  }
+
+  public static async process(templateData: NodeData, contentData: NodeData[], config: PipelineConfig): Promise<void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
-      await Supervisor.instance.runPipeline(data);
+      await Supervisor.instance.runPipeline(templateData, contentData);
       Supervisor.instance.resumeMonitoring();
     } else {
       Supervisor.instance = new Supervisor(config);
-      await Supervisor.instance.runPipeline(data);
+      await Supervisor.instance.runPipeline(templateData, contentData);
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
       } else {
@@ -31,18 +36,14 @@ export class Supervisor {
     }
   }
 
-  private async runPipeline(data: NodeData | NodeData[]): Promise<void> {
+  private async runPipeline(templateData: NodeData, contentData: NodeData[]): Promise<void> {
     if (this.config.runInstantiation) {
       console.log("Stage: Instantiation");
       StyleNode.clear(); // Clear before re-running
       Node.clearPlacements();
-      let rootData: NodeData;
-      if (Array.isArray(data)) {
-        rootData = { type: "div", css: { id: "root-container" }, content: data };
-      } else {
-        rootData = data;
-      }
-      this.rootNode = new Node(rootData);
+      
+      this.rootNode = new Node(templateData);
+      this.contentNodes = contentData.map(data => new Node(data));
     }
 
     if (this.config.runAssembly) {
@@ -63,6 +64,7 @@ export class Supervisor {
         }
       }
       if (this.rootNode) {
+        this.rootNode.applyComponentsTree();
         // [DEV-ONLY] TODO: Remove root data export logging before production
         console.log("After Assembly:", this.rootNode.exportToJson());
       }

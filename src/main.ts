@@ -16,4 +16,4 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>Loading Supervisor...</div>
 `
 
-Supervisor.process(mockData as any, config).catch(console.error);
+Supervisor.process(mockData.template as any, mockData.content as any, config).catch(console.error);
