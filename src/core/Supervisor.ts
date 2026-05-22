@@ -1,5 +1,5 @@
 import type { PipelineConfig } from "../types/Pipeline";
-import type { NodeData } from "../types/NodeSchema";
+import type { NodeData, ContentPayload } from "../types/NodeSchema";
 import { Node } from "./Node";
 import { StyleNode } from "./StyleNode";
 
@@ -20,7 +20,7 @@ export class Supervisor {
     return this.contentNodes;
   }
 
-  public static async process(templateData: NodeData, contentData: NodeData[], config: PipelineConfig): Promise<void> {
+  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
       await Supervisor.instance.runPipeline(templateData, contentData);
@@ -36,14 +36,14 @@ export class Supervisor {
     }
   }
 
-  private async runPipeline(templateData: NodeData, contentData: NodeData[]): Promise<void> {
+  private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<void> {
     if (this.config.runInstantiation) {
       console.log("Stage: Instantiation");
       StyleNode.clear(); // Clear before re-running
       Node.clearPlacements();
       
       this.rootNode = new Node(templateData);
-      this.contentNodes = contentData.map(data => new Node(data));
+      this.contentNodes = contentData.content.map(data => new Node(data));
     }
 
     if (this.config.runAssembly) {
@@ -64,6 +64,13 @@ export class Supervisor {
         }
       }
       if (this.rootNode) {
+        if (contentData.component && contentData.component.length > 0) {
+          if (!this.rootNode.data.component) {
+            this.rootNode.data.component = [];
+          }
+          this.rootNode.data.component.push(...contentData.component);
+        }
+        
         this.rootNode.applyComponentsTree();
         // [DEV-ONLY] TODO: Remove root data export logging before production
         console.log("After Assembly:", this.rootNode.exportToJson());

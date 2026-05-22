@@ -27,3 +27,9 @@ export interface NodeData {
     cssDef?: CssDef[];
   };
 }
+
+export interface ContentPayload {
+  metadata?: Record<string, any>;
+  component?: ComponentBinding[];
+  content: NodeData[];
+}
