@@ -4,7 +4,7 @@ import mockData from './mockData.json'
 
 const config: PipelineConfig = {
   runInstantiation: true,
-  runAssembly: false, 
+  runAssembly: true, 
   runPreprocessing: true, 
   runValidation: true, 
   runRendering: true,

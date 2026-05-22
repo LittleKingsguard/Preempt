@@ -3,8 +3,14 @@ export interface CssDef {
   styles: Record<string, string>;
 }
 
+export interface PlacementConfig {
+  placementName?: string;
+  targetPlacement?: string[];
+}
+
 export interface NodeData {
   type: string;
+  placement?: PlacementConfig;
   content?: string | NodeData | NodeData[];
   props?: Record<string, any>;
   css?: {

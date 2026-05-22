@@ -18,6 +18,11 @@ export class Node {
   public element: HTMLElement | null = null;
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
+  
+  public static placementArray: Node[] = [];
+  public static sourcePlacements: Node[] = [];
+  public originalParent: Node | null = null;
+  public originalIndex: number = -1;
 
   constructor(data: NodeData, parent: Node | null = null) {
     this.data = data;
@@ -37,6 +42,49 @@ export class Node {
       } else if (typeof data.content === "object" && data.content !== null) {
         this.children.push(new Node(data.content, this));
       }
+    }
+
+    Node.appendPlacement(this);
+  }
+
+  public static appendPlacement(node: Node): void {
+    if (node.data.placement?.placementName) {
+      Node.placementArray.push(node);
+    }
+    if (node.data.placement?.targetPlacement) {
+      Node.sourcePlacements.push(node);
+    }
+  }
+
+  public static clearPlacements(): void {
+    Node.placementArray = [];
+    Node.sourcePlacements = [];
+  }
+
+  public placeInto(target: Node): void {
+    if (this.parent) {
+      this.originalParent = this.parent;
+      this.originalIndex = this.parent.children.indexOf(this);
+      if (this.originalIndex > -1) {
+        this.parent.children.splice(this.originalIndex, 1);
+      }
+    }
+    this.parent = target;
+    target.children.push(this);
+  }
+
+  public restorePlacement(): void {
+    if (this.originalParent && this.originalIndex > -1) {
+      if (this.parent) {
+        const index = this.parent.children.indexOf(this);
+        if (index > -1) {
+          this.parent.children.splice(index, 1);
+        }
+      }
+      this.parent = this.originalParent;
+      this.parent.children.splice(this.originalIndex, 0, this);
+      this.originalParent = null;
+      this.originalIndex = -1;
     }
   }
 

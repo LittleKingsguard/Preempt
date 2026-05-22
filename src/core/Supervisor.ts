@@ -35,6 +35,7 @@ export class Supervisor {
     if (this.config.runInstantiation) {
       console.log("Stage: Instantiation");
       StyleNode.clear(); // Clear before re-running
+      Node.clearPlacements();
       let rootData: NodeData;
       if (Array.isArray(data)) {
         rootData = { type: "div", css: { id: "root-container" }, content: data };
@@ -46,6 +47,25 @@ export class Supervisor {
 
     if (this.config.runAssembly) {
       console.log("Stage: Assembly");
+      if (this.rootNode) {
+        // [DEV-ONLY] TODO: Remove root data export logging before production
+        console.log("Before Assembly:", this.rootNode.exportToJson());
+      }
+      for (const sourceNode of Node.sourcePlacements) {
+        const targets = sourceNode.data.placement?.targetPlacement || [];
+        let matchedTarget: Node | null = null;
+        for (const targetName of targets) {
+          matchedTarget = Node.placementArray.find(n => n.data.placement?.placementName === targetName) || null;
+          if (matchedTarget) break;
+        }
+        if (matchedTarget) {
+          sourceNode.placeInto(matchedTarget);
+        }
+      }
+      if (this.rootNode) {
+        // [DEV-ONLY] TODO: Remove root data export logging before production
+        console.log("After Assembly:", this.rootNode.exportToJson());
+      }
     }
 
     if (this.config.runPreprocessing) {
