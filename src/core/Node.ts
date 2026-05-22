@@ -2,6 +2,16 @@ import type { NodeData } from "../types/NodeSchema";
 import { StyleNode } from "./StyleNode";
 
 export class Node {
+  private static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
+    "img": ["src", "alt"],
+    "a": ["href"],
+    "iframe": ["src"],
+    "form": ["action"],
+    "video": ["src"],
+    "audio": ["src"],
+    "source": ["src"]
+  };
+
   public data: NodeData;
   public children: Node[] = [];
   public parent: Node | null = null;
@@ -101,7 +111,9 @@ export class Node {
 
     if (this.element) {
       const childEl = childNode.render();
-      this.element.appendChild(childEl);
+      if (childEl) {
+        this.element.appendChild(childEl);
+      }
     }
 
     return childNode;
@@ -129,8 +141,9 @@ export class Node {
     if (this.element || this.isValid) {
       const oldElement = this.element;
       this.render();
-      if (!oldElement && this.element && this.parent && this.parent.element) {
-        this.parent.element.appendChild(this.element);
+      const newElement = this.element;
+      if (!oldElement && newElement && this.parent && this.parent.element) {
+        this.parent.element.appendChild(newElement);
       }
     }
   }
@@ -140,6 +153,16 @@ export class Node {
     if (!this.data.type) {
       console.error("Node validation failed: missing 'type' property", this.data);
       valid = false;
+    } else {
+      const requiredProps = Node.REQUIRED_PROPS_MAP[this.data.type.toLowerCase()];
+      if (requiredProps) {
+        for (const prop of requiredProps) {
+          if (!this.data.props || !this.data.props[prop]) {
+            console.error(`Node validation failed: '${this.data.type}' missing required property: '${prop}'`, this.data);
+            valid = false;
+          }
+        }
+      }
     }
     for (const sNode of this.styleNodes) {
       if (!sNode.validate()) {

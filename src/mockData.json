@@ -51,6 +51,26 @@
         ],
         "classes": ["dynamic-subtitle"]
       }
+    },
+    {
+      "type": "img",
+      "props": {
+        "alt": "Missing src image"
+      }
+    },
+    {
+      "type": "a",
+      "props": {
+        "href": "https://example.com"
+      },
+      "content": "Valid Link",
+      "css": {
+        "style": {
+          "color": "#42b883",
+          "marginTop": "2rem",
+          "textDecoration": "none"
+        }
+      }
     }
   ]
 }
