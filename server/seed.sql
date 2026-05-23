@@ -1,0 +1,267 @@
+-- Insert Admin User
+INSERT INTO Users (username, email, password_hash, is_admin)
+VALUES ('admin', 'admin@preempt.com', crypt('password123', gen_salt('bf')), TRUE)
+ON CONFLICT DO NOTHING;
+
+-- Insert Template
+INSERT INTO Templates (id, author_id, payload)
+VALUES (
+  1,
+  'admin',
+  '{
+    "type": "div",
+    "css": {
+      "classes": ["hello-container"],
+      "style": {
+        "display": "flex",
+        "flexDirection": "column",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "height": "100vh"
+      },
+      "cssDef": [
+        {
+          "selector": ".hello-container",
+          "styles": {
+            "backgroundColor": "#1a1a1a",
+            "fontFamily": "sans-serif"
+          }
+        },
+        {
+          "selector": "h1.dynamic-title",
+          "styles": {
+            "color": "#42b883",
+            "margin": "0",
+            "fontSize": "3rem"
+          }
+        }
+      ]
+    },
+    "content": [
+      {
+        "type": "h1",
+        "content": "Hello World",
+        "css": {
+          "classes": ["dynamic-title"]
+        }
+      },
+      {
+        "type": "p",
+        "content": "Rendered dynamically with cssDef styling rules.",
+        "css": {
+          "cssDef": [
+            {
+              "selector": ".dynamic-subtitle",
+              "styles": {
+                "color": "#888",
+                "marginTop": "1rem",
+                "fontWeight": "bold"
+              }
+            }
+          ],
+          "classes": ["dynamic-subtitle"]
+        }
+      },
+      {
+        "type": "img",
+        "props": {
+          "alt": "Missing src image"
+        }
+      },
+      {
+        "type": "a",
+        "props": {
+          "href": "https://example.com"
+        },
+        "content": "Valid Link",
+        "css": {
+          "style": {
+            "color": "#42b883",
+            "marginTop": "2rem",
+            "textDecoration": "none"
+          }
+        }
+      },
+      {
+        "type": "div",
+        "placement": {
+          "placementName": "test-zone"
+        },
+        "css": {
+          "style": {
+            "border": "2px dashed #888",
+            "padding": "1rem",
+            "marginTop": "2rem",
+            "borderRadius": "8px"
+          }
+        },
+        "content": [
+          {
+            "type": "p",
+            "content": "This is the placement zone.",
+            "css": {
+              "style": {
+                "margin": "0",
+                "color": "#888"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "placement": {
+          "placementName": "empty-zone"
+        },
+        "css": {
+          "style": {
+            "border": "2px dashed #f06292",
+            "padding": "1rem",
+            "marginTop": "2rem",
+            "borderRadius": "8px",
+            "minHeight": "50px"
+          }
+        },
+        "content": "This is an empty placement zone."
+      },
+      {
+        "type": "div",
+        "placement": {
+          "placementName": "comment-zone"
+        }
+      }
+    ]
+  }'::jsonb
+) ON CONFLICT DO NOTHING;
+
+-- Insert Content
+INSERT INTO Content (id, author_id, payload, headers)
+VALUES (
+  1,
+  'admin',
+  '{
+    "metadata": {
+      "author": "System Admin",
+      "timestamp": "2026-05-22T00:00:00Z"
+    },
+    "component": [
+      { "reference": "writerName", "value": "Alice_Engineer" },
+      { "reference": "avatarColor", "value": "#9c27b0" },
+      { "reference": "commentText", "value": "This component assembly system is really powerful!" },
+      { "reference": "shadowColor", "value": "5px 5px 15px rgba(156, 39, 176, 0.5)" },
+      { "reference": "unusedValue", "value": "I am never consumed" }
+    ],
+    "content": [
+      {
+        "type": "div",
+        "placement": {
+          "targetPlacement": ["test-zone"]
+        },
+        "content": "This was dynamically placed here!",
+        "css": {
+          "style": {
+            "color": "#fff",
+            "backgroundColor": "#42b883",
+            "padding": "0.5rem",
+            "borderRadius": "4px",
+            "marginTop": "1rem"
+          }
+        }
+      },
+      {
+        "type": "div",
+        "placement": {
+          "targetPlacement": ["fake-zone"]
+        },
+        "content": "I was looking for a fake zone, so I stayed here.",
+        "css": {
+          "style": {
+            "color": "#fff",
+            "backgroundColor": "#f06292",
+            "padding": "0.5rem",
+            "borderRadius": "4px",
+            "marginTop": "1rem"
+          }
+        }
+      },
+      {
+        "type": "div",
+        "placement": {
+          "targetPlacement": ["comment-zone"]
+        },
+        "component": [
+          { "reference": "shadowColor", "target": "css.style.boxShadow", "value": null }
+        ],
+        "css": {
+          "style": {
+            "border": "1px solid #444",
+            "padding": "1rem",
+            "marginTop": "2rem",
+            "borderRadius": "8px",
+            "display": "flex",
+            "gap": "1rem",
+            "alignItems": "flex-start"
+          }
+        },
+        "content": [
+          {
+            "type": "div",
+            "component": [
+              { "reference": "avatarColor", "target": "css.style.backgroundColor", "value": null }
+            ],
+            "css": {
+              "style": {
+                "width": "40px",
+                "height": "40px",
+                "borderRadius": "50%",
+                "flexShrink": "0"
+              }
+            }
+          },
+          {
+            "type": "div",
+            "content": [
+              {
+                "type": "h3",
+                "component": [
+                  { "reference": "writerName", "target": "content", "value": null }
+                ],
+                "css": {
+                  "style": {
+                    "margin": "0 0 0.5rem 0",
+                    "color": "#42b883"
+                  }
+                }
+              },
+              {
+                "type": "p",
+                "component": [
+                  { "reference": "commentText", "target": "content", "value": null },
+                  { "reference": "missingValue", "target": "css.style.border", "value": null }
+                ],
+                "css": {
+                  "style": {
+                    "margin": "0",
+                    "color": "#eee"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "content": "This orphaned component should never be rendered!",
+        "css": {
+          "style": { "color": "red", "fontSize": "50px" }
+        }
+      }
+    ]
+  }'::jsonb,
+  '<meta property="og:title" content="Preempt SSR Test" /><meta name="description" content="This is dynamically injected OpenGraph data!" />'
+) ON CONFLICT DO NOTHING;
+
+-- Map Content to Template
+INSERT INTO ContentTemplates (content_id, template_id)
+VALUES (1, 1) ON CONFLICT DO NOTHING;

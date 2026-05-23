@@ -1,0 +1,39 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE Users (
+    username VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE,
+    is_contributor BOOLEAN DEFAULT FALSE,
+    is_shadowed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Templates (
+    id SERIAL PRIMARY KEY,
+    author_id VARCHAR(255) REFERENCES Users(username),
+    tags TEXT[],
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE Content (
+    id SERIAL PRIMARY KEY,
+    author_id VARCHAR(255) REFERENCES Users(username),
+    tags TEXT[],
+    payload JSONB NOT NULL,
+    live_date TIMESTAMP WITH TIME ZONE,
+    is_visible BOOLEAN DEFAULT TRUE,
+    headers TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ContentTemplates (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
+    PRIMARY KEY (content_id, template_id)
+);

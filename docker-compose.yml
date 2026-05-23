@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    container_name: preempt_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: preempt
+      POSTGRES_PASSWORD: preemptpassword
+      POSTGRES_DB: preempt
+    ports:
+      - "5432:5432"
+    volumes:
+      - preempt_pgdata:/var/lib/postgresql/data
+
+  backend:
+    image: node:20-alpine
+    container_name: preempt_backend
+    restart: always
+    working_dir: /app
+    env_file:
+      - ./server/.env
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server:/app
+      - ./dist:/dist
+    command: sh -c "npm install && npx ts-node --transpile-only index.ts"
+    depends_on:
+      - db
+
+volumes:
+  preempt_pgdata:

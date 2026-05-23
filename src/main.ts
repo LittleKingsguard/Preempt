@@ -1,7 +1,5 @@
 import { Supervisor } from './core/Supervisor'
 import type { PipelineConfig } from './types/Pipeline'
-import mockData from './mockData.json'
-
 const config: PipelineConfig = {
   runInstantiation: true,
   runAssembly: true, 
@@ -13,7 +11,20 @@ const config: PipelineConfig = {
 };
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>Loading Supervisor...</div>
+  <div>Loading Supervisor from Backend...</div>
 `
 
-Supervisor.process(mockData.template as any, mockData.content as any, config).catch(console.error);
+async function init() {
+  try {
+    const res = await fetch("http://localhost:3001/api/content/1");
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    const data = await res.json();
+    
+    await Supervisor.process(data.template, data.content, config);
+  } catch (err) {
+    console.error("Initialization failed:", err);
+    document.querySelector<HTMLDivElement>('#app')!.innerHTML = `<div>Error loading from backend: ${err}</div>`;
+  }
+}
+
+init();
