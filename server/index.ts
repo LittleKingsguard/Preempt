@@ -109,6 +109,23 @@ app.get("/api/content/:id", authenticateToken, async (req, res) => {
   }
 });
 
+app.get("/api/template/:id", authenticateToken, async (req, res) => {
+  const templateId = parseInt(req.params.id as string, 10);
+
+  try {
+    const result = await pool.query("SELECT * FROM Templates WHERE id = $1", [templateId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // --- SSR HTML SERVING ---
 app.get("/content/:id", async (req, res) => {
   const contentId = parseInt(req.params.id, 10);
