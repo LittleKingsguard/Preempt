@@ -126,6 +126,59 @@ app.get("/api/template/:id", authenticateToken, async (req, res) => {
   }
 });
 
+app.post("/api/template", authenticateToken, async (req, res) => {
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!user.is_admin && !user.is_contributor) {
+    return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
+  }
+
+  const { payload, tags } = req.body;
+  if (!payload) return res.status(400).json({ error: "Payload is required" });
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO Templates (author_id, payload, tags) VALUES ($1, $2, $3) RETURNING *",
+      [user.username, payload, tags || []]
+    );
+    res.json({ message: "Template created successfully", template: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/template/:id", authenticateToken, async (req, res) => {
+  const templateId = parseInt(req.params.id as string, 10);
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!user.is_admin && !user.is_contributor) {
+    return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
+  }
+
+  const { payload, tags } = req.body;
+  if (!payload) return res.status(400).json({ error: "Payload is required" });
+
+  try {
+    // Check ownership
+    const check = await pool.query("SELECT author_id FROM Templates WHERE id = $1", [templateId]);
+    if (check.rows.length === 0) return res.status(404).json({ error: "Template not found" });
+
+    if (check.rows[0].author_id !== user.username && !user.is_admin) {
+      return res.status(403).json({ error: "Forbidden: Not the author" });
+    }
+
+    const result = await pool.query(
+      "UPDATE Templates SET payload = $1, tags = COALESCE($2, tags), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
+      [payload, tags || null, templateId]
+    );
+    res.json({ message: "Template updated successfully", template: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // --- SSR HTML SERVING ---
 app.get("/content/:id", async (req, res) => {
   const contentId = parseInt(req.params.id, 10);

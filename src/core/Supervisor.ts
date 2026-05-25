@@ -20,6 +20,13 @@ export class Supervisor {
     return this.contentNodes;
   }
 
+  public static exportRootNode(): NodeData | null {
+    if (Supervisor.instance && Supervisor.instance.rootNode) {
+      return Supervisor.instance.rootNode.exportToJson();
+    }
+    return null;
+  }
+
   public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
