@@ -25,7 +25,7 @@ services:
     volumes:
       - ./server:/app
       - ./dist:/dist
-    command: sh -c "npm install && npx ts-node --transpile-only index.ts"
+    command: sh -c "npm install && npx tsx src/index.ts"
     depends_on:
       - db
 

@@ -14,7 +14,6 @@ CREATE TABLE Users (
 CREATE TABLE Templates (
     id SERIAL PRIMARY KEY,
     author_id VARCHAR(255) REFERENCES Users(username),
-    tags TEXT[],
     payload JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -23,7 +22,6 @@ CREATE TABLE Templates (
 CREATE TABLE Content (
     id SERIAL PRIMARY KEY,
     author_id VARCHAR(255) REFERENCES Users(username),
-    tags TEXT[],
     payload JSONB NOT NULL,
     live_date TIMESTAMP WITH TIME ZONE,
     is_visible BOOLEAN DEFAULT TRUE,
@@ -36,4 +34,21 @@ CREATE TABLE ContentTemplates (
     content_id INT REFERENCES Content(id) ON DELETE CASCADE,
     template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
     PRIMARY KEY (content_id, template_id)
+);
+
+CREATE TABLE Tags (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE TemplateTags (
+    template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
+    tag_id INT REFERENCES Tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (template_id, tag_id)
+);
+
+CREATE TABLE ContentTags (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    tag_id INT REFERENCES Tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (content_id, tag_id)
 );
