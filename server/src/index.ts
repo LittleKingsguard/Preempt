@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
-import { initTagCache } from "./utils/tags.js";
+import { initTagCache } from "./models/tag.js";
 
 import authRoutes from "./routes/auth.js";
 import apiRoutes from "./routes/api.js";
