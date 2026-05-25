@@ -22,7 +22,29 @@ export class Supervisor {
 
   public static exportRootNode(): NodeData | null {
     if (Supervisor.instance && Supervisor.instance.rootNode) {
-      return Supervisor.instance.rootNode.exportToJson();
+      // Un-assemble content nodes temporarily for clean export
+      const removedRecords: { parent: Node, node: Node, index: number }[] = [];
+
+      for (const sourceNode of Node.sourcePlacements) {
+        if (sourceNode.parent) {
+          const index = sourceNode.parent.children.indexOf(sourceNode);
+          if (index > -1) {
+            removedRecords.push({ parent: sourceNode.parent, node: sourceNode, index });
+            sourceNode.parent.children.splice(index, 1);
+          }
+        }
+      }
+
+      const exported = Supervisor.instance.rootNode.exportToJson();
+
+      // Restore content nodes
+      // Sort by index ascending to ensure splice inserts at correct positions if multiple nodes were removed from same parent
+      removedRecords.sort((a, b) => a.index - b.index);
+      for (const record of removedRecords) {
+        record.parent.children.splice(record.index, 0, record.node);
+      }
+
+      return exported;
     }
     return null;
   }
