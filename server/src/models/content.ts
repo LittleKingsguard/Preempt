@@ -45,5 +45,41 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
   }
 
   const result = await pool.query(query, params);
-  return result.rows.length > 0 ? result.rows[0] : null;
+  if (result.rows.length === 0) return null;
+
+  const content = result.rows[0];
+
+  const templateHandlerResult = await pool.query(`
+    SELECT h.name, h.body 
+    FROM Handlers h
+    JOIN TemplateHandlers th ON h.id = th.handler_id
+    JOIN ContentTemplates ct ON th.template_id = ct.template_id
+    WHERE ct.content_id = $1
+  `, [contentId]);
+
+  const contentHandlerResult = await pool.query(`
+    SELECT h.name, h.body 
+    FROM Handlers h
+    JOIN ContentHandlers ch ON h.id = ch.handler_id
+    WHERE ch.content_id = $1
+  `, [contentId]);
+
+  const handlers = new Map<string, string>();
+  
+  templateHandlerResult.rows.forEach((h: any) => handlers.set(h.name, h.body));
+  contentHandlerResult.rows.forEach((h: any) => handlers.set(h.name, h.body));
+
+  if (handlers.size > 0) {
+    if (!content.payload.component) {
+      content.payload.component = [];
+    }
+    for (const [name, body] of handlers.entries()) {
+      content.payload.component.push({
+        reference: name,
+        value: body
+      });
+    }
+  }
+
+  return content;
 }

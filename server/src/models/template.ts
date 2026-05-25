@@ -3,7 +3,30 @@ import { updateTemplateTags } from "./tag.js";
 
 export async function getTemplateById(id: number) {
   const result = await pool.query("SELECT * FROM Templates WHERE id = $1", [id]);
-  return result.rows.length > 0 ? result.rows[0] : null;
+  if (result.rows.length === 0) return null;
+  
+  const template = result.rows[0];
+  
+  const handlerResult = await pool.query(`
+    SELECT h.name, h.body 
+    FROM Handlers h
+    JOIN TemplateHandlers th ON h.id = th.handler_id
+    WHERE th.template_id = $1
+  `, [id]);
+
+  if (handlerResult.rows.length > 0) {
+    if (!template.payload.component) {
+      template.payload.component = [];
+    }
+    handlerResult.rows.forEach((h: any) => {
+      template.payload.component.push({
+        reference: h.name,
+        value: h.body
+      });
+    });
+  }
+
+  return template;
 }
 
 export async function createTemplate(authorId: string, payload: any, tags: string[]) {

@@ -90,6 +90,10 @@ export class Node {
       const propName = path.substring(6);
       if (!this.data.props) this.data.props = {};
       this.data.props[propName] = value;
+    } else if (path.startsWith("handlers.")) {
+      const handlerName = path.substring(9);
+      if (!this.data.handlers) this.data.handlers = {};
+      this.data.handlers[handlerName] = value;
     } else if (path.startsWith("css.style.")) {
       const styleName = path.substring(10);
       if (!this.data.css) this.data.css = {};
@@ -156,6 +160,18 @@ export class Node {
     if (this.data.props) {
       for (const [key, value] of Object.entries(this.data.props)) {
         el.setAttribute(key, String(value));
+      }
+    }
+
+    if (this.data.handlers) {
+      for (const [key, value] of Object.entries(this.data.handlers)) {
+        try {
+          const handlerFunc = new Function('event', value) as EventListener;
+          const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
+          el.addEventListener(eventName, handlerFunc);
+        } catch (err) {
+          console.error(`Failed to parse handler for event ${key}:`, err);
+        }
       }
     }
 

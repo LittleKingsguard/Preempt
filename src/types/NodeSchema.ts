@@ -20,6 +20,7 @@ export interface NodeData {
   component?: ComponentBinding[];
   content?: string | NodeData | NodeData[];
   props?: Record<string, any>;
+  handlers?: Record<string, string>;
   css?: {
     id?: string;
     classes?: string[];

@@ -52,3 +52,29 @@ CREATE TABLE ContentTags (
     tag_id INT REFERENCES Tags(id) ON DELETE CASCADE,
     PRIMARY KEY (content_id, tag_id)
 );
+
+CREATE TABLE Handlers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    body TEXT NOT NULL,
+    author_id VARCHAR(255) REFERENCES Users(username),
+    is_approved BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE TemplateHandlers (
+    template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
+    handler_id INT REFERENCES Handlers(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (template_id, handler_id)
+);
+
+CREATE TABLE ContentHandlers (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    handler_id INT REFERENCES Handlers(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (content_id, handler_id)
+);
