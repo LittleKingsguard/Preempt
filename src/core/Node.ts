@@ -23,10 +23,21 @@ export class Node {
   public static sourcePlacements: Node[] = [];
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
+  public static nodeCounter: number = 0;
 
   constructor(data: NodeData, parent: Node | null = null) {
     this.data = data;
     this.parent = parent;
+
+    if (!this.data.css) this.data.css = {};
+    if (!this.data.css.id) this.data.css.id = `preempt-node-${Node.nodeCounter++}`;
+
+    if (typeof window !== 'undefined') {
+      const existingEl = document.getElementById(this.data.css.id);
+      if (existingEl) {
+        this.element = existingEl;
+      }
+    }
 
     if (data.css && data.css.cssDef) {
       for (const def of data.css.cssDef) {
@@ -143,6 +154,62 @@ export class Node {
     }
   }
 
+  public renderToString(): string {
+    if (!this.isValid) return "";
+
+    const tag = this.data.type || "div";
+    let attributes = "";
+
+    if (this.data.props) {
+      for (const [key, value] of Object.entries(this.data.props)) {
+        const escapedValue = String(value).replace(/"/g, '&quot;');
+        attributes += ` ${key}="${escapedValue}"`;
+      }
+    }
+
+    if (this.data.handlers) {
+      for (const [key, value] of Object.entries(this.data.handlers)) {
+        const eventName = key.startsWith('on') ? key.toLowerCase() : `on${key.toLowerCase()}`;
+        const escapedValue = String(value).replace(/"/g, '&quot;');
+        attributes += ` ${eventName}="${escapedValue}"`;
+      }
+    }
+
+    if (this.data.css) {
+      if (this.data.css.id) attributes += ` id="${this.data.css.id}"`;
+      if (this.data.css.classes && this.data.css.classes.length > 0) {
+        attributes += ` class="${this.data.css.classes.join(" ")}"`;
+      }
+      if (this.data.css.style) {
+        const styleStr = Object.entries(this.data.css.style)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("; ");
+        if (styleStr) attributes += ` style="${styleStr}"`;
+      }
+    }
+
+    let innerHTML = "";
+    if (this.data.content) {
+      if (typeof this.data.content === "string") {
+        innerHTML += this.data.content
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+    }
+
+    for (const child of this.children) {
+      innerHTML += child.renderToString();
+    }
+
+    const voidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
+    if (voidElements.includes(tag.toLowerCase())) {
+      return `<${tag}${attributes}>`;
+    }
+
+    return `<${tag}${attributes}>${innerHTML}</${tag}>`;
+  }
+
   public render(): HTMLElement | null {
     const oldElement = this.element;
     
@@ -154,7 +221,9 @@ export class Node {
       return null;
     }
 
-    const el = document.createElement(this.data.type || "div");
+    const targetTag = (this.data.type || "div").toLowerCase();
+    const shouldReuse = oldElement && oldElement.tagName.toLowerCase() === targetTag;
+    const el = shouldReuse ? oldElement! : document.createElement(targetTag);
     this.element = el;
 
     if (this.data.props) {
@@ -194,15 +263,15 @@ export class Node {
     }
 
     for (const child of this.children) {
-      if (!child.element) {
+      if (!child.element || !el.contains(child.element)) {
         child.render();
       }
-      if (child.element) {
+      if (child.element && child.element.parentNode !== el) {
         el.appendChild(child.element);
       }
     }
 
-    if (oldElement) {
+    if (oldElement && oldElement !== el) {
       if (oldElement.parentNode) {
         oldElement.replaceWith(el);
       } else {

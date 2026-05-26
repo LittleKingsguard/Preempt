@@ -10,6 +10,7 @@ export class Supervisor {
   private contentNodes: Node[] = [];
   private isMonitoring: boolean = false;
   private mountElementId: string;
+  private hasInstantiated: boolean = false;
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -49,30 +50,40 @@ export class Supervisor {
     return null;
   }
 
-  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<void> {
+  public static resetInstantiation(): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.hasInstantiated = false;
+    }
+  }
+
+  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<string | void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
-      await Supervisor.instance.runPipeline(templateData, contentData);
+      const result = await Supervisor.instance.runPipeline(templateData, contentData);
       Supervisor.instance.resumeMonitoring();
+      return result;
     } else {
       Supervisor.instance = new Supervisor(config);
-      await Supervisor.instance.runPipeline(templateData, contentData);
+      const result = await Supervisor.instance.runPipeline(templateData, contentData);
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
       } else {
         Supervisor.instance.startMonitoring();
       }
+      return result;
     }
   }
 
-  private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<void> {
-    if (this.config.runInstantiation) {
+  private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<string | void> {
+    if (this.config.runInstantiation && !this.hasInstantiated) {
       console.log("Stage: Instantiation");
       StyleNode.clear(); // Clear before re-running
       Node.clearPlacements();
+      Node.nodeCounter = 0;
       
       this.rootNode = new Node(templateData);
       this.contentNodes = contentData.content.map(data => new Node(data));
+      this.hasInstantiated = true;
     }
 
     if (this.config.runAssembly) {
@@ -121,24 +132,38 @@ export class Supervisor {
     if (this.config.runRendering) {
       console.log("Stage: Rendering");
       
-      let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
-      if (styleEl) styleEl.remove();
-      
-      styleEl = document.createElement("style");
-      styleEl.id = "preempt-dynamic-styles";
-      document.head.appendChild(styleEl);
-      
-      const sheet = styleEl.sheet as CSSStyleSheet;
-      for (const sNode of StyleNode.cssDefs) {
-        sNode.render(sheet);
-      }
+      if (typeof window === 'undefined') {
+        // SSR Context
+        let cssString = "";
+        for (const sNode of StyleNode.cssDefs) {
+          cssString += sNode.renderToString();
+        }
+        let htmlString = "";
+        if (this.rootNode) {
+          htmlString = this.rootNode.renderToString();
+        }
+        return `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
+      } else {
+        // Client DOM Context
+        let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
+        if (styleEl) styleEl.remove();
+        
+        styleEl = document.createElement("style");
+        styleEl.id = "preempt-dynamic-styles";
+        document.head.appendChild(styleEl);
+        
+        const sheet = styleEl.sheet as CSSStyleSheet;
+        for (const sNode of StyleNode.cssDefs) {
+          sNode.render(sheet);
+        }
 
-      if (this.rootNode) {
-        const domElement = this.rootNode.render();
-        const mountTarget = document.getElementById(this.mountElementId);
-        if (mountTarget && domElement) {
-          mountTarget.innerHTML = "";
-          mountTarget.appendChild(domElement);
+        if (this.rootNode) {
+          const domElement = this.rootNode.render();
+          const mountTarget = document.getElementById(this.mountElementId);
+          if (mountTarget && domElement) {
+            mountTarget.innerHTML = "";
+            mountTarget.appendChild(domElement);
+          }
         }
       }
     }

@@ -25,6 +25,7 @@ services:
     volumes:
       - ./server:/app
       - ./dist:/dist
+      - ./src:/src
     command: sh -c "npm install && npx tsx src/index.ts"
     depends_on:
       - db
