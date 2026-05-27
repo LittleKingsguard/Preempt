@@ -11,13 +11,22 @@ CREATE TABLE Users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE TemplateGroups (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    default_template_id INT
+);
+
 CREATE TABLE Templates (
     id SERIAL PRIMARY KEY,
     author_id VARCHAR(255) REFERENCES Users(username),
+    group_id INT REFERENCES TemplateGroups(id) ON DELETE CASCADE,
     payload JSONB NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE TemplateGroups ADD CONSTRAINT fk_default_template FOREIGN KEY (default_template_id) REFERENCES Templates(id) ON DELETE SET NULL;
 
 CREATE TABLE Content (
     id SERIAL PRIMARY KEY,
@@ -30,10 +39,10 @@ CREATE TABLE Content (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE ContentTemplates (
+CREATE TABLE ContentTemplateGroups (
     content_id INT REFERENCES Content(id) ON DELETE CASCADE,
-    template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
-    PRIMARY KEY (content_id, template_id)
+    group_id INT REFERENCES TemplateGroups(id) ON DELETE CASCADE,
+    PRIMARY KEY (content_id, group_id)
 );
 
 CREATE TABLE Tags (

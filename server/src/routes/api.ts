@@ -68,10 +68,17 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
   const contentId = parseInt(req.params.id as string, 10);
   const templateId = req.query.templateId ? parseInt(req.query.templateId as string, 10) : null;
   const tagsParam = req.query.tags as string;
+  const editorMode = req.query.editorMode as string || null;
   const user = (req as any).user;
 
+  if (editorMode) {
+    if (!user || (!user.is_admin && !user.is_contributor)) {
+      return res.status(403).json({ error: "Forbidden: Must be admin or contributor to use edit mode" });
+    }
+  }
+
   try {
-    const content = await getContentWithTemplate(contentId, templateId, tagsParam);
+    const content = await getContentWithTemplate(contentId, templateId, tagsParam, editorMode);
 
     if (!content) {
       return res.status(404).json({ error: "Content or associated Template not found" });
@@ -104,9 +111,17 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
 
 router.get("/template/:id", authenticateToken, async (req, res) => {
   const templateId = parseInt(req.params.id as string, 10);
+  const editorMode = req.query.editorMode as string || null;
+  const user = (req as any).user;
+
+  if (editorMode) {
+    if (!user || (!user.is_admin && !user.is_contributor)) {
+      return res.status(403).json({ error: "Forbidden: Must be admin or contributor to use edit mode" });
+    }
+  }
 
   try {
-    const template = await getTemplateById(templateId);
+    const template = await getTemplateById(templateId, editorMode);
     
     if (!template) {
       return res.status(404).json({ error: "Template not found" });

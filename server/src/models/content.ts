@@ -5,64 +5,100 @@ export async function getContentHeaders(id: number) {
   return result.rows.length > 0 ? result.rows[0].headers : null;
 }
 
-export async function getContentWithTemplate(contentId: number, templateId: number | null, tagsParam: string | null) {
-  let query = `
-    SELECT c.*, t.payload as template_payload
-    FROM Content c
-    JOIN ContentTemplates ct ON c.id = ct.content_id
-    JOIN Templates t ON ct.template_id = t.id
-    WHERE c.id = $1
-  `;
+export async function getContentWithTemplate(contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null) {
+  let query = "";
   const params: any[] = [contentId];
 
+  const tagsArray = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(t => t) : [];
+  if (editorMode) {
+    tagsArray.push("editor");
+  }
+
   if (templateId) {
-    query += ` AND t.id = $2`;
+    query = `
+      SELECT c.*, t.payload as template_payload, t.id as resolved_template_id
+      FROM Content c
+      JOIN ContentTemplateGroups ctg ON c.id = ctg.content_id
+      JOIN Templates t ON t.group_id = ctg.group_id
+      WHERE c.id = $1 AND t.id = $2
+    `;
     params.push(templateId);
-  } else if (tagsParam) {
-    const tagsArray = tagsParam.split(',').map(t => t.trim()).filter(t => t);
-    if (tagsArray.length > 0) {
-      query = `
-        SELECT c.*, t.payload as template_payload,
-          (
-            SELECT count(*)
-            FROM TemplateTags tt
-            JOIN Tags tag ON tt.tag_id = tag.id
-            WHERE tt.template_id = t.id AND tag.name = ANY($2::text[])
-          ) as match_count
-        FROM Content c
-        JOIN ContentTemplates ct ON c.id = ct.content_id
-        JOIN Templates t ON ct.template_id = t.id
-        WHERE c.id = $1
-        ORDER BY match_count DESC, t.id ASC
-        LIMIT 1
-      `;
-      params.push(tagsArray);
-    } else {
-      query += ` LIMIT 1`;
-    }
+  } else if (tagsArray.length > 0) {
+    query = `
+      SELECT c.*, t.payload as template_payload, t.id as resolved_template_id,
+        (
+          SELECT count(*)
+          FROM TemplateTags tt
+          JOIN Tags tag ON tt.tag_id = tag.id
+          WHERE tt.template_id = t.id AND tag.name = ANY($2::text[])
+        ) as match_count,
+        (t.id = tg.default_template_id) as is_default
+      FROM Content c
+      JOIN ContentTemplateGroups ctg ON c.id = ctg.content_id
+      JOIN TemplateGroups tg ON tg.id = ctg.group_id
+      JOIN Templates t ON t.group_id = ctg.group_id
+      WHERE c.id = $1
+      ORDER BY match_count DESC, is_default DESC, t.id ASC
+      LIMIT 1
+    `;
+    params.push(tagsArray);
   } else {
-    query += ` LIMIT 1`;
+    query = `
+      SELECT c.*, t.payload as template_payload, t.id as resolved_template_id
+      FROM Content c
+      JOIN ContentTemplateGroups ctg ON c.id = ctg.content_id
+      JOIN TemplateGroups tg ON ctg.group_id = tg.id
+      JOIN Templates t ON t.id = tg.default_template_id
+      WHERE c.id = $1
+    `;
   }
 
   const result = await pool.query(query, params);
   if (result.rows.length === 0) return null;
 
   const content = result.rows[0];
+  let resolvedTemplateId = content.resolved_template_id;
+
+  if (editorMode) {
+    const editorTemplateCheck = await pool.query(`
+      SELECT t.id, t.payload FROM TemplateTags tt
+      JOIN Tags tag ON tt.tag_id = tag.id
+      JOIN Templates t ON tt.template_id = t.id
+      JOIN Templates rt ON t.group_id = rt.group_id
+      WHERE rt.id = $1 AND tag.name = 'editor'
+      LIMIT 1
+    `, [resolvedTemplateId]);
+
+    if (editorTemplateCheck.rows.length > 0) {
+      const editorTemplate = editorTemplateCheck.rows[0];
+      if (editorTemplate.id !== resolvedTemplateId) {
+        content.template_payload = editorTemplate.payload;
+        resolvedTemplateId = editorTemplate.id;
+      }
+    }
+  }
+
+  if (!editorMode) {
+    const securityCheck = await pool.query(`
+      SELECT 1 FROM TemplateTags tt
+      JOIN Tags tag ON tt.tag_id = tag.id
+      WHERE tt.template_id = $1 AND tag.name = 'editor'
+    `, [resolvedTemplateId]);
+    if (securityCheck.rows.length > 0) return null;
+  }
 
   const templateHandlerResult = await pool.query(`
     SELECT h.name, h.body 
     FROM Handlers h
     JOIN TemplateHandlers th ON h.id = th.handler_id
-    JOIN ContentTemplates ct ON th.template_id = ct.template_id
-    WHERE ct.content_id = $1
+    WHERE th.template_id = $1
     UNION
     SELECT h.name, h.body
     FROM Handlers h
     JOIN ComponentHandlers ch ON h.id = ch.handler_id
     JOIN TemplateComponents tc ON ch.component_id = tc.component_id
-    JOIN ContentTemplates ct ON tc.template_id = ct.template_id
-    WHERE ct.content_id = $1
-  `, [contentId]);
+    WHERE tc.template_id = $1
+  `, [resolvedTemplateId]);
 
   const contentHandlerResult = await pool.query(`
     SELECT h.name, h.body 
@@ -83,14 +119,9 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
   contentHandlerResult.rows.forEach((h: any) => handlers.set(h.name, h.body));
 
   if (handlers.size > 0) {
-    if (!content.payload.component) {
-      content.payload.component = [];
-    }
+    if (!content.payload.component) content.payload.component = [];
     for (const [name, body] of handlers.entries()) {
-      content.payload.component.push({
-        reference: name,
-        value: body
-      });
+      content.payload.component.push({ reference: name, value: body });
     }
   }
 
@@ -98,9 +129,8 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
     SELECT c.name, c.payload 
     FROM Components c
     JOIN TemplateComponents tc ON c.id = tc.component_id
-    JOIN ContentTemplates ct ON tc.template_id = ct.template_id
-    WHERE ct.content_id = $1
-  `, [contentId]);
+    WHERE tc.template_id = $1
+  `, [resolvedTemplateId]);
 
   const contentComponentResult = await pool.query(`
     SELECT c.name, c.payload 
@@ -116,9 +146,55 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
   if (components.size > 0) {
     if (!content.payload.component) content.payload.component = [];
     for (const [name, payload] of components.entries()) {
-      content.payload.component.push({
-        reference: name,
-        value: payload
+      content.payload.component.push({ reference: name, value: payload });
+    }
+  }
+
+  // Dynamic Editor Component Injection
+  if (editorMode) {
+    const tagCheck = await pool.query(`
+      SELECT 1 FROM TemplateTags tt
+      JOIN Tags tag ON tt.tag_id = tag.id
+      JOIN Templates t ON tt.template_id = t.id
+      JOIN Templates rt ON t.group_id = rt.group_id
+      WHERE rt.id = $1 AND tag.name = 'editor'
+    `, [resolvedTemplateId]);
+
+    const hasEditorTag = tagCheck.rows.length > 0;
+
+    if (!hasEditorTag) {
+      if (!content.template_payload.content) content.template_payload.content = [];
+      if (!Array.isArray(content.template_payload.content)) {
+        content.template_payload.content = [content.template_payload.content];
+      }
+      content.template_payload.content.push({
+        type: "div",
+        component: [
+          { reference: "PreemptEditor", target: "type" },
+          { reference: "editorMode", target: "props.mode", value: editorMode }
+        ]
+      });
+
+      const editorComponentRes = await pool.query(`SELECT payload FROM Components WHERE name = 'PreemptEditor'`);
+      if (editorComponentRes.rows.length > 0) {
+        if (!content.payload.component) content.payload.component = [];
+        content.payload.component.push({
+          reference: "PreemptEditor",
+          value: editorComponentRes.rows[0].payload
+        });
+      }
+
+      const editorHandlersRes = await pool.query(`
+        SELECT h.name, h.body FROM Handlers h
+        JOIN ComponentHandlers ch ON h.id = ch.handler_id
+        JOIN Components c ON ch.component_id = c.id
+        WHERE c.name = 'PreemptEditor'
+      `);
+      editorHandlersRes.rows.forEach((h: any) => {
+        content.payload.component.push({
+          reference: h.name,
+          value: h.body
+        });
       });
     }
   }
