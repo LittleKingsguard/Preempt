@@ -55,6 +55,13 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
     JOIN TemplateHandlers th ON h.id = th.handler_id
     JOIN ContentTemplates ct ON th.template_id = ct.template_id
     WHERE ct.content_id = $1
+    UNION
+    SELECT h.name, h.body
+    FROM Handlers h
+    JOIN ComponentHandlers ch ON h.id = ch.handler_id
+    JOIN TemplateComponents tc ON ch.component_id = tc.component_id
+    JOIN ContentTemplates ct ON tc.template_id = ct.template_id
+    WHERE ct.content_id = $1
   `, [contentId]);
 
   const contentHandlerResult = await pool.query(`
@@ -62,6 +69,12 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
     FROM Handlers h
     JOIN ContentHandlers ch ON h.id = ch.handler_id
     WHERE ch.content_id = $1
+    UNION
+    SELECT h.name, h.body
+    FROM Handlers h
+    JOIN ComponentHandlers ch ON h.id = ch.handler_id
+    JOIN ContentComponents cc ON ch.component_id = cc.component_id
+    WHERE cc.content_id = $1
   `, [contentId]);
 
   const handlers = new Map<string, string>();
@@ -77,6 +90,35 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
       content.payload.component.push({
         reference: name,
         value: body
+      });
+    }
+  }
+
+  const templateComponentResult = await pool.query(`
+    SELECT c.name, c.payload 
+    FROM Components c
+    JOIN TemplateComponents tc ON c.id = tc.component_id
+    JOIN ContentTemplates ct ON tc.template_id = ct.template_id
+    WHERE ct.content_id = $1
+  `, [contentId]);
+
+  const contentComponentResult = await pool.query(`
+    SELECT c.name, c.payload 
+    FROM Components c
+    JOIN ContentComponents cc ON c.id = cc.component_id
+    WHERE cc.content_id = $1
+  `, [contentId]);
+
+  const components = new Map<string, any>();
+  templateComponentResult.rows.forEach((c: any) => components.set(c.name, c.payload));
+  contentComponentResult.rows.forEach((c: any) => components.set(c.name, c.payload));
+
+  if (components.size > 0) {
+    if (!content.payload.component) content.payload.component = [];
+    for (const [name, payload] of components.entries()) {
+      content.payload.component.push({
+        reference: name,
+        value: payload
       });
     }
   }

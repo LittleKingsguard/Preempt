@@ -4,6 +4,7 @@ import { getTags } from "../models/tag.js";
 import { getTemplateById, createTemplate, updateTemplate } from "../models/template.js";
 import { getContentWithTemplate } from "../models/content.js";
 import { getHandlers, createHandler, updateHandler } from "../models/handler.js";
+import { getComponents, getComponentById, createComponent, updateComponent, deleteComponent } from "../models/component.js";
 
 const router = express.Router();
 
@@ -155,6 +156,81 @@ router.put("/template/:id", authenticateToken, async (req, res) => {
     }
 
     res.json({ message: "Template updated successfully", template: result.template });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/components", authenticateToken, async (req, res) => {
+  try {
+    const components = await getComponents();
+    res.json(components);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/components/:id", authenticateToken, async (req, res) => {
+  const componentId = parseInt(req.params.id as string, 10);
+  try {
+    const component = await getComponentById(componentId);
+    if (!component) {
+      return res.status(404).json({ error: "Component not found" });
+    }
+    res.json(component);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/components", authenticateToken, async (req, res) => {
+  const user = (req as any).user;
+  const { name, payload } = req.body;
+  if (!name || !payload) return res.status(400).json({ error: "Name and payload are required" });
+
+  try {
+    const result = await createComponent(user, name, payload);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/components/:id", authenticateToken, async (req, res) => {
+  const componentId = parseInt(req.params.id as string, 10);
+  const user = (req as any).user;
+  const { name, payload } = req.body;
+  if (!name || !payload) return res.status(400).json({ error: "Name and payload are required" });
+
+  try {
+    const result = await updateComponent(componentId, user, name, payload);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/components/:id", authenticateToken, async (req, res) => {
+  const componentId = parseInt(req.params.id as string, 10);
+  const user = (req as any).user;
+
+  try {
+    const result = await deleteComponent(componentId, user);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json({ message: "Component deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

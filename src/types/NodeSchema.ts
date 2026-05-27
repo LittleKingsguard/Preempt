@@ -11,7 +11,7 @@ export interface PlacementConfig {
 export interface ComponentBinding {
   reference: string;
   target?: string;
-  value: string | null;
+  value?: string | NodeData | NodeData[] | null;
 }
 
 export interface NodeData {

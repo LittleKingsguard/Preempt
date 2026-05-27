@@ -78,3 +78,34 @@ CREATE TABLE ContentHandlers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (content_id, handler_id)
 );
+
+CREATE TABLE Components (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    payload JSONB NOT NULL,
+    author_id VARCHAR(255) REFERENCES Users(username),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE TemplateComponents (
+    template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
+    component_id INT REFERENCES Components(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (template_id, component_id)
+);
+
+CREATE TABLE ContentComponents (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    component_id INT REFERENCES Components(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (content_id, component_id)
+);
+
+CREATE TABLE ComponentHandlers (
+    component_id INT REFERENCES Components(id) ON DELETE CASCADE,
+    handler_id INT REFERENCES Handlers(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, handler_id)
+);

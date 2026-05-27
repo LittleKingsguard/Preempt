@@ -71,13 +71,13 @@ export class Node {
     for (const binding of this.data.component) {
       if (!binding.target) continue;
 
-      let resolvedValue: string | null = binding.value;
+      let resolvedValue: string | NodeData | NodeData[] | null = binding.value !== undefined ? binding.value : null;
 
       if (resolvedValue === null) {
         let currentParent = this.parent;
         while (currentParent) {
           const parentBinding = currentParent.data.component?.find(b => b.reference === binding.reference);
-          if (parentBinding && parentBinding.value !== null) {
+          if (parentBinding && parentBinding.value !== null && parentBinding.value !== undefined) {
             resolvedValue = parentBinding.value;
             break;
           }
@@ -90,7 +90,55 @@ export class Node {
         continue;
       }
 
-      this.applyProperty(binding.target, resolvedValue);
+      if (binding.target === "type") {
+        const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
+        for (const d of dataArray) {
+          if (typeof d === "string") {
+            this.data.type = d;
+            continue;
+          }
+          
+          if (d.type) this.data.type = d.type;
+
+          if (d.content) {
+            if (Array.isArray(d.content)) {
+              d.content.forEach(childData => {
+                this.children.push(new Node(childData, this));
+              });
+            } else if (typeof d.content === "object" && d.content !== null) {
+              this.children.push(new Node(d.content, this));
+            } else if (typeof d.content === "string") {
+              if (typeof this.data.content === "string") {
+                this.data.content += d.content;
+              } else {
+                this.data.content = d.content;
+              }
+            }
+          }
+
+          if (d.css) {
+            if (!this.data.css) this.data.css = {};
+            if (d.css.style) this.data.css.style = { ...this.data.css.style, ...d.css.style };
+            if (d.css.classes) this.data.css.classes = [...new Set([...(this.data.css.classes || []), ...d.css.classes])];
+            if (d.css.cssDef) {
+              this.data.css.cssDef = [...(this.data.css.cssDef || []), ...d.css.cssDef];
+              for (const def of d.css.cssDef) {
+                this.styleNodes.push(new StyleNode(def, this));
+              }
+            }
+          }
+
+          if (d.props) this.data.props = { ...this.data.props, ...d.props };
+          if (d.handlers) this.data.handlers = { ...this.data.handlers, ...d.handlers };
+        }
+        continue;
+      }
+
+      if (typeof resolvedValue === "string") {
+        this.applyProperty(binding.target, resolvedValue);
+      } else {
+        console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
+      }
     }
   }
 

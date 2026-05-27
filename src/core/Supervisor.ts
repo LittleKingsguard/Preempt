@@ -80,7 +80,7 @@ export class Supervisor {
       StyleNode.clear(); // Clear before re-running
       Node.clearPlacements();
       Node.nodeCounter = 0;
-      
+
       this.rootNode = new Node(templateData);
       this.contentNodes = contentData.content.map(data => new Node(data));
       this.hasInstantiated = true;

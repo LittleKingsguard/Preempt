@@ -12,6 +12,12 @@ export async function getTemplateById(id: number) {
     FROM Handlers h
     JOIN TemplateHandlers th ON h.id = th.handler_id
     WHERE th.template_id = $1
+    UNION
+    SELECT h.name, h.body
+    FROM Handlers h
+    JOIN ComponentHandlers ch ON h.id = ch.handler_id
+    JOIN TemplateComponents tc ON ch.component_id = tc.component_id
+    WHERE tc.template_id = $1
   `, [id]);
 
   if (handlerResult.rows.length > 0) {
@@ -22,6 +28,23 @@ export async function getTemplateById(id: number) {
       template.payload.component.push({
         reference: h.name,
         value: h.body
+      });
+    });
+  }
+
+  const componentResult = await pool.query(`
+    SELECT c.name, c.payload 
+    FROM Components c
+    JOIN TemplateComponents tc ON c.id = tc.component_id
+    WHERE tc.template_id = $1
+  `, [id]);
+
+  if (componentResult.rows.length > 0) {
+    if (!template.payload.component) template.payload.component = [];
+    componentResult.rows.forEach((c: any) => {
+      template.payload.component.push({
+        reference: c.name,
+        value: c.payload
       });
     });
   }
