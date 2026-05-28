@@ -19,7 +19,8 @@ export class Node {
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
   public isComponentInjected: boolean = false;
-  
+  public hasChangedSinceRender: boolean = true;
+
   public static placementArray: Node[] = [];
   public static sourcePlacements: Node[] = [];
   public originalParent: Node | null = null;
@@ -99,7 +100,7 @@ export class Node {
             this.data.type = d;
             continue;
           }
-          
+
           if (d.type) this.data.type = d.type;
 
           if (d.content) {
@@ -151,6 +152,7 @@ export class Node {
   }
 
   private applyProperty(path: string, value: string): void {
+    this.hasChangedSinceRender = true;
     if (path === "content") {
       this.data.content = value;
     } else if (path.startsWith("props.")) {
@@ -185,6 +187,7 @@ export class Node {
 
   public placeInto(target: Node): void {
     if (this.parent) {
+      this.parent.hasChangedSinceRender = true;
       this.originalParent = this.parent;
       this.originalIndex = this.parent.children.indexOf(this);
       if (this.originalIndex > -1) {
@@ -192,18 +195,21 @@ export class Node {
       }
     }
     this.parent = target;
+    target.hasChangedSinceRender = true;
     target.children.push(this);
   }
 
   public restorePlacement(): void {
     if (this.originalParent && this.originalIndex > -1) {
       if (this.parent) {
+        this.parent.hasChangedSinceRender = true;
         const index = this.parent.children.indexOf(this);
         if (index > -1) {
           this.parent.children.splice(index, 1);
         }
       }
       this.parent = this.originalParent;
+      this.parent.hasChangedSinceRender = true;
       this.parent.children.splice(this.originalIndex, 0, this);
       this.originalParent = null;
       this.originalIndex = -1;
@@ -273,13 +279,20 @@ export class Node {
 
   public render(): HTMLElement | null {
     const oldElement = this.element;
-    
+
     if (!this.isValid) {
       if (oldElement) {
         oldElement.remove();
         this.element = null;
       }
       return null;
+    }
+
+    if (!this.hasChangedSinceRender && oldElement) {
+      for (const child of this.children) {
+        child.render();
+      }
+      return oldElement;
     }
 
     const targetTag = (this.data.type || "div").toLowerCase();
@@ -348,6 +361,7 @@ export class Node {
       }
     }
 
+    this.hasChangedSinceRender = false;
     return el;
   }
 
@@ -359,7 +373,8 @@ export class Node {
     } else {
       childNode = new Node(childDataOrNode as NodeData, this);
     }
-    
+
+    this.hasChangedSinceRender = true;
     this.children.push(childNode);
 
     if (this.element) {
@@ -374,6 +389,7 @@ export class Node {
 
   public delete(): void {
     if (this.parent) {
+      this.parent.hasChangedSinceRender = true;
       const index = this.parent.children.indexOf(this);
       if (index > -1) {
         this.parent.children.splice(index, 1);
@@ -389,6 +405,7 @@ export class Node {
   }
 
   public modify(newData: Partial<NodeData>): void {
+    this.hasChangedSinceRender = true;
     this.data = { ...this.data, ...newData };
     this.validate();
     if (this.element || this.isValid) {
@@ -433,13 +450,15 @@ export class Node {
   public exportToJson(): NodeData {
     const exported: any = { ...this.data };
     delete exported.parent;
-    
-    if (exported.css && exported.css.id && exported.css.id.startsWith("preempt-node-")) {
-      delete exported.css.id;
-    }
-    
-    if (this.styleNodes.length > 0) {
+
+    if (exported.css) {
       exported.css = { ...exported.css };
+      if (exported.css.id && exported.css.id.startsWith("preempt-node-")) {
+        delete exported.css.id;
+      }
+    }
+
+    if (this.styleNodes.length > 0 && exported.css) {
       exported.css.cssDef = this.styleNodes.map(sn => sn.exportToJson());
     }
 

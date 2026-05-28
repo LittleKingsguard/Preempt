@@ -41,7 +41,7 @@ export class Supervisor {
       // Clean out dynamically injected editor components from the export
       const cleanEditorArtifacts = (data: any) => {
         if (!data) return;
-        
+
         // Remove EditorInspectHandler from component bindings
         if (Array.isArray(data.component)) {
           data.component = data.component.filter((c: any) => c.reference !== "EditorInspectHandler");
@@ -143,7 +143,7 @@ export class Supervisor {
           }
           this.rootNode.data.component.push(...contentData.component);
         }
-        
+
         this.rootNode.applyComponentsTree();
         // [DEV-ONLY] TODO: Remove root data export logging before production
         console.log("After Assembly:", this.rootNode.exportToJson());
@@ -164,7 +164,7 @@ export class Supervisor {
 
     if (this.config.runRendering) {
       console.log("Stage: Rendering");
-      
+
       if (typeof window === 'undefined') {
         // SSR Context
         let cssString = "";
@@ -180,11 +180,11 @@ export class Supervisor {
         // Client DOM Context
         let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
         if (styleEl) styleEl.remove();
-        
+
         styleEl = document.createElement("style");
         styleEl.id = "preempt-dynamic-styles";
         document.head.appendChild(styleEl);
-        
+
         const sheet = styleEl.sheet as CSSStyleSheet;
         for (const sNode of StyleNode.cssDefs) {
           sNode.render(sheet);
@@ -194,8 +194,10 @@ export class Supervisor {
           const domElement = this.rootNode.render();
           const mountTarget = document.getElementById(this.mountElementId);
           if (mountTarget && domElement) {
-            mountTarget.innerHTML = "";
-            mountTarget.appendChild(domElement);
+            if (!mountTarget.contains(domElement)) {
+              mountTarget.innerHTML = "";
+              mountTarget.appendChild(domElement);
+            }
           }
         }
       }

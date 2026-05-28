@@ -30,37 +30,41 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
     }
 
     Supervisor.resetInstantiation();
-    const htmlOutput = await Supervisor.process(contentData.template_payload, contentData.payload, {
-      runInstantiation: true,
-      runAssembly: true,
-      runPreprocessing: true,
-      runValidation: true,
-      runRendering: true,
+    const serverConfig = {
+      runInstantiation: false,
+      runAssembly: false,
+      runPreprocessing: false,
+      runValidation: false,
+      runRendering: false,
       runPostprocessing: false,
       runMonitoring: false
-    });
+    };
+
+    const htmlOutput = await Supervisor.process(contentData.template_payload, contentData.payload, serverConfig);
 
     let html = fs.readFileSync(distPath, "utf-8");
-    
+
+    const clientConfig = {
+      runInstantiation: true,
+      runAssembly: !serverConfig.runAssembly,
+      runPreprocessing: !serverConfig.runPreprocessing,
+      runValidation: !serverConfig.runValidation,
+      runRendering: true, // Required for hydration
+      runPostprocessing: !serverConfig.runPostprocessing,
+      runMonitoring: true
+    };
+
     const payloadScript = `<script id="preempt-initial-data" type="application/json">${JSON.stringify({
       template: contentData.template_payload,
       content: contentData.payload,
-      clientConfig: {
-        runInstantiation: true, // Always true as requested
-        runAssembly: true,
-        runPreprocessing: true,
-        runValidation: true,
-        runRendering: true,
-        runPostprocessing: true,
-        runMonitoring: true
-      }
+      clientConfig: clientConfig
     })}</script>`;
-    
+
     const headersInject = (contentData.headers || "") + "\n" + payloadScript;
     html = html.replace("<!-- HEADERS_INJECT -->", headersInject);
-    
+
     html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput || ""}</div>`);
-    
+
     res.send(html);
   } catch (err) {
     console.error(err);

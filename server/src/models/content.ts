@@ -166,8 +166,13 @@ export async function getContentWithTemplate(contentId: number, templateId: numb
       if (!node || typeof node !== 'object') return;
       if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor")) return;
       
-      if (!node.component) node.component = [];
-      node.component.push({ reference: "EditorInspectHandler", target: "handlers.click" });
+      const hasClickHandler = node.handlers?.click || node.handlers?.onclick;
+      const hasComponentClickHandler = node.component?.some((c: any) => c.target === "handlers.click" || c.target === "handlers.onclick");
+      
+      if (!hasClickHandler && !hasComponentClickHandler) {
+        if (!node.component) node.component = [];
+        node.component.push({ reference: "EditorInspectHandler", target: "handlers.click" });
+      }
 
       if (Array.isArray(node.content)) {
         node.content.forEach(injectInspectHandlers);
