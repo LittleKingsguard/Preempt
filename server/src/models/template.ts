@@ -78,6 +78,28 @@ export async function getTemplateById(id: number, editorMode: string | null = nu
 
     const hasEditorTag = tagCheck.rows.length > 0;
 
+    const injectInspectHandlers = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor")) return;
+      
+      if (!node.component) node.component = [];
+      node.component.push({ reference: "EditorInspectHandler", target: "handlers.click" });
+
+      if (Array.isArray(node.content)) {
+        node.content.forEach(injectInspectHandlers);
+      } else if (typeof node.content === 'object') {
+        injectInspectHandlers(node.content);
+      }
+    };
+
+    if (template.payload?.content) {
+      if (Array.isArray(template.payload.content)) {
+        template.payload.content.forEach(injectInspectHandlers);
+      } else {
+        injectInspectHandlers(template.payload.content);
+      }
+    }
+
     if (!hasEditorTag) {
       if (!template.payload.content) template.payload.content = [];
       if (!Array.isArray(template.payload.content)) {

@@ -33,6 +33,9 @@ async function init() {
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       data = await res.json();
     }
+    (window as any).Preempt.templateData = data.template;
+    (window as any).Preempt.contentData = data.content;
+    (window as any).Preempt.pipelineConfig = pipelineConfig;
     
     await Supervisor.process(data.template, data.content, pipelineConfig);
   } catch (err) {

@@ -50,7 +50,7 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
         runAssembly: false,
         runPreprocessing: false,
         runValidation: false,
-        runRendering: false,
+        runRendering: true,
         runPostprocessing: true,
         runMonitoring: true
       }

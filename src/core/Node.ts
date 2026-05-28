@@ -102,10 +102,16 @@ export class Node {
 
           if (d.content) {
             if (Array.isArray(d.content)) {
+              if (!this.data.content) this.data.content = [];
+              if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
               d.content.forEach(childData => {
+                (this.data.content as NodeData[]).push(childData);
                 this.children.push(new Node(childData, this));
               });
             } else if (typeof d.content === "object" && d.content !== null) {
+              if (!this.data.content) this.data.content = [];
+              if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
+              (this.data.content as NodeData[]).push(d.content);
               this.children.push(new Node(d.content, this));
             } else if (typeof d.content === "string") {
               if (typeof this.data.content === "string") {
@@ -230,7 +236,7 @@ export class Node {
       }
       if (this.data.css.style) {
         const styleStr = Object.entries(this.data.css.style)
-          .map(([k, v]) => `${k}: ${v}`)
+          .map(([k, v]) => `${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}: ${v}`)
           .join("; ");
         if (styleStr) attributes += ` style="${styleStr}"`;
       }
@@ -412,6 +418,10 @@ export class Node {
   public exportToJson(): NodeData {
     const exported: any = { ...this.data };
     delete exported.parent;
+    
+    if (exported.css && exported.css.id && exported.css.id.startsWith("preempt-node-")) {
+      delete exported.css.id;
+    }
     
     if (this.styleNodes.length > 0) {
       exported.css = { ...exported.css };

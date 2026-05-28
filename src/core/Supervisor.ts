@@ -38,6 +38,37 @@ export class Supervisor {
 
       const exported = Supervisor.instance.rootNode.exportToJson();
 
+      // Clean out dynamically injected editor components from the export
+      const cleanEditorArtifacts = (data: any) => {
+        if (!data) return;
+        
+        // Remove EditorInspectHandler from component bindings
+        if (Array.isArray(data.component)) {
+          data.component = data.component.filter((c: any) => c.reference !== "EditorInspectHandler");
+          if (data.component.length === 0) delete data.component;
+        }
+
+        // Remove PreemptEditor nodes from content arrays
+        if (Array.isArray(data.content)) {
+          data.content = data.content.filter((n: any) => {
+            return !(n.component && n.component.some((c: any) => c.reference === "PreemptEditor"));
+          });
+          if (data.content.length === 0) {
+            delete data.content;
+          } else {
+            data.content.forEach((child: any) => cleanEditorArtifacts(child));
+          }
+        } else if (typeof data.content === 'object' && data.content !== null) {
+          if (data.content.component && data.content.component.some((c: any) => c.reference === "PreemptEditor")) {
+            delete data.content;
+          } else {
+            cleanEditorArtifacts(data.content);
+          }
+        }
+      };
+
+      cleanEditorArtifacts(exported);
+
       // Restore content nodes
       // Sort by index ascending to ensure splice inserts at correct positions if multiple nodes were removed from same parent
       removedRecords.sort((a, b) => a.index - b.index);
