@@ -47,9 +47,9 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
       content: contentData.payload,
       clientConfig: {
         runInstantiation: true, // Always true as requested
-        runAssembly: false,
-        runPreprocessing: false,
-        runValidation: false,
+        runAssembly: true,
+        runPreprocessing: true,
+        runValidation: true,
         runRendering: true,
         runPostprocessing: true,
         runMonitoring: true

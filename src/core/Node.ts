@@ -18,6 +18,7 @@ export class Node {
   public element: HTMLElement | null = null;
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
+  public isComponentInjected: boolean = false;
   
   public static placementArray: Node[] = [];
   public static sourcePlacements: Node[] = [];
@@ -25,9 +26,10 @@ export class Node {
   public originalIndex: number = -1;
   public static nodeCounter: number = 0;
 
-  constructor(data: NodeData, parent: Node | null = null) {
+  constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
     this.parent = parent;
+    this.isComponentInjected = isComponentInjected;
 
     if (!this.data.css) this.data.css = {};
     if (!this.data.css.id) this.data.css.id = `preempt-node-${Node.nodeCounter++}`;
@@ -106,13 +108,13 @@ export class Node {
               if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
               d.content.forEach(childData => {
                 (this.data.content as NodeData[]).push(childData);
-                this.children.push(new Node(childData, this));
+                this.children.push(new Node(childData, this, true));
               });
             } else if (typeof d.content === "object" && d.content !== null) {
               if (!this.data.content) this.data.content = [];
               if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
               (this.data.content as NodeData[]).push(d.content);
-              this.children.push(new Node(d.content, this));
+              this.children.push(new Node(d.content, this, true));
             } else if (typeof d.content === "string") {
               if (typeof this.data.content === "string") {
                 this.data.content += d.content;
@@ -224,7 +226,12 @@ export class Node {
     if (this.data.handlers) {
       for (const [key, value] of Object.entries(this.data.handlers)) {
         const eventName = key.startsWith('on') ? key.toLowerCase() : `on${key.toLowerCase()}`;
-        const escapedValue = String(value).replace(/"/g, '&quot;');
+        const trimmedValue = String(value).trim();
+        let jsCode = trimmedValue;
+        if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+          jsCode = `(${trimmedValue})(event, { node: null })`;
+        }
+        const escapedValue = jsCode.replace(/"/g, '&quot;');
         attributes += ` ${eventName}="${escapedValue}"`;
       }
     }
@@ -289,7 +296,15 @@ export class Node {
     if (this.data.handlers) {
       for (const [key, value] of Object.entries(this.data.handlers)) {
         try {
-          const handlerFunc = new Function('event', value) as EventListener;
+          let handlerFunc: EventListener;
+          const trimmedValue = String(value).trim();
+          if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+            const fn = new Function('return ' + trimmedValue)();
+            handlerFunc = ((event: Event) => fn(event, { node: this })) as EventListener;
+          } else {
+            const fn = new Function('event', 'context', trimmedValue);
+            handlerFunc = ((event: Event) => fn(event, { node: this })) as EventListener;
+          }
           const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
           el.addEventListener(eventName, handlerFunc);
         } catch (err) {
@@ -428,8 +443,11 @@ export class Node {
       exported.css.cssDef = this.styleNodes.map(sn => sn.exportToJson());
     }
 
-    if (this.children.length > 0) {
-      exported.content = this.children.map(child => child.exportToJson());
+    const nativeChildren = this.children.filter(child => !child.isComponentInjected);
+    if (nativeChildren.length > 0) {
+      exported.content = nativeChildren.map(child => child.exportToJson());
+    } else {
+      delete exported.content;
     }
     return exported as NodeData;
   }

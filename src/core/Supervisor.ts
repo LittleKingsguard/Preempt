@@ -112,8 +112,10 @@ export class Supervisor {
       Node.clearPlacements();
       Node.nodeCounter = 0;
 
-      this.rootNode = new Node(templateData);
-      this.contentNodes = contentData.content.map(data => new Node(data));
+      const safeTemplateData = JSON.parse(JSON.stringify(templateData));
+      const safeContentData = JSON.parse(JSON.stringify(contentData));
+      this.rootNode = new Node(safeTemplateData);
+      this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
       this.hasInstantiated = true;
     }
 
