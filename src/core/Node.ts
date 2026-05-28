@@ -345,9 +345,7 @@ export class Node {
     }
 
     for (const child of this.children) {
-      if (!child.element || !el.contains(child.element)) {
-        child.render();
-      }
+      child.render();
       if (child.element && child.element.parentNode !== el) {
         el.appendChild(child.element);
       }
