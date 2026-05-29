@@ -17,8 +17,35 @@ export class Supervisor {
     this.mountElementId = mountElementId;
   }
 
-  public getContentNodes(): Node[] {
-    return this.contentNodes;
+  public static getContentNodes(): Node[] {
+    return Supervisor.instance ? Supervisor.instance.contentNodes : [];
+  }
+
+  public static setContentNodes(nodes: Node[]): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.contentNodes = nodes;
+    }
+  }
+
+  public static addContentNode(node: Node): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.contentNodes.push(node);
+    }
+  }
+
+  public static removeContentNode(node: Node): void {
+    if (Supervisor.instance) {
+      const index = Supervisor.instance.contentNodes.indexOf(node);
+      if (index > -1) {
+        Supervisor.instance.contentNodes.splice(index, 1);
+      }
+    }
+  }
+
+  public static clearContentNodes(): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.contentNodes = [];
+    }
   }
 
   public static exportRootNode(): NodeData | null {
