@@ -34,3 +34,12 @@ export interface ContentPayload {
   component?: ComponentBinding[];
   content: NodeData[];
 }
+
+export interface NodeQuery {
+  type?: string;
+  id?: string;
+  classes?: string[];
+  props?: Record<string, any>;
+  handlers?: Record<string, string>;
+  components?: { target?: string; reference?: string }[];
+}
