@@ -41,5 +41,6 @@ export interface NodeQuery {
   classes?: string[];
   props?: Record<string, any>;
   handlers?: Record<string, string>;
+  style?: Record<string, string>;
   components?: { target?: string; reference?: string }[];
 }

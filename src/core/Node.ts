@@ -1,4 +1,4 @@
-import type { NodeData } from "../types/NodeSchema";
+import type { NodeData, NodeQuery } from "../types/NodeSchema";
 import { StyleNode } from "./StyleNode";
 
 export class Node {
@@ -443,6 +443,83 @@ export class Node {
     }
     this.isValid = valid;
     return valid;
+  }
+
+  public isMatch(query: NodeQuery | ((node: Node) => boolean)): boolean {
+    if (typeof query === 'function') {
+      return query(this);
+    }
+    
+    if (query.id && this.data.css?.id !== query.id) return false;
+    if (query.type && this.data.type !== query.type) return false;
+    
+    if (query.classes && query.classes.length > 0) {
+      if (!this.data.css?.classes) return false;
+      const hasAllClasses = query.classes.every(c => this.data.css!.classes!.includes(c));
+      if (!hasAllClasses) return false;
+    }
+    
+    if (query.props) {
+      if (!this.data.props) return false;
+      for (const [k, v] of Object.entries(query.props)) {
+        if (this.data.props[k] !== v) return false;
+      }
+    }
+    
+    if (query.style) {
+      if (!this.data.css?.style) return false;
+      for (const [k, v] of Object.entries(query.style)) {
+        if (this.data.css.style[k] !== v) return false;
+      }
+    }
+    
+    if (query.handlers) {
+      if (!this.data.handlers) return false;
+      for (const [k, v] of Object.entries(query.handlers)) {
+        if (this.data.handlers[k] !== v) return false;
+      }
+    }
+    
+    if (query.components && query.components.length > 0) {
+      if (!this.data.component) return false;
+      for (const compQuery of query.components) {
+        const match = this.data.component.some(c => {
+          if (compQuery.target && c.target !== compQuery.target) return false;
+          if (compQuery.reference && c.reference !== compQuery.reference) return false;
+          return true;
+        });
+        if (!match) return false;
+      }
+    }
+    
+    return true;
+  }
+
+  public findNodes(query: NodeQuery | ((node: Node) => boolean)): Node[] {
+    const results: Node[] = [];
+
+    if (this.isMatch(query)) {
+      results.push(this);
+    }
+
+    for (const child of this.children) {
+      results.push(...child.findNodes(query));
+    }
+
+    return results;
+  }
+
+  public findNode(query: NodeQuery | ((node: Node) => boolean)): Node | null {
+    if (this.isMatch(query)) {
+      return this;
+    }
+
+    for (const child of this.children) {
+      const found = child.findNode(query);
+      if (found) return found;
+    }
+
+    return null;
   }
 
   public exportToJson(): NodeData {
