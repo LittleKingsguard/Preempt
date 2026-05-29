@@ -128,6 +128,13 @@
       "author": "System Admin",
       "timestamp": "2026-05-22T00:00:00Z"
     },
+    "userData": {
+      "username": "AdminUser",
+      "email": "admin@preempt.test",
+      "isAdmin": true,
+      "isContributor": true,
+      "isShadowed": false
+    },
     "component": [
       { "reference": "writerName", "value": "Alice_Engineer" },
       { "reference": "avatarColor", "value": "#9c27b0" },
@@ -240,6 +247,22 @@
         "css": {
           "style": { "color": "red", "fontSize": "50px" }
         }
+      },
+      {
+        "type": "div",
+        "css": {
+          "id": "login-component",
+          "style": {
+            "padding": "1rem",
+            "border": "1px solid #ccc",
+            "marginTop": "2rem",
+            "color": "#fff"
+          }
+        },
+        "handlers": {
+          "afterAssembly": "(context) => { if (context.supervisor.userData) { const roles = []; if (context.supervisor.userData.isAdmin) roles.push('Admin'); if (context.supervisor.userData.isContributor) roles.push('Contributor'); context.node.modify({ content: 'Welcome ' + context.supervisor.userData.username + ' (' + roles.join(', ') + ') <button>Logout</button>' }); } }"
+        },
+        "content": "Please log in"
       }
     ]
   }

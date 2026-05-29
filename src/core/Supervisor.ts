@@ -1,5 +1,5 @@
 import type { PipelineConfig } from "../types/Pipeline";
-import type { NodeData, ContentPayload } from "../types/NodeSchema";
+import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema";
 import { Node } from "./Node";
 import { StyleNode } from "./StyleNode";
 
@@ -11,6 +11,7 @@ export class Supervisor {
   private isMonitoring: boolean = false;
   private mountElementId: string;
   private hasInstantiated: boolean = false;
+  public userData?: UserData;
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -117,16 +118,18 @@ export class Supervisor {
   public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<string | void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
+      if (contentData.userData) Supervisor.instance.userData = contentData.userData;
       const result = await Supervisor.instance.runPipeline(templateData, contentData);
       Supervisor.instance.resumeMonitoring();
       return result;
     } else {
       Supervisor.instance = new Supervisor(config);
+      if (contentData.userData) Supervisor.instance.userData = contentData.userData;
       const result = await Supervisor.instance.runPipeline(templateData, contentData);
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
       } else {
-        Supervisor.instance.startMonitoring();
+        Supervisor.instance.monitor();
       }
       return result;
     }
@@ -134,118 +137,175 @@ export class Supervisor {
 
   private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<string | void> {
     if (this.config.runInstantiation && !this.hasInstantiated) {
-      console.log("Stage: Instantiation");
-      StyleNode.clear(); // Clear before re-running
-      Node.clearPlacements();
-      Node.nodeCounter = 0;
+      await this.instantiate(templateData, contentData);
+      this.executeHandlers("afterInstantiate");
+    }
 
-      const safeTemplateData = JSON.parse(JSON.stringify(templateData));
-      const safeContentData = JSON.parse(JSON.stringify(contentData));
-      this.rootNode = new Node(safeTemplateData);
-      this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
-      this.hasInstantiated = true;
+    if (typeof window === 'undefined') {
+      this.executeHandlers("onDBLoad");
     }
 
     if (this.config.runAssembly) {
-      console.log("Stage: Assembly");
-      if (this.rootNode) {
-        // [DEV-ONLY] TODO: Remove root data export logging before production
-        console.log("Before Assembly:", this.rootNode.exportToJson());
-      }
-      for (const sourceNode of Node.sourcePlacements) {
-        const targets = sourceNode.data.placement?.targetPlacement || [];
-        let matchedTarget: Node | null = null;
-        for (const targetName of targets) {
-          matchedTarget = Node.placementArray.find(n => n.data.placement?.placementName === targetName) || null;
-          if (matchedTarget) break;
-        }
-        if (matchedTarget) {
-          sourceNode.placeInto(matchedTarget);
-        }
-      }
-      if (this.rootNode) {
-        if (contentData.component && contentData.component.length > 0) {
-          if (!this.rootNode.data.component) {
-            this.rootNode.data.component = [];
-          }
-          this.rootNode.data.component.push(...contentData.component);
-        }
-
-        this.rootNode.applyComponentsTree();
-        // [DEV-ONLY] TODO: Remove root data export logging before production
-        console.log("After Assembly:", this.rootNode.exportToJson());
-      }
+      this.executeHandlers("beforeAssembly");
+      await this.assemble(contentData);
+      this.executeHandlers("afterAssembly");
     }
 
     if (this.config.runPreprocessing) {
-      console.log("Stage: Pre-processing");
+      this.executeHandlers("beforePreprocess");
+      await this.preProcess();
+      this.executeHandlers("afterPreprocess");
     }
 
     if (this.config.runValidation) {
-      console.log("Stage: Validation");
-      if (this.rootNode) {
-        const isValid = this.rootNode.validate();
-        if (!isValid) throw new Error("Validation failed");
-      }
+      this.executeHandlers("beforeValidate");
+      await this.validate();
+      this.executeHandlers("afterValidate");
     }
 
+    let renderResult: string | void;
     if (this.config.runRendering) {
-      console.log("Stage: Rendering");
+      this.executeHandlers("beforeRender");
+      renderResult = await this.render();
+      this.executeHandlers("afterRender");
+    }
 
-      if (typeof window === 'undefined') {
-        // SSR Context
-        let cssString = "";
-        for (const sNode of StyleNode.cssDefs) {
-          cssString += sNode.renderToString();
+    if (this.config.runPostprocessing) {
+      this.executeHandlers("beforePostprocess");
+      await this.postProcess();
+      this.executeHandlers("afterPostprocess");
+    }
+
+    return renderResult;
+  }
+
+  private async instantiate(templateData: NodeData, contentData: ContentPayload): Promise<void> {
+    console.log("Stage: Instantiation");
+    StyleNode.clear(); // Clear before re-running
+    Node.clearPlacements();
+    Node.nodeCounter = 0;
+
+    const safeTemplateData = JSON.parse(JSON.stringify(templateData));
+    const safeContentData = JSON.parse(JSON.stringify(contentData));
+    this.rootNode = new Node(safeTemplateData);
+    this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
+    this.hasInstantiated = true;
+  }
+
+  private async assemble(contentData: ContentPayload): Promise<void> {
+    console.log("Stage: Assembly");
+    if (this.rootNode) {
+      // [DEV-ONLY] TODO: Remove root data export logging before production
+      console.log("Before Assembly:", this.rootNode.exportToJson());
+    }
+    for (const sourceNode of Node.sourcePlacements) {
+      const targets = sourceNode.data.placement?.targetPlacement || [];
+      let matchedTarget: Node | null = null;
+      for (const targetName of targets) {
+        matchedTarget = Node.placementArray.find(n => n.data.placement?.placementName === targetName) || null;
+        if (matchedTarget) break;
+      }
+      if (matchedTarget) {
+        sourceNode.placeInto(matchedTarget);
+      }
+    }
+    if (this.rootNode) {
+      if (contentData.component && contentData.component.length > 0) {
+        if (!this.rootNode.data.component) {
+          this.rootNode.data.component = [];
         }
-        let htmlString = "";
-        if (this.rootNode) {
-          htmlString = this.rootNode.renderToString();
-        }
-        return `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
-      } else {
-        // Client DOM Context
-        let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
-        if (styleEl) styleEl.remove();
+        this.rootNode.data.component.push(...contentData.component);
+      }
 
-        styleEl = document.createElement("style");
-        styleEl.id = "preempt-dynamic-styles";
-        document.head.appendChild(styleEl);
+      this.rootNode.applyComponentsTree();
+      // [DEV-ONLY] TODO: Remove root data export logging before production
+      console.log("After Assembly:", this.rootNode.exportToJson());
+    }
+  }
 
-        const sheet = styleEl.sheet as CSSStyleSheet;
-        for (const sNode of StyleNode.cssDefs) {
-          sNode.render(sheet);
-        }
+  private async preProcess(): Promise<void> {
+    console.log("Stage: Pre-processing");
+  }
 
-        if (this.rootNode) {
-          const domElement = this.rootNode.render();
-          const mountTarget = document.getElementById(this.mountElementId);
-          if (mountTarget && domElement) {
-            if (!mountTarget.contains(domElement)) {
-              mountTarget.innerHTML = "";
-              mountTarget.appendChild(domElement);
-            }
+  private async validate(): Promise<void> {
+    console.log("Stage: Validation");
+    if (this.rootNode) {
+      const isValid = this.rootNode.validate();
+      if (!isValid) throw new Error("Validation failed");
+    }
+  }
+
+  private async render(): Promise<string | void> {
+    console.log("Stage: Rendering");
+
+    if (typeof window === 'undefined') {
+      // SSR Context
+      let cssString = "";
+      for (const sNode of StyleNode.cssDefs) {
+        cssString += sNode.renderToString();
+      }
+      let htmlString = "";
+      if (this.rootNode) {
+        htmlString = this.rootNode.renderToString();
+      }
+      return `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
+    } else {
+      // Client DOM Context
+      let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
+      if (styleEl) styleEl.remove();
+
+      styleEl = document.createElement("style");
+      styleEl.id = "preempt-dynamic-styles";
+      document.head.appendChild(styleEl);
+
+      const sheet = styleEl.sheet as CSSStyleSheet;
+      for (const sNode of StyleNode.cssDefs) {
+        sNode.render(sheet);
+      }
+
+      if (this.rootNode) {
+        const domElement = this.rootNode.render();
+        const mountTarget = document.getElementById(this.mountElementId);
+        if (mountTarget && domElement) {
+          if (!mountTarget.contains(domElement)) {
+            mountTarget.innerHTML = "";
+            mountTarget.appendChild(domElement);
           }
         }
       }
     }
-
-    if (this.config.runPostprocessing) {
-      console.log("Stage: Post-processing");
-    }
   }
 
-  private startMonitoring(): void {
+  private async postProcess(): Promise<void> {
+    console.log("Stage: Post-processing");
+  }
+
+  private executeHandlers(phase: string): void {
+    if (this.rootNode) {
+      this.rootNode.executeHandlers(phase, { supervisor: this });
+    }
+
+    this.contentNodes.forEach(node => {
+      if (!this.rootNode || !this.rootNode.findNode(n => n === node)) {
+        node.executeHandlers(phase, { supervisor: this });
+      }
+    });
+  }
+
+  private monitor(): void {
+    this.executeHandlers("beforeMonitor");
     this.isMonitoring = true;
     console.log("Stage: Monitoring started, state:", this.isMonitoring);
   }
 
   private pauseMonitoring(): void {
+    this.executeHandlers("onPause");
     this.isMonitoring = false;
     console.log("Monitoring paused, state:", this.isMonitoring);
   }
 
   private resumeMonitoring(): void {
+    this.executeHandlers("onResume");
     this.isMonitoring = true;
     console.log("Monitoring resumed, state:", this.isMonitoring);
   }

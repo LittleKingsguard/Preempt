@@ -29,8 +29,17 @@ export interface NodeData {
   };
 }
 
+export interface UserData {
+  username: string;
+  email: string;
+  isAdmin: boolean;
+  isContributor: boolean;
+  isShadowed: boolean;
+}
+
 export interface ContentPayload {
   metadata?: Record<string, any>;
+  userData?: UserData;
   component?: ComponentBinding[];
   content: NodeData[];
 }

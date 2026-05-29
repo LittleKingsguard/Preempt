@@ -522,6 +522,27 @@ export class Node {
     return null;
   }
 
+  public executeHandlers(phase: string, context: any): void {
+    if (this.data.handlers && this.data.handlers[phase]) {
+      try {
+        const trimmedValue = String(this.data.handlers[phase]).trim();
+        if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+          const fn = new Function('return ' + trimmedValue)();
+          fn({ ...context, node: this });
+        } else {
+          const fn = new Function('context', trimmedValue);
+          fn({ ...context, node: this });
+        }
+      } catch (err) {
+        console.error(`Failed to execute ${phase} handler on node:`, err);
+      }
+    }
+
+    for (const child of this.children) {
+      child.executeHandlers(phase, context);
+    }
+  }
+
   public exportToJson(): NodeData {
     const exported: any = { ...this.data };
     delete exported.parent;
