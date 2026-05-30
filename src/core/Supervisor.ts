@@ -12,6 +12,7 @@ export class Supervisor {
   private mountElementId: string;
   private hasInstantiated: boolean = false;
   public userData?: UserData;
+  public serverApi?: any;
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -115,16 +116,18 @@ export class Supervisor {
     }
   }
 
-  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig): Promise<string | void> {
+  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig, serverApi?: any): Promise<string | void> {
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
       if (contentData.userData) Supervisor.instance.userData = contentData.userData;
+      if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline(templateData, contentData);
       Supervisor.instance.resumeMonitoring();
       return result;
     } else {
       Supervisor.instance = new Supervisor(config);
       if (contentData.userData) Supervisor.instance.userData = contentData.userData;
+      if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline(templateData, contentData);
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
@@ -163,7 +166,7 @@ export class Supervisor {
       this.executeHandlers("afterValidate");
     }
 
-    let renderResult: string | void;
+    let renderResult: string | void = undefined;
     if (this.config.runRendering) {
       this.executeHandlers("beforeRender");
       renderResult = await this.render();

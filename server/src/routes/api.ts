@@ -5,6 +5,7 @@ import { getTemplateById, createTemplate, updateTemplate } from "../models/templ
 import { getContentWithTemplate } from "../models/content.js";
 import { getHandlers, createHandler, updateHandler } from "../models/handler.js";
 import { getComponents, getComponentById, createComponent, updateComponent, deleteComponent } from "../models/component.js";
+import { setSetting } from "../models/settings.js";
 
 const router = express.Router();
 
@@ -246,6 +247,28 @@ router.delete("/components/:id", authenticateToken, async (req, res) => {
       return res.status(result.status || 400).json({ error: result.error });
     }
     res.json({ message: "Component deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/settings/default-index", authenticateToken, async (req, res) => {
+  const user = (req as any).user;
+  if (!user || !user.is_admin) {
+    return res.status(403).json({ error: "Forbidden: Only admins can set the default index" });
+  }
+
+  const { contentId } = req.body;
+  if (!contentId || typeof contentId !== 'number') {
+    return res.status(400).json({ error: "Valid contentId is required" });
+  }
+
+  try {
+    // Invalidate memory cache across SSR instances (in a real production app we'd use a shared cache or pubsub, but here we can just update the DB. We'll update the global cache variable if it exists in ssr.ts later).
+    await setSetting('default_index_content_id', { id: contentId });
+    // Also broadcast an event to invalidate the cache if possible, or we will handle it in ssr.ts using a getter.
+    res.json({ message: "Default index updated successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

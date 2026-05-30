@@ -118,3 +118,9 @@ CREATE TABLE ComponentHandlers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (component_id, handler_id)
 );
+
+CREATE TABLE SiteSettings (
+    key VARCHAR(255) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
