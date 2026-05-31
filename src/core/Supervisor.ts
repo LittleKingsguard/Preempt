@@ -13,6 +13,7 @@ export class Supervisor {
   private hasInstantiated: boolean = false;
   public userData?: UserData;
   public serverApi?: any;
+  public static currentStage: string = 'closed';
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -117,6 +118,11 @@ export class Supervisor {
   }
 
   public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig, serverApi?: any): Promise<string | void> {
+    if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
+      console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
+      return;
+    }
+
     if (Supervisor.instance) {
       Supervisor.instance.pauseMonitoring();
       if (contentData.userData) Supervisor.instance.userData = contentData.userData;
@@ -140,6 +146,7 @@ export class Supervisor {
 
   private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<string | void> {
     if (this.config.runInstantiation && !this.hasInstantiated) {
+      Supervisor.currentStage = 'instantiation';
       await this.instantiate(templateData, contentData);
       this.executeHandlers("afterInstantiate");
     }
@@ -149,18 +156,21 @@ export class Supervisor {
     }
 
     if (this.config.runAssembly) {
+      Supervisor.currentStage = 'assembly';
       this.executeHandlers("beforeAssembly");
       await this.assemble(contentData);
       this.executeHandlers("afterAssembly");
     }
 
     if (this.config.runPreprocessing) {
+      Supervisor.currentStage = 'preprocessing';
       this.executeHandlers("beforePreprocess");
       await this.preProcess();
       this.executeHandlers("afterPreprocess");
     }
 
     if (this.config.runValidation) {
+      Supervisor.currentStage = 'validation';
       this.executeHandlers("beforeValidate");
       await this.validate();
       this.executeHandlers("afterValidate");
@@ -168,12 +178,14 @@ export class Supervisor {
 
     let renderResult: string | void = undefined;
     if (this.config.runRendering) {
+      Supervisor.currentStage = 'render';
       this.executeHandlers("beforeRender");
       renderResult = await this.render();
       this.executeHandlers("afterRender");
     }
 
     if (this.config.runPostprocessing) {
+      Supervisor.currentStage = 'postprocessing';
       this.executeHandlers("beforePostprocess");
       await this.postProcess();
       this.executeHandlers("afterPostprocess");
@@ -296,6 +308,7 @@ export class Supervisor {
   }
 
   private monitor(): void {
+    Supervisor.currentStage = 'monitoring';
     this.executeHandlers("beforeMonitor");
     this.isMonitoring = true;
     console.log("Stage: Monitoring started, state:", this.isMonitoring);
@@ -314,6 +327,7 @@ export class Supervisor {
   }
 
   private close(): void {
+    Supervisor.currentStage = 'closed';
     console.log("Supervisor closing. Pipeline complete.");
     Supervisor.instance = null;
   }
