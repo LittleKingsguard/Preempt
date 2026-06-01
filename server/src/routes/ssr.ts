@@ -8,9 +8,6 @@ import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-let cachedDefaultIndexId: number | null = null;
-let lastCacheUpdate: number = 0;
-const CACHE_TTL = 60000; // 1 minute cache
 
 const serverApi = {
   getLatestContent,
@@ -37,7 +34,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
     }
 
     Supervisor.resetInstantiation();
-    const serverConfig = {
+    let serverConfig = {
       runInstantiation: false,
       runAssembly: false,
       runPreprocessing: false,
@@ -46,6 +43,16 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
       runPostprocessing: false,
       runMonitoring: false
     };
+
+    let dbConfig = await getSetting('server_config');
+    if (dbConfig) {
+      if (typeof dbConfig === 'string') {
+        try { dbConfig = JSON.parse(dbConfig); } catch (e) {}
+      }
+      if (typeof dbConfig === 'object') {
+        serverConfig = { ...serverConfig, ...dbConfig };
+      }
+    }
 
     const htmlOutput = await Supervisor.process(contentData.template_payload, contentData.payload, serverConfig, serverApi);
 
@@ -81,20 +88,14 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const now = Date.now();
-    if (cachedDefaultIndexId === null || now - lastCacheUpdate > CACHE_TTL) {
-      const setting = await getSetting('default_index_content_id');
-      if (setting && setting.id) {
-        cachedDefaultIndexId = setting.id;
-      }
-      lastCacheUpdate = now;
-    }
+    const setting = await getSetting('default_index_content_id');
+    const defaultIndexId = (setting && setting.id) ? setting.id : null;
     
-    if (cachedDefaultIndexId === null) {
+    if (!defaultIndexId) {
       return res.status(404).send("No default index configured");
     }
 
-    await renderContent(cachedDefaultIndexId, null, req, res);
+    await renderContent(defaultIndexId, null, req, res);
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal server error");
