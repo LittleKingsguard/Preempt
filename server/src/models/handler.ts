@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { queryFirstRow } from "../utils/db.js";
 
 export async function getHandlers() {
   const result = await pool.query("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers");
@@ -6,8 +7,7 @@ export async function getHandlers() {
 }
 
 export async function getHandlerById(id: number) {
-  const result = await pool.query("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers WHERE id = $1", [id]);
-  return result.rows.length > 0 ? result.rows[0] : null;
+  return await queryFirstRow("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers WHERE id = $1", [id]);
 }
 
 export async function createHandler(user: any, name: string, body: string) {

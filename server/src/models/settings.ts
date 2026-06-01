@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { queryFirstRow } from "../utils/db.js";
 
 interface CacheEntry {
   value: any;
@@ -16,8 +17,8 @@ export async function getSetting(key: string): Promise<any> {
     return cached.value;
   }
 
-  const result = await pool.query("SELECT value FROM SiteSettings WHERE key = $1", [key]);
-  const value = result.rows.length > 0 ? result.rows[0].value : null;
+  const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", [key]);
+  const value = row ? row.value : null;
   
   cache.set(key, { value, timestamp: now });
   return value;

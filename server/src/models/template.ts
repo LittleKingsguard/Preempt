@@ -1,140 +1,19 @@
 import { pool } from "../db.js";
 import { updateTemplateTags } from "./tag.js";
+import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "./templateUtils.js";
+import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
 
 export async function getTemplateById(id: number, editorMode: string | null = null) {
-  let templateIdToFetch = id;
+  const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
+  const template = await fetchTemplateRecord(templateIdToFetch);
+  if (!template) return null;
+
+  await populateTemplateHandlers(template.payload, template.id);
+  await populateTemplateComponents(template.payload, template.id);
 
   if (editorMode) {
-    const editorTagCheck = await pool.query(`
-      SELECT t.id FROM TemplateTags tt
-      JOIN Tags tag ON tt.tag_id = tag.id
-      JOIN Templates t ON tt.template_id = t.id
-      JOIN Templates rt ON t.group_id = rt.group_id
-      WHERE rt.id = $1 AND tag.name = 'editor'
-      LIMIT 1
-    `, [id]);
-    
-    if (editorTagCheck.rows.length > 0) {
-      templateIdToFetch = editorTagCheck.rows[0].id;
-    }
-  }
-
-  const result = await pool.query("SELECT * FROM Templates WHERE id = $1", [templateIdToFetch]);
-  if (result.rows.length === 0) return null;
-  
-  const template = result.rows[0];
-  const resolvedTemplateId = template.id;
-  
-  const handlerResult = await pool.query(`
-    SELECT h.name, h.body 
-    FROM Handlers h
-    JOIN TemplateHandlers th ON h.id = th.handler_id
-    WHERE th.template_id = $1
-    UNION
-    SELECT h.name, h.body
-    FROM Handlers h
-    JOIN ComponentHandlers ch ON h.id = ch.handler_id
-    JOIN TemplateComponents tc ON ch.component_id = tc.component_id
-    WHERE tc.template_id = $1
-  `, [resolvedTemplateId]);
-
-  if (handlerResult.rows.length > 0) {
-    if (!template.payload.component) {
-      template.payload.component = [];
-    }
-    handlerResult.rows.forEach((h: any) => {
-      template.payload.component.push({
-        reference: h.name,
-        value: h.body
-      });
-    });
-  }
-
-  const componentResult = await pool.query(`
-    SELECT c.name, c.payload 
-    FROM Components c
-    JOIN TemplateComponents tc ON c.id = tc.component_id
-    WHERE tc.template_id = $1
-  `, [resolvedTemplateId]);
-
-  if (componentResult.rows.length > 0) {
-    if (!template.payload.component) template.payload.component = [];
-    componentResult.rows.forEach((c: any) => {
-      template.payload.component.push({
-        reference: c.name,
-        value: c.payload
-      });
-    });
-  }
-
-  if (editorMode) {
-    const tagCheck = await pool.query(`
-      SELECT 1 FROM TemplateTags tt
-      JOIN Tags tag ON tt.tag_id = tag.id
-      JOIN Templates t ON tt.template_id = t.id
-      JOIN Templates rt ON t.group_id = rt.group_id
-      WHERE rt.id = $1 AND tag.name = 'editor'
-    `, [resolvedTemplateId]);
-
-    const hasEditorTag = tagCheck.rows.length > 0;
-
-    const injectInspectHandlers = (node: any) => {
-      if (!node || typeof node !== 'object') return;
-      if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor")) return;
-      
-      if (!node.component) node.component = [];
-      node.component.push({ reference: "EditorInspectHandler", target: "handlers.click" });
-
-      if (Array.isArray(node.content)) {
-        node.content.forEach(injectInspectHandlers);
-      } else if (typeof node.content === 'object') {
-        injectInspectHandlers(node.content);
-      }
-    };
-
-    if (template.payload?.content) {
-      if (Array.isArray(template.payload.content)) {
-        template.payload.content.forEach(injectInspectHandlers);
-      } else {
-        injectInspectHandlers(template.payload.content);
-      }
-    }
-
-    if (!hasEditorTag) {
-      if (!template.payload.content) template.payload.content = [];
-      if (!Array.isArray(template.payload.content)) {
-        template.payload.content = [template.payload.content];
-      }
-      template.payload.content.push({
-        type: "div",
-        component: [
-          { reference: "PreemptEditor", target: "type" },
-          { reference: "editorMode", target: "props.mode", value: editorMode }
-        ]
-      });
-
-      const editorComponentRes = await pool.query(`SELECT payload FROM Components WHERE name = 'PreemptEditor'`);
-      if (editorComponentRes.rows.length > 0) {
-        if (!template.payload.component) template.payload.component = [];
-        template.payload.component.push({
-          reference: "PreemptEditor",
-          value: editorComponentRes.rows[0].payload
-        });
-      }
-
-      const editorHandlersRes = await pool.query(`
-        SELECT h.name, h.body FROM Handlers h
-        JOIN ComponentHandlers ch ON h.id = ch.handler_id
-        JOIN Components c ON ch.component_id = c.id
-        WHERE c.name = 'PreemptEditor'
-      `);
-      editorHandlersRes.rows.forEach((h: any) => {
-        template.payload.component.push({
-          reference: h.name,
-          value: h.body
-        });
-      });
-    }
+    const hasEditorTag = await checkHasEditorTag(template.id);
+    await injectEditorDependencies(template.payload, null, editorMode, hasEditorTag);
   }
 
   return template;

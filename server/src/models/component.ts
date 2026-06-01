@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { queryFirstRow } from "../utils/db.js";
 
 export async function getComponents() {
   const result = await pool.query("SELECT id, name, payload, author_id, created_at, updated_at FROM Components");
@@ -6,8 +7,7 @@ export async function getComponents() {
 }
 
 export async function getComponentById(id: number) {
-  const result = await pool.query("SELECT id, name, payload, author_id, created_at, updated_at FROM Components WHERE id = $1", [id]);
-  return result.rows.length > 0 ? result.rows[0] : null;
+  return await queryFirstRow("SELECT id, name, payload, author_id, created_at, updated_at FROM Components WHERE id = $1", [id]);
 }
 
 export async function createComponent(user: any, name: string, payload: any) {
