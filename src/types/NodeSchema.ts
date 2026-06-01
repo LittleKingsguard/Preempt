@@ -13,6 +13,20 @@ export interface ComponentBinding {
   target?: string;
   value?: string | NodeData | NodeData[] | null;
 }
+export interface NodeVersion {
+  name?: string;
+  timestamp: number;
+  content?: string | NodeData | NodeData[];
+  props?: Record<string, any>;
+  component?: ComponentBinding[];
+  css?: {
+    id?: string;
+    classes?: string[];
+    style?: Record<string, string>;
+    cssDef?: CssDef[];
+  };
+}
+
 
 export interface NodeData {
   type: string;
@@ -27,6 +41,7 @@ export interface NodeData {
     style?: Record<string, string>;
     cssDef?: CssDef[];
   };
+  versions?: NodeVersion[];
 }
 
 export interface UserData {

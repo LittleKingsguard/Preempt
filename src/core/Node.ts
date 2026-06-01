@@ -26,11 +26,14 @@ export class Node {
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
   public static nodeCounter: number = 0;
+  public static globalMetadata: any = {};
 
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
     this.parent = parent;
     this.isComponentInjected = isComponentInjected;
+
+    this.resolveVersion();
 
     if (!this.data.css) this.data.css = {};
     if (!this.data.css.id) this.data.css.id = `preempt-node-${Node.nodeCounter++}`;
@@ -59,6 +62,33 @@ export class Node {
     }
 
     Node.appendPlacement(this);
+  }
+
+  private resolveVersion(): void {
+    const targetVersion = this.data.props?.version || Node.globalMetadata?.version;
+    if (!targetVersion || typeof targetVersion.timestamp !== 'number' || !this.data.versions || this.data.versions.length === 0) {
+      return;
+    }
+
+    const targetTimestamp = targetVersion.timestamp;
+    
+    const sortedVersions = [...this.data.versions].sort((a, b) => b.timestamp - a.timestamp);
+    const matchedVersion = sortedVersions.find(v => v.timestamp <= targetTimestamp);
+
+    if (matchedVersion) {
+      if (matchedVersion.content !== undefined) {
+        this.data.content = matchedVersion.content;
+      }
+      if (matchedVersion.props !== undefined) {
+        this.data.props = matchedVersion.props;
+      }
+      if (matchedVersion.component !== undefined) {
+        this.data.component = matchedVersion.component;
+      }
+      if (matchedVersion.css !== undefined) {
+        this.data.css = matchedVersion.css;
+      }
+    }
   }
 
   public applyComponentsTree(): void {

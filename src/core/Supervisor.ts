@@ -114,6 +114,7 @@ export class Supervisor {
   public static resetInstantiation(): void {
     if (Supervisor.instance) {
       Supervisor.instance.hasInstantiated = false;
+      Node.globalMetadata = {};
     }
   }
 
@@ -199,6 +200,7 @@ export class Supervisor {
     StyleNode.clear(); // Clear before re-running
     Node.clearPlacements();
     Node.nodeCounter = 0;
+    Node.globalMetadata = contentData.metadata || {};
 
     const safeTemplateData = JSON.parse(JSON.stringify(templateData));
     const safeContentData = JSON.parse(JSON.stringify(contentData));
@@ -330,5 +332,6 @@ export class Supervisor {
     Supervisor.currentStage = 'closed';
     console.log("Supervisor closing. Pipeline complete.");
     Supervisor.instance = null;
+    Node.globalMetadata = {};
   }
 }
