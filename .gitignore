@@ -42,4 +42,5 @@ server/vitest.config.ts
 reset_db.sh
 server/seed.sql
 
-
+# Custom scripts
+rebuild_frontend.sh

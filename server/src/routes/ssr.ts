@@ -28,6 +28,11 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
       return res.status(404).send("Content not found");
     }
 
+    if (req.user) {
+      contentData.payload.metadata = contentData.payload.metadata || {};
+      contentData.payload.metadata.user = req.user;
+    }
+
     const distPath = path.join(process.cwd(), "../dist/index.html");
     if (!fs.existsSync(distPath)) {
       return res.status(500).send("Frontend dist not found. Did you run npm run build?");

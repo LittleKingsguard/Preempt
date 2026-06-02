@@ -26,7 +26,7 @@ services:
       - ./server:/app
       - ./dist:/dist
       - ./src:/src
-    command: sh -c "npm install && npx tsx src/index.ts"
+    command: sh -c "npm install && npx tsx watch src/index.ts"
     depends_on:
       - db
 

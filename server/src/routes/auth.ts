@@ -1,7 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { authenticateUser, createUser } from "../models/user.js";
-import { JWT_SECRET } from "../middleware/auth.js";
+import { JWT_SECRET, authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -44,6 +44,16 @@ router.post("/register", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+router.get("/me", authenticateToken, (req, res) => {
+  const user = (req as any).user;
+  res.json({ user });
+});
+
+router.post("/logout", (req, res) => {
+  res.clearCookie("token");
+  res.json({ message: "Logged out successfully" });
 });
 
 export default router;

@@ -99,16 +99,22 @@ export class Node {
     }
   }
 
-  private applyComponents(): void {
+  private applyComponents(processedComponents: Set<any> = new Set()): void {
     if (!this.data.component) return;
 
-    const sortedComponents = [...this.data.component].sort((a, b) => {
+    const componentsToProcess = this.data.component.filter(c => !processedComponents.has(c));
+    if (componentsToProcess.length === 0) return;
+
+    const sortedComponents = [...componentsToProcess].sort((a, b) => {
       if (a.target === "type" && b.target !== "type") return -1;
       if (a.target !== "type" && b.target === "type") return 1;
       return 0;
     });
 
+    let addedNew = false;
+
     for (const binding of sortedComponents) {
+      processedComponents.add(binding);
       if (!binding.target) continue;
 
       let resolvedValue: string | NodeData | NodeData[] | null = binding.value !== undefined ? binding.value : null;
@@ -178,6 +184,7 @@ export class Node {
           if (d.handlers) this.data.handlers = { ...this.data.handlers, ...d.handlers };
           if (d.component) {
             this.data.component = [...(this.data.component || []), ...d.component];
+            addedNew = true;
           }
         }
         continue;
@@ -188,6 +195,10 @@ export class Node {
       } else {
         console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
       }
+    }
+
+    if (addedNew) {
+      this.applyComponents(processedComponents);
     }
   }
 
