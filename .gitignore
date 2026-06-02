@@ -31,3 +31,9 @@ dist-ssr
 # Credentials
 admin_credentials.txt
 create_admin.cjs
+
+# Test scenarios & test suite
+testScenaros.md
+server/tests/
+server/vitest.config.ts
+

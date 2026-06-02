@@ -216,6 +216,17 @@ export class Node {
   }
 
   public placeInto(target: Node): void {
+    if (target === this) {
+      throw new Error("Cannot place node into itself");
+    }
+    let current: Node | null = target.parent;
+    while (current) {
+      if (current === this) {
+        throw new Error("Cannot place node into a descendant");
+      }
+      current = current.parent;
+    }
+
     if (this.parent) {
       this.parent.hasChangedSinceRender = true;
       this.originalParent = this.parent;
