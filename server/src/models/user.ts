@@ -3,7 +3,7 @@ import { queryFirstRow } from "../utils/db.js";
 
 export async function authenticateUser(username: string, passwordPlain: string) {
   return await queryFirstRow(
-    "SELECT username, is_admin, is_contributor FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
+    "SELECT username, is_admin, is_contributor, is_trusted_dev FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
     [username, passwordPlain]
   );
 }
@@ -11,7 +11,7 @@ export async function authenticateUser(username: string, passwordPlain: string) 
 export async function createUser(username: string, email: string, passwordPlain: string) {
   try {
     const result = await pool.query(
-      "INSERT INTO Users (username, email, password_hash) VALUES ($1, $2, crypt($3, gen_salt('bf'))) RETURNING username, email, is_admin, is_contributor",
+      "INSERT INTO Users (username, email, password_hash) VALUES ($1, $2, crypt($3, gen_salt('bf'))) RETURNING username, email, is_admin, is_contributor, is_trusted_dev",
       [username, email, passwordPlain]
     );
     return result.rows[0];

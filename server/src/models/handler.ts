@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
+import { getSetting } from "./settings.js";
 
 export async function getHandlers() {
   const result = await pool.query("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers");
@@ -11,8 +12,10 @@ export async function getHandlerById(id: number) {
 }
 
 export async function createHandler(user: any, name: string, body: string) {
-  if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can create handlers", status: 403 };
+  const hasTrustedDevs = await getSetting("hasTrustedDevs");
+  const isAuthorized = user && (user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+  if (!isAuthorized) {
+    return { error: "Forbidden: Not authorized to create handlers", status: 403 };
   }
 
   try {
@@ -30,8 +33,10 @@ export async function createHandler(user: any, name: string, body: string) {
 }
 
 export async function updateHandler(id: number, user: any, name: string, body: string) {
-  if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can update handlers", status: 403 };
+  const hasTrustedDevs = await getSetting("hasTrustedDevs");
+  const isAuthorized = user && (user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+  if (!isAuthorized) {
+    return { error: "Forbidden: Not authorized to update handlers", status: 403 };
   }
 
   try {

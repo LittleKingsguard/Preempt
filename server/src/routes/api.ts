@@ -27,7 +27,6 @@ router.post("/handlers", authenticateToken, async (req, res) => {
   // TODO: For production release, create a .d.ts file to extend express.Request with user property
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
-  if (!user.is_admin) return res.status(403).json({ error: "Forbidden: Only admins can create handlers" });
 
   const { name, body } = req.body;
   if (!name || !body) return res.status(400).json({ error: "Name and body are required" });
@@ -48,7 +47,6 @@ router.put("/handlers/:id", authenticateToken, async (req, res) => {
   const handlerId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
-  if (!user.is_admin) return res.status(403).json({ error: "Forbidden: Only admins can update handlers" });
 
   const { name, body } = req.body;
   if (!name || !body) return res.status(400).json({ error: "Name and body are required" });

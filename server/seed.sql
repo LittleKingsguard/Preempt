@@ -433,6 +433,7 @@ CREATE TABLE public.users (
     is_admin boolean DEFAULT false,
     is_contributor boolean DEFAULT false,
     is_shadowed boolean DEFAULT false,
+    is_trusted_dev boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 );
@@ -649,7 +650,7 @@ SELECT pg_catalog.setval('public.components_id_seq', 2, true);
 -- Name: content_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.content_id_seq', 1, false);
+SELECT pg_catalog.setval('public.content_id_seq', 1, true);
 
 
 --
@@ -677,7 +678,7 @@ SELECT pg_catalog.setval('public.templategroups_id_seq', 1, true);
 -- Name: templates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.templates_id_seq', 1, false);
+SELECT pg_catalog.setval('public.templates_id_seq', 1, true);
 
 
 --
