@@ -33,7 +33,7 @@ admin_credentials.txt
 create_admin.cjs
 
 # Test scenarios & test suite
-testScenaros.md
+testScenarios.md
 server/tests/
 server/vitest.config.ts
 

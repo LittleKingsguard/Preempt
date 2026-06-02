@@ -13,6 +13,8 @@ export async function checkHasEditorTag(templateId: number): Promise<boolean> {
 }
 
 export async function injectEditorDependencies(targetPayload: any, templatePayload: any | null, editorMode: string, hasEditorTag: boolean): Promise<void> {
+  // NOTE: This function does not perform circular reference/recursion checks on the node payload structures.
+  // The layout data processed here is always loaded from JSON stored in the database, which strictly prevents circular/recursive references.
   const injectInspectHandlers = (node: any) => {
     if (!node || typeof node !== 'object') return;
     if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor")) return;
