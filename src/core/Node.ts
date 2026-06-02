@@ -102,7 +102,13 @@ export class Node {
   private applyComponents(): void {
     if (!this.data.component) return;
 
-    for (const binding of this.data.component) {
+    const sortedComponents = [...this.data.component].sort((a, b) => {
+      if (a.target === "type" && b.target !== "type") return -1;
+      if (a.target !== "type" && b.target === "type") return 1;
+      return 0;
+    });
+
+    for (const binding of sortedComponents) {
       if (!binding.target) continue;
 
       let resolvedValue: string | NodeData | NodeData[] | null = binding.value !== undefined ? binding.value : null;
@@ -170,6 +176,9 @@ export class Node {
 
           if (d.props) this.data.props = { ...this.data.props, ...d.props };
           if (d.handlers) this.data.handlers = { ...this.data.handlers, ...d.handlers };
+          if (d.component) {
+            this.data.component = [...(this.data.component || []), ...d.component];
+          }
         }
         continue;
       }
@@ -464,6 +473,13 @@ export class Node {
       console.error("Node validation failed: missing 'type' property", this.data);
       valid = false;
     } else {
+      if (this.data.component) {
+        const typeTargets = this.data.component.filter(c => c.target === "type");
+        if (typeTargets.length > 1) {
+          console.error("Node validation failed: node cannot have more than one 'type' target in components", this.data);
+          valid = false;
+        }
+      }
       const requiredProps = Node.REQUIRED_PROPS_MAP[this.data.type.toLowerCase()];
       if (requiredProps) {
         for (const prop of requiredProps) {
