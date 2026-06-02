@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
+import { Node } from "../../../src/core/Node.js";
 
 export async function getComponents() {
   const result = await pool.query("SELECT id, name, payload, author_id, created_at, updated_at FROM Components");
@@ -13,7 +14,12 @@ export async function getComponentById(id: number) {
 export async function createComponent(user: any, name: string, payload: any) {
   // admin or contributor can create
   if (!user || (!user.is_admin && !user.is_contributor)) {
-    return { error: "Forbidden: Only admins and contributors can create components" };
+    return { error: "Forbidden: Only admins and contributors can create components", status: 403 };
+  }
+
+  const virtualNode = new Node(payload);
+  if (!virtualNode.validate(true)) {
+    return { error: "Invalid layout node tree", status: 400 };
   }
 
   try {
@@ -33,7 +39,12 @@ export async function createComponent(user: any, name: string, payload: any) {
 export async function updateComponent(id: number, user: any, name: string, payload: any) {
   // only admin can update
   if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can update components" };
+    return { error: "Forbidden: Only admins can update components", status: 403 };
+  }
+
+  const virtualNode = new Node(payload);
+  if (!virtualNode.validate(true)) {
+    return { error: "Invalid layout node tree", status: 400 };
   }
 
   try {
@@ -56,7 +67,7 @@ export async function updateComponent(id: number, user: any, name: string, paylo
 export async function deleteComponent(id: number, user: any) {
   // only admin can delete
   if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can delete components" };
+    return { error: "Forbidden: Only admins can delete components", status: 403 };
   }
 
   const result = await pool.query("DELETE FROM Components WHERE id = $1 RETURNING id", [id]);

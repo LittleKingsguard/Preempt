@@ -146,8 +146,11 @@ router.post("/template", authenticateToken, async (req, res) => {
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const template = await createTemplate(user.username, payload, tags);
-    res.json({ message: "Template created successfully", template });
+    const result = await createTemplate(user.username, payload, tags);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json({ message: "Template created successfully", template: result.template });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

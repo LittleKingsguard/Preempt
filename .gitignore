@@ -34,6 +34,12 @@ create_admin.cjs
 
 # Test scenarios & test suite
 testScenarios.md
+e2eScenarios.md
 server/tests/
 server/vitest.config.ts
+
+# Database scripts and seeds
+reset_db.sh
+server/seed.sql
+
 

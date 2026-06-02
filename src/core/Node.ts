@@ -37,6 +37,7 @@ export class Node {
 
     if (!this.data.css) this.data.css = {};
     if (!this.data.css.id) this.data.css.id = `preempt-node-${Node.nodeCounter++}`;
+    if (!this.data.props) this.data.props = {};
 
     if (typeof window !== 'undefined') {
       const existingEl = document.getElementById(this.data.css.id);
@@ -457,7 +458,7 @@ export class Node {
     }
   }
 
-  public validate(): boolean {
+  public validate(bubbleErrors: boolean = false): boolean {
     let valid = true;
     if (!this.data.type) {
       console.error("Node validation failed: missing 'type' property", this.data);
@@ -480,7 +481,9 @@ export class Node {
       }
     }
     for (const child of this.children) {
-      child.validate();
+      if (!child.validate(bubbleErrors) && bubbleErrors) {
+        valid = false;
+      }
     }
     this.isValid = valid;
     return valid;

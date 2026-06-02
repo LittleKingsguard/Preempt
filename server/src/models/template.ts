@@ -2,6 +2,7 @@ import { pool } from "../db.js";
 import { updateTemplateTags } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "./templateUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
+import { Node } from "../../../src/core/Node.js";
 
 export async function getTemplateById(id: number, editorMode: string | null = null) {
   const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
@@ -20,6 +21,11 @@ export async function getTemplateById(id: number, editorMode: string | null = nu
 }
 
 export async function createTemplate(authorId: string, payload: any, tags: string[]) {
+  const virtualNode = new Node(payload);
+  if (!virtualNode.validate(true)) {
+    return { error: "Validation Error", status: 400 };
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -32,7 +38,7 @@ export async function createTemplate(authorId: string, payload: any, tags: strin
       await updateTemplateTags(client, template.id, tags);
     }
     await client.query('COMMIT');
-    return template;
+    return { template };
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -42,6 +48,11 @@ export async function createTemplate(authorId: string, payload: any, tags: strin
 }
 
 export async function updateTemplate(templateId: number, authorId: string, isAdmin: boolean, payload: any, tags: string[]) {
+  const virtualNode = new Node(payload);
+  if (!virtualNode.validate(true)) {
+    return { error: "Validation Error", status: 400 };
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

@@ -12,7 +12,7 @@ export async function getHandlerById(id: number) {
 
 export async function createHandler(user: any, name: string, body: string) {
   if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can create handlers" };
+    return { error: "Forbidden: Only admins can create handlers", status: 403 };
   }
 
   try {
@@ -31,7 +31,7 @@ export async function createHandler(user: any, name: string, body: string) {
 
 export async function updateHandler(id: number, user: any, name: string, body: string) {
   if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can update handlers" };
+    return { error: "Forbidden: Only admins can update handlers", status: 403 };
   }
 
   try {
