@@ -27,6 +27,8 @@ router.post("/handlers", authenticateToken, async (req, res) => {
   // TODO: For production release, create a .d.ts file to extend express.Request with user property
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ id: 999999, name: req.body.name || "", body: req.body.body || "" });
 
   const { name, body } = req.body;
   if (!name || !body) return res.status(400).json({ error: "Name and body are required" });
@@ -47,6 +49,8 @@ router.put("/handlers/:id", authenticateToken, async (req, res) => {
   const handlerId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ id: handlerId, name: req.body.name || "", body: req.body.body || "" });
 
   const { name, body } = req.body;
   if (!name || !body) return res.status(400).json({ error: "Name and body are required" });
@@ -136,6 +140,8 @@ router.get("/template/:id", authenticateToken, async (req, res) => {
 router.post("/template", authenticateToken, async (req, res) => {
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ message: "Template created successfully", template: { id: 999999, username: user.username, payload: req.body.payload, tags: req.body.tags } });
   if (!user.is_admin && !user.is_contributor) {
     return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
   }
@@ -159,6 +165,8 @@ router.put("/template/:id", authenticateToken, async (req, res) => {
   const templateId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ message: "Template updated successfully", template: { id: templateId, username: user.username, payload: req.body.payload, tags: req.body.tags } });
   if (!user.is_admin && !user.is_contributor) {
     return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
   }
@@ -205,6 +213,9 @@ router.get("/components/:id", authenticateToken, async (req, res) => {
 
 router.post("/components", authenticateToken, async (req, res) => {
   const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ id: 999999, name: req.body.name || "", payload: req.body.payload || {} });
   const { name, payload } = req.body;
   if (!name || !payload) return res.status(400).json({ error: "Name and payload are required" });
 
@@ -223,6 +234,9 @@ router.post("/components", authenticateToken, async (req, res) => {
 router.put("/components/:id", authenticateToken, async (req, res) => {
   const componentId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ id: componentId, name: req.body.name || "", payload: req.body.payload || {} });
   const { name, payload } = req.body;
   if (!name || !payload) return res.status(400).json({ error: "Name and payload are required" });
 
@@ -241,6 +255,9 @@ router.put("/components/:id", authenticateToken, async (req, res) => {
 router.delete("/components/:id", authenticateToken, async (req, res) => {
   const componentId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ message: "Component deleted successfully" });
 
   try {
     const result = await deleteComponent(componentId, user);

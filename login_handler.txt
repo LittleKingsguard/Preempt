@@ -1,0 +1,69 @@
+ async (event, context) => {                                                                                                                              +
+     event.preventDefault();                                                                                                                              +
+     const form = event.target.closest("form");                                                                                                           +
+     const username = form.querySelector("[name=username]").value;                                                                                        +
+     const password = form.querySelector("[name=password]").value;                                                                                        +
+     try {                                                                                                                                                +
+       const res = await fetch("/api/login", {                                                                                                            +
+         method: "POST",                                                                                                                                  +
+         headers: { "Content-Type": "application/json" },                                                                                                 +
+         body: JSON.stringify({ username, password })                                                                                                     +
+       });                                                                                                                                                +
+       const data = await res.json();                                                                                                                     +
+       if (res.ok) {                                                                                                                                      +
+         if (data.status === "2fa_required") {                                                                                                            +
+           let container = context.node.parent;                                                                                                           +
+           while(container && (!container.data.css || !container.data.css.classes || !container.data.css.classes.includes("login-component-container"))) {+
+              container = container.parent;                                                                                                               +
+           }                                                                                                                                              +
+           if(container) {                                                                                                                                +
+              const loginFormNode = container.children[1];                                                                                                +
+              const twoFaFormNode = container.children[4];                                                                                                +
+              loginFormNode.data.css.style.display = "none";                                                                                              +
+              twoFaFormNode.data.css.style.display = "block";                                                                                             +
+                                                                                                                                                          +
+              const twoFaForm = twoFaFormNode.domNode ? twoFaFormNode.domNode.querySelector('form') : null;                                               +
+              if(twoFaForm) {                                                                                                                             +
+                  const usernameInput = twoFaForm.querySelector('[name=username]');                                                                       +
+                  if(usernameInput) usernameInput.value = data.username;                                                                                  +
+              }                                                                                                                                           +
+                                                                                                                                                          +
+              loginFormNode.hasChangedSinceRender = true;                                                                                                 +
+              twoFaFormNode.hasChangedSinceRender = true;                                                                                                 +
+              loginFormNode.render();                                                                                                                     +
+              twoFaFormNode.render();                                                                                                                     +
+                                                                                                                                                          +
+                                                                                                                                                          +
+           }                                                                                                                                              +
+         } else if (data.status === "verification_required") {                                                                                            +
+           let container = context.node.parent;                                                                                                           +
+           while(container && (!container.data.css || !container.data.css.classes || !container.data.css.classes.includes("login-component-container"))) {+
+              container = container.parent;                                                                                                               +
+           }                                                                                                                                              +
+           if(container) {                                                                                                                                +
+              const loginFormNode = container.children[1];                                                                                                +
+              const verifyFormNode = container.children[6];                                                                                               +
+              loginFormNode.data.css.style.display = "none";                                                                                              +
+              verifyFormNode.data.css.style.display = "block";                                                                                            +
+                                                                                                                                                          +
+              // Inject username into the JSON directly                                                                                                   +
+              const verifyFormConfig = verifyFormNode.data.content[2];                                                                                    +
+              const usernameInputConfig = verifyFormConfig.content[0];                                                                                    +
+              usernameInputConfig.props.value = data.username;                                                                                            +
+              verifyFormNode.hasChangedSinceRender = true;                                                                                                +
+              loginFormNode.render();                                                                                                                     +
+              verifyFormNode.render();                                                                                                                    +
+                                                                                                                                                          +
+                                                                                                                                                          +
+           }                                                                                                                                              +
+         } else {                                                                                                                                         +
+           window.location.reload();                                                                                                                      +
+         }                                                                                                                                                +
+       } else {                                                                                                                                           +
+         alert(data.error || "Login failed");                                                                                                             +
+       }                                                                                                                                                  +
+     } catch(err) {                                                                                                                                       +
+       alert("Error logging in");                                                                                                                         +
+     }                                                                                                                                                    +
+ }
+
