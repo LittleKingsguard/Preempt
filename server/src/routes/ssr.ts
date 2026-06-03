@@ -107,6 +107,22 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
+router.get("/reset-password", authenticateToken, async (req, res) => {
+  try {
+    const setting = await getSetting('default_index_content_id');
+    const defaultIndexId = (setting && setting.id) ? setting.id : null;
+    
+    if (!defaultIndexId) {
+      return res.status(404).send("No default index configured");
+    }
+
+    await renderContent(defaultIndexId, null, req, res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Internal server error");
+  }
+});
+
 router.get("/content/:id", authenticateToken, async (req, res) => {
   const contentId = parseInt(req.params.id as string, 10);
   const editorMode = req.query.editorMode as string || null;

@@ -128,7 +128,7 @@ router.post("/forgot-password", async (req, res) => {
       const resetToken = crypto.randomBytes(32).toString('hex');
       await deleteAuthTokens(user.username, 'RESET');
       await createAuthToken(user.username, 'RESET', resetToken, 30);
-      await sendPasswordResetEmail(user.email, resetToken);
+      await sendPasswordResetEmail(user.email, user.username, resetToken);
     }
     // Always return 200 to avoid email enumeration
     res.json({ message: "If an account with that email exists, a reset link has been sent." });

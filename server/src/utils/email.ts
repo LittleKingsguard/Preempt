@@ -10,8 +10,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export const sendPasswordResetEmail = async (to: string, token: string) => {
-  const resetLink = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/reset-password?token=${token}&username=${encodeURIComponent(to)}`;
+export const sendPasswordResetEmail = async (to: string, username: string, token: string) => {
+  const resetLink = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/reset-password?token=${token}&username=${encodeURIComponent(username)}`;
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM,
