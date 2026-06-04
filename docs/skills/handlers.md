@@ -17,12 +17,16 @@ The most important property is `context.node`, which points to the Preempt `Node
 You can traverse the node tree using:
 - `context.node.parent`: The parent `Node`.
 - `context.node.children`: An array of child `Node`s.
+- `context.node.findNode(query)`: Recursively searches children for a node matching the query (e.g., `{ classes: ['login-form-wrapper'] }`).
+- `context.node.findNodes(query)`: Returns an array of all matching nodes.
 
-**Example Traversal:**
+**Example Traversal (Best Practice):**
 ```javascript
-// Navigating up to a container and down to a specific child
+// Navigating up to the top-level container, then finding a specific child by class name.
+// ALWAYS prefer findNode() over hardcoded array indices (e.g., container.children[1]) 
+// because structural changes (like adding a new tab) will break hardcoded index logic!
 const container = context.node.parent.parent;
-const loginFormNode = container.children[1];
+const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
 ```
 
 ### Best Practice: Structural Component Handlers
@@ -42,9 +46,9 @@ The `node.data` object holds a reference to the actual JSON configuration that t
 **Example Implementation:**
 ```javascript
 async (event, context) => {
-    // 1. Traverse to find the target node
+    // 1. Traverse to find the target node safely using findNode
     const container = context.node.parent.parent;
-    const loginFormNode = container.children[1];
+    const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
     
     // 2. Mutate the target node's JSON data directly
     // This ensures the change survives pipeline re-instantiation
@@ -82,3 +86,38 @@ You can bind handlers to specific phases of the `Supervisor` pipeline. When defi
 When a lifecycle handler runs, `context` contains:
 - `context.supervisor`: The main pipeline `Supervisor` singleton instance. You can access `Supervisor.currentStage` to check the execution status, or invoke backend APIs via `context.supervisor.serverApi` if running in an SSR environment.
 - `context.node`: The specific `Node` on the virtual DOM tree currently executing the handler.
+
+## State Management Between Form Steps (Avoiding Race Conditions)
+
+When building complex multi-step workflows within a single structural component (e.g., transitioning from a Login form to a 2FA form, or from Registration to Email Verification), you often need to pass state (like a `username`) from the first step to the second step.
+
+**Anti-Pattern (Causes Race Conditions):**
+Do NOT inject state directly into hidden native DOM inputs via DOM manipulation during a handler:
+```javascript
+// AVOID THIS! It will be wiped by the pipeline during re-rendering/hydration.
+const twoFaForm = container.children[4].domNode.querySelector('form');
+twoFaForm.querySelector('[name=username]').value = data.username;
+```
+Because Preempt relies on its virtual `Node` tree as the source of truth, any manual DOM injections will be wiped out when the `Supervisor` triggers a re-render or hydrates the component.
+
+**Best Practice:**
+To safely persist state across form steps and pipeline renders, use the browser's `localStorage` as an intermediary cache.
+
+1. **Set the state in the initial handler:**
+```javascript
+// LoginHandler.js
+localStorage.setItem('preempt_2fa_username', data.username);
+// Trigger the UI transition...
+loginFormNode.data.css.style.display = "none";
+twoFaFormNode.data.css.style.display = "block";
+twoFaFormNode.hasChangedSinceRender = true;
+```
+
+2. **Read the state in the subsequent handler:**
+```javascript
+// Verify2FAHandler.js
+// Fallback to localStorage if the native input is empty/wiped
+const username = form.querySelector("[name=username]").value || localStorage.getItem('preempt_2fa_username');
+```
+
+This guarantees your state survives any unexpected DOM rehydrations triggered by the pipeline monitoring loop.

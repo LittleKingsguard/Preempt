@@ -85,3 +85,11 @@ export async function updateContentHandlers(client: any, contentId: number, hand
     await client.query("INSERT INTO ContentHandlers (content_id, handler_id) SELECT $1, unnest($2::int[])", [contentId, handlerIds]);
   }
 }
+
+export async function stageHandler(user: any, name: string, body: string, originalId: number | null, batchId: number) {
+  const result = await pool.query(
+    "INSERT INTO Handlers (name, body, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
+    [name, body, user.username, originalId, batchId]
+  );
+  return { handler: result.rows[0] };
+}

@@ -20,7 +20,7 @@ export async function getTemplateById(id: number, editorMode: string | null = nu
   return template;
 }
 
-export async function createTemplate(authorId: string, payload: any, tags: string[]) {
+export async function createTemplate(authorId: string, payload: any, tags: string[], groupId: number | null = null) {
   const virtualNode = new Node(payload);
   if (!virtualNode.validate(true)) {
     return { error: "Validation Error", status: 400 };
@@ -30,8 +30,8 @@ export async function createTemplate(authorId: string, payload: any, tags: strin
   try {
     await client.query('BEGIN');
     const result = await client.query(
-      "INSERT INTO Templates (author_id, payload) VALUES ($1, $2) RETURNING *",
-      [authorId, payload]
+      "INSERT INTO Templates (author_id, group_id, payload) VALUES ($1, $2, $3) RETURNING *",
+      [authorId, groupId, payload]
     );
     const template = result.rows[0];
     if (tags && Array.isArray(tags)) {
@@ -47,7 +47,7 @@ export async function createTemplate(authorId: string, payload: any, tags: strin
   }
 }
 
-export async function updateTemplate(templateId: number, authorId: string, isAdmin: boolean, payload: any, tags: string[]) {
+export async function updateTemplate(templateId: number, authorId: string, isAdmin: boolean, payload: any, tags: string[], groupId: number | null = null) {
   const virtualNode = new Node(payload);
   if (!virtualNode.validate(true)) {
     return { error: "Validation Error", status: 400 };
@@ -70,14 +70,49 @@ export async function updateTemplate(templateId: number, authorId: string, isAdm
     }
 
     const result = await client.query(
-      "UPDATE Templates SET payload = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
-      [payload, templateId]
+      "UPDATE Templates SET payload = $1, group_id = COALESCE($2, group_id), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
+      [payload, groupId, templateId]
     );
     if (tags && Array.isArray(tags)) {
       await updateTemplateTags(client, templateId, tags);
     }
     await client.query('COMMIT');
     return { template: result.rows[0] };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function stageTemplate(user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
+  const virtualNode = new Node(payload);
+  if (!virtualNode.validate(true)) {
+    return { error: "Validation Error", status: 400 };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let actualGroupId = groupId;
+    if (!actualGroupId && originalId) {
+      const orig = await client.query("SELECT group_id FROM Templates WHERE id = $1", [originalId]);
+      if (orig.rows.length > 0) {
+        actualGroupId = orig.rows[0].group_id;
+      }
+    }
+
+    const result = await client.query(
+      "INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
+      [user.username, actualGroupId, payload, originalId, batchId]
+    );
+    const template = result.rows[0];
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      await updateTemplateTags(client, template.id, tags);
+    }
+    await client.query('COMMIT');
+    return { template };
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;

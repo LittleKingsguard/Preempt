@@ -6,6 +6,7 @@ import { initTagCache } from "./models/tag.js";
 
 import authRoutes from "./routes/auth.js";
 import apiRoutes from "./routes/api.js";
+import mcpRoutes from "./routes/mcp.js";
 import ssrRoutes from "./routes/ssr.js";
 
 const app = express();
@@ -19,6 +20,7 @@ initTagCache();
 // Mount routers
 app.use("/api", authRoutes);
 app.use("/api", apiRoutes);
+app.use("/api/mcp", mcpRoutes);
 app.use("/", ssrRoutes);
 
 // Serve static assets from dist

@@ -3,7 +3,7 @@ import { queryFirstRow } from "../utils/db.js";
 
 export async function authenticateUser(username: string, passwordPlain: string) {
   return await queryFirstRow(
-    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
+    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
     [username, passwordPlain]
   );
 }
@@ -11,7 +11,7 @@ export async function authenticateUser(username: string, passwordPlain: string) 
 export async function createUser(username: string, email: string, passwordPlain: string) {
   try {
     const result = await pool.query(
-      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified",
+      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot",
       [username, email, passwordPlain]
     );
     return result.rows[0];
@@ -28,7 +28,7 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function getUserByUsername(username: string) {
-  return await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified FROM Users WHERE username = $1", [username]);
+  return await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot FROM Users WHERE username = $1", [username]);
 }
 
 export async function updatePassword(username: string, newPasswordPlain: string) {
@@ -56,4 +56,31 @@ export async function deleteAuthTokens(username: string, type: string) {
 
 export async function verifyUserEmail(username: string) {
   await pool.query("UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1", [username]);
+}
+
+export async function updateUserRoles(username: string, roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
+  const updates: string[] = [];
+  const values: any[] = [];
+  let index = 1;
+  
+  if (roles.is_contributor !== undefined) {
+    updates.push(`is_contributor = $${index++}`);
+    values.push(roles.is_contributor);
+  }
+  if (roles.is_bot !== undefined) {
+    updates.push(`is_bot = $${index++}`);
+    values.push(roles.is_bot);
+  }
+  if (roles.is_shadowed !== undefined) {
+    updates.push(`is_shadowed = $${index++}`);
+    values.push(roles.is_shadowed);
+  }
+
+  if (updates.length === 0) return;
+
+  values.push(username);
+  await pool.query(
+    `UPDATE Users SET ${updates.join(', ')} WHERE username = $${index}`,
+    values
+  );
 }

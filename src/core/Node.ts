@@ -1,5 +1,5 @@
-import type { NodeData, NodeQuery } from "../types/NodeSchema";
-import { StyleNode } from "./StyleNode";
+import type { NodeData, NodeQuery } from "../types/NodeSchema.js";
+import { StyleNode } from "./StyleNode.js";
 
 export class Node {
   private static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {

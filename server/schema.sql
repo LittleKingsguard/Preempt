@@ -10,8 +10,10 @@ CREATE TABLE Users (
     has_verified BOOLEAN DEFAULT FALSE,
     is_trusted_dev BOOLEAN DEFAULT FALSE,
     is_2fa_enabled BOOLEAN DEFAULT FALSE,
+    is_bot BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_bot_roles CHECK (NOT (is_bot = true AND (is_admin = true OR is_contributor = true)))
 );
 
 CREATE TABLE AuthTokens (
@@ -20,6 +22,14 @@ CREATE TABLE AuthTokens (
     token_type VARCHAR(50) NOT NULL,
     token_hash VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ChangeBatches (
+    id SERIAL PRIMARY KEY,
+    author_id VARCHAR(255) REFERENCES Users(username),
+    description TEXT,
+    merged_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -34,6 +44,9 @@ CREATE TABLE Templates (
     author_id VARCHAR(255) REFERENCES Users(username),
     group_id INT REFERENCES TemplateGroups(id) ON DELETE CASCADE,
     payload JSONB NOT NULL,
+    original_id INT REFERENCES Templates(id) ON DELETE SET NULL,
+    change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
+    is_approved BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -47,6 +60,8 @@ CREATE TABLE Content (
     live_date TIMESTAMP WITH TIME ZONE,
     is_visible BOOLEAN DEFAULT TRUE,
     headers TEXT,
+    original_id INT REFERENCES Content(id) ON DELETE SET NULL,
+    change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -76,13 +91,17 @@ CREATE TABLE ContentTags (
 
 CREATE TABLE Handlers (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
     body TEXT NOT NULL,
     author_id VARCHAR(255) REFERENCES Users(username),
     is_approved BOOLEAN DEFAULT TRUE,
+    original_id INT REFERENCES Handlers(id) ON DELETE SET NULL,
+    change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX idx_handlers_name ON Handlers (name) WHERE is_approved = true AND change_batch_id IS NULL;
 
 CREATE TABLE TemplateHandlers (
     template_id INT REFERENCES Templates(id) ON DELETE CASCADE,
@@ -102,12 +121,17 @@ CREATE TABLE ContentHandlers (
 
 CREATE TABLE Components (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
     payload JSONB NOT NULL,
     author_id VARCHAR(255) REFERENCES Users(username),
+    original_id INT REFERENCES Components(id) ON DELETE SET NULL,
+    change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
+    is_approved BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX idx_components_name ON Components (name) WHERE is_approved = true AND change_batch_id IS NULL;
 
 CREATE TABLE TemplateComponents (
     template_id INT REFERENCES Templates(id) ON DELETE CASCADE,

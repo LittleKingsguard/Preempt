@@ -1,5 +1,6 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireAdmin } from "../middleware/auth.js";
+import { updateUserRoles } from "../models/user.js";
 import { getTags } from "../models/tag.js";
 import { getTemplateById, createTemplate, updateTemplate } from "../models/template.js";
 import { getContentWithTemplate } from "../models/content.js";
@@ -290,6 +291,27 @@ router.post("/settings/default-index", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/users/:username/roles", authenticateToken, requireAdmin, async (req, res) => {
+  const { username } = req.params;
+  const { is_contributor, is_bot, is_shadowed } = req.body;
+
+  try {
+    // Basic validation before hitting DB constraint
+    if (is_bot && is_contributor) {
+      return res.status(400).json({ error: "A user cannot be both a bot and a contributor" });
+    }
+
+    await updateUserRoles(username as string, { is_contributor, is_bot, is_shadowed });
+    res.json({ success: true, message: "User roles updated successfully" });
+  } catch (err: any) {
+    console.error(err);
+    if (err.code === '23514' && err.constraint === 'check_bot_roles') {
+      return res.status(400).json({ error: "A bot cannot have admin or contributor roles" });
+    }
+    res.status(500).json({ error: "Failed to update user roles" });
   }
 });
 

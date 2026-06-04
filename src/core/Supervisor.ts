@@ -1,7 +1,7 @@
-import type { PipelineConfig } from "../types/Pipeline";
-import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema";
-import { Node } from "./Node";
-import { StyleNode } from "./StyleNode";
+import type { PipelineConfig } from "../types/Pipeline.js";
+import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
+import { Node } from "./Node.js";
+import { StyleNode } from "./StyleNode.js";
 
 export class Supervisor {
   private static instance: Supervisor | null = null;
@@ -22,6 +22,10 @@ export class Supervisor {
 
   public static getContentNodes(): Node[] {
     return Supervisor.instance ? Supervisor.instance.contentNodes : [];
+  }
+
+  public static getRootNode(): Node | null {
+    return Supervisor.instance ? Supervisor.instance.rootNode : null;
   }
 
   public static setContentNodes(nodes: Node[]): void {

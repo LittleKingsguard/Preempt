@@ -1,5 +1,5 @@
-import type { CssDef } from "../types/NodeSchema";
-import type { Node } from "./Node";
+import type { CssDef } from "../types/NodeSchema.js";
+import type { Node } from "./Node.js";
 
 export class StyleNode {
   public static cssDefs: StyleNode[] = [];

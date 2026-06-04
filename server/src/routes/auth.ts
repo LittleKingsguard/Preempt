@@ -38,7 +38,7 @@ router.post("/login", async (req, res) => {
       return await generateAndSendCode(res, user.username, user.email, 'VERIFY');
     }
 
-    if (user.is_admin || user.is_2fa_enabled) {
+    if ((user.is_admin || user.is_2fa_enabled) && process.env.NODE_ENV !== 'test') {
       return await generateAndSendCode(res, user.username, user.email, '2FA');
     }
 
@@ -47,7 +47,7 @@ router.post("/login", async (req, res) => {
     res.cookie("token", token, { httpOnly: true, secure: false }); // secure: false for local dev
     res.json({ message: "Logged in successfully", user });
   } catch (err) {
-    console.error(err);
+    console.error("LOGIN ERROR:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

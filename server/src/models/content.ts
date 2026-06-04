@@ -103,3 +103,11 @@ export async function getContentCount(criteria: { tags?: string[]; author?: stri
   const result = await pool.query(query, params);
   return parseInt(result.rows[0].count, 10);
 }
+
+export async function stageContent(user: any, payload: any, headers: string | null, originalId: number | null, batchId: number) {
+  const result = await pool.query(
+    "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
+    [user.username, payload, headers, originalId, batchId]
+  );
+  return { content: result.rows[0] };
+}

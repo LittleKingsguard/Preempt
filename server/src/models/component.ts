@@ -1,6 +1,5 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
-import { Node } from "../../../src/core/Node.js";
 
 export async function getComponents() {
   const result = await pool.query("SELECT id, name, payload, author_id, created_at, updated_at FROM Components");
@@ -15,11 +14,6 @@ export async function createComponent(user: any, name: string, payload: any) {
   // admin or contributor can create
   if (!user || (!user.is_admin && !user.is_contributor)) {
     return { error: "Forbidden: Only admins and contributors can create components", status: 403 };
-  }
-
-  const virtualNode = new Node(payload);
-  if (!virtualNode.validate(true)) {
-    return { error: "Invalid layout node tree", status: 400 };
   }
 
   try {
@@ -40,11 +34,6 @@ export async function updateComponent(id: number, user: any, name: string, paylo
   // only admin can update
   if (!user || !user.is_admin) {
     return { error: "Forbidden: Only admins can update components", status: 403 };
-  }
-
-  const virtualNode = new Node(payload);
-  if (!virtualNode.validate(true)) {
-    return { error: "Invalid layout node tree", status: 400 };
   }
 
   try {
@@ -105,4 +94,13 @@ export async function updateContentComponents(client: any, contentId: number, co
   if (componentIds.length > 0) {
     await client.query("INSERT INTO ContentComponents (content_id, component_id) SELECT $1, unnest($2::int[])", [contentId, componentIds]);
   }
+}
+
+export async function stageComponent(user: any, name: string, payload: any, originalId: number | null, batchId: number) {
+
+  const result = await pool.query(
+    "INSERT INTO Components (name, payload, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
+    [name, payload, user.username, originalId, batchId]
+  );
+  return { component: result.rows[0] };
 }

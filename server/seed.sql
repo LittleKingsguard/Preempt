@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3ifB5qNNaWUevQUjmIlitY0Rh3uxFM7pST1p1715x6FdJEIHFgm9KirLdJY8lK5
+\restrict mKRxMyj7xwLYStEMV5vzDAIcNsj1w89R6sCVqhyq8xhhOwYjMINP0tN5CNtjVjQ
 
 -- Dumped from database version 15.18 (Debian 15.18-1.pgdg13+1)
 -- Dumped by pg_dump version 15.18 (Debian 15.18-1.pgdg13+1)
@@ -18,88 +18,17 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-ALTER TABLE IF EXISTS ONLY public.templatetags DROP CONSTRAINT IF EXISTS templatetags_template_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templatetags DROP CONSTRAINT IF EXISTS templatetags_tag_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templates DROP CONSTRAINT IF EXISTS templates_group_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templates DROP CONSTRAINT IF EXISTS templates_author_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templatehandlers DROP CONSTRAINT IF EXISTS templatehandlers_template_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templatehandlers DROP CONSTRAINT IF EXISTS templatehandlers_handler_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templatecomponents DROP CONSTRAINT IF EXISTS templatecomponents_template_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templatecomponents DROP CONSTRAINT IF EXISTS templatecomponents_component_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.handlers DROP CONSTRAINT IF EXISTS handlers_author_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.templategroups DROP CONSTRAINT IF EXISTS fk_default_template;
-ALTER TABLE IF EXISTS ONLY public.contenttemplategroups DROP CONSTRAINT IF EXISTS contenttemplategroups_group_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contenttemplategroups DROP CONSTRAINT IF EXISTS contenttemplategroups_content_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contenttags DROP CONSTRAINT IF EXISTS contenttags_tag_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contenttags DROP CONSTRAINT IF EXISTS contenttags_content_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contenthandlers DROP CONSTRAINT IF EXISTS contenthandlers_handler_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contenthandlers DROP CONSTRAINT IF EXISTS contenthandlers_content_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contentcomponents DROP CONSTRAINT IF EXISTS contentcomponents_content_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.contentcomponents DROP CONSTRAINT IF EXISTS contentcomponents_component_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.content DROP CONSTRAINT IF EXISTS content_author_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.components DROP CONSTRAINT IF EXISTS components_author_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.componenthandlers DROP CONSTRAINT IF EXISTS componenthandlers_handler_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.componenthandlers DROP CONSTRAINT IF EXISTS componenthandlers_component_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_pkey;
-ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_email_key;
-ALTER TABLE IF EXISTS ONLY public.templatetags DROP CONSTRAINT IF EXISTS templatetags_pkey;
-ALTER TABLE IF EXISTS ONLY public.templates DROP CONSTRAINT IF EXISTS templates_pkey;
-ALTER TABLE IF EXISTS ONLY public.templatehandlers DROP CONSTRAINT IF EXISTS templatehandlers_pkey;
-ALTER TABLE IF EXISTS ONLY public.templategroups DROP CONSTRAINT IF EXISTS templategroups_pkey;
-ALTER TABLE IF EXISTS ONLY public.templategroups DROP CONSTRAINT IF EXISTS templategroups_name_key;
-ALTER TABLE IF EXISTS ONLY public.templatecomponents DROP CONSTRAINT IF EXISTS templatecomponents_pkey;
-ALTER TABLE IF EXISTS ONLY public.tags DROP CONSTRAINT IF EXISTS tags_pkey;
-ALTER TABLE IF EXISTS ONLY public.tags DROP CONSTRAINT IF EXISTS tags_name_key;
-ALTER TABLE IF EXISTS ONLY public.sitesettings DROP CONSTRAINT IF EXISTS sitesettings_pkey;
-ALTER TABLE IF EXISTS ONLY public.handlers DROP CONSTRAINT IF EXISTS handlers_pkey;
-ALTER TABLE IF EXISTS ONLY public.handlers DROP CONSTRAINT IF EXISTS handlers_name_key;
-ALTER TABLE IF EXISTS ONLY public.contenttemplategroups DROP CONSTRAINT IF EXISTS contenttemplategroups_pkey;
-ALTER TABLE IF EXISTS ONLY public.contenttags DROP CONSTRAINT IF EXISTS contenttags_pkey;
-ALTER TABLE IF EXISTS ONLY public.contenthandlers DROP CONSTRAINT IF EXISTS contenthandlers_pkey;
-ALTER TABLE IF EXISTS ONLY public.contentcomponents DROP CONSTRAINT IF EXISTS contentcomponents_pkey;
-ALTER TABLE IF EXISTS ONLY public.content DROP CONSTRAINT IF EXISTS content_pkey;
-ALTER TABLE IF EXISTS ONLY public.components DROP CONSTRAINT IF EXISTS components_pkey;
-ALTER TABLE IF EXISTS ONLY public.components DROP CONSTRAINT IF EXISTS components_name_key;
-ALTER TABLE IF EXISTS ONLY public.componenthandlers DROP CONSTRAINT IF EXISTS componenthandlers_pkey;
-ALTER TABLE IF EXISTS public.templates ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.templategroups ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.tags ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.handlers ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.content ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.components ALTER COLUMN id DROP DEFAULT;
-DROP TABLE IF EXISTS public.users;
-DROP TABLE IF EXISTS public.templatetags;
-DROP SEQUENCE IF EXISTS public.templates_id_seq;
-DROP TABLE IF EXISTS public.templates;
-DROP TABLE IF EXISTS public.templatehandlers;
-DROP SEQUENCE IF EXISTS public.templategroups_id_seq;
-DROP TABLE IF EXISTS public.templategroups;
-DROP TABLE IF EXISTS public.templatecomponents;
-DROP SEQUENCE IF EXISTS public.tags_id_seq;
-DROP TABLE IF EXISTS public.tags;
-DROP TABLE IF EXISTS public.sitesettings;
-DROP SEQUENCE IF EXISTS public.handlers_id_seq;
-DROP TABLE IF EXISTS public.handlers;
-DROP TABLE IF EXISTS public.contenttemplategroups;
-DROP TABLE IF EXISTS public.contenttags;
-DROP TABLE IF EXISTS public.contenthandlers;
-DROP TABLE IF EXISTS public.contentcomponents;
-DROP SEQUENCE IF EXISTS public.content_id_seq;
-DROP TABLE IF EXISTS public.content;
-DROP SEQUENCE IF EXISTS public.components_id_seq;
-DROP TABLE IF EXISTS public.components;
-DROP TABLE IF EXISTS public.componenthandlers;
-DROP EXTENSION IF EXISTS pgcrypto;
--- *not* dropping schema, since initdb creates it
 --
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
+-- Name: public; Type: SCHEMA; Schema: -; Owner: preempt
 --
 
 -- *not* creating schema, since initdb creates it
 
 
+ALTER SCHEMA public OWNER TO preempt;
+
 --
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: preempt
 --
 
 COMMENT ON SCHEMA public IS '';
@@ -113,7 +42,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
@@ -124,7 +53,82 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: componenthandlers; Type: TABLE; Schema: public; Owner: -
+-- Name: authtokens; Type: TABLE; Schema: public; Owner: preempt
+--
+
+CREATE TABLE public.authtokens (
+    id integer NOT NULL,
+    username character varying(255),
+    token_type character varying(50) NOT NULL,
+    token_hash character varying(255) NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.authtokens OWNER TO preempt;
+
+--
+-- Name: authtokens_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
+--
+
+CREATE SEQUENCE public.authtokens_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.authtokens_id_seq OWNER TO preempt;
+
+--
+-- Name: authtokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
+--
+
+ALTER SEQUENCE public.authtokens_id_seq OWNED BY public.authtokens.id;
+
+
+--
+-- Name: changebatches; Type: TABLE; Schema: public; Owner: preempt
+--
+
+CREATE TABLE public.changebatches (
+    id integer NOT NULL,
+    author_id character varying(255),
+    description text,
+    merged_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+
+ALTER TABLE public.changebatches OWNER TO preempt;
+
+--
+-- Name: changebatches_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
+--
+
+CREATE SEQUENCE public.changebatches_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.changebatches_id_seq OWNER TO preempt;
+
+--
+-- Name: changebatches_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
+--
+
+ALTER SEQUENCE public.changebatches_id_seq OWNED BY public.changebatches.id;
+
+
+--
+-- Name: componenthandlers; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.componenthandlers (
@@ -135,8 +139,10 @@ CREATE TABLE public.componenthandlers (
 );
 
 
+ALTER TABLE public.componenthandlers OWNER TO preempt;
+
 --
--- Name: components; Type: TABLE; Schema: public; Owner: -
+-- Name: components; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.components (
@@ -145,12 +151,17 @@ CREATE TABLE public.components (
     payload jsonb NOT NULL,
     author_id character varying(255),
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    original_id integer,
+    change_batch_id integer,
+    is_approved boolean DEFAULT true
 );
 
 
+ALTER TABLE public.components OWNER TO preempt;
+
 --
--- Name: components_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: components_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.components_id_seq
@@ -162,15 +173,17 @@ CREATE SEQUENCE public.components_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.components_id_seq OWNER TO preempt;
+
 --
--- Name: components_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: components_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.components_id_seq OWNED BY public.components.id;
 
 
 --
--- Name: content; Type: TABLE; Schema: public; Owner: -
+-- Name: content; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.content (
@@ -181,12 +194,16 @@ CREATE TABLE public.content (
     is_visible boolean DEFAULT true,
     headers text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    original_id integer,
+    change_batch_id integer
 );
 
 
+ALTER TABLE public.content OWNER TO preempt;
+
 --
--- Name: content_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: content_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.content_id_seq
@@ -198,15 +215,17 @@ CREATE SEQUENCE public.content_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.content_id_seq OWNER TO preempt;
+
 --
--- Name: content_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: content_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.content_id_seq OWNED BY public.content.id;
 
 
 --
--- Name: contentcomponents; Type: TABLE; Schema: public; Owner: -
+-- Name: contentcomponents; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.contentcomponents (
@@ -216,8 +235,10 @@ CREATE TABLE public.contentcomponents (
 );
 
 
+ALTER TABLE public.contentcomponents OWNER TO preempt;
+
 --
--- Name: contenthandlers; Type: TABLE; Schema: public; Owner: -
+-- Name: contenthandlers; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.contenthandlers (
@@ -228,8 +249,10 @@ CREATE TABLE public.contenthandlers (
 );
 
 
+ALTER TABLE public.contenthandlers OWNER TO preempt;
+
 --
--- Name: contenttags; Type: TABLE; Schema: public; Owner: -
+-- Name: contenttags; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.contenttags (
@@ -238,8 +261,10 @@ CREATE TABLE public.contenttags (
 );
 
 
+ALTER TABLE public.contenttags OWNER TO preempt;
+
 --
--- Name: contenttemplategroups; Type: TABLE; Schema: public; Owner: -
+-- Name: contenttemplategroups; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.contenttemplategroups (
@@ -248,8 +273,10 @@ CREATE TABLE public.contenttemplategroups (
 );
 
 
+ALTER TABLE public.contenttemplategroups OWNER TO preempt;
+
 --
--- Name: handlers; Type: TABLE; Schema: public; Owner: -
+-- Name: handlers; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.handlers (
@@ -259,12 +286,16 @@ CREATE TABLE public.handlers (
     author_id character varying(255),
     is_approved boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    original_id integer,
+    change_batch_id integer
 );
 
 
+ALTER TABLE public.handlers OWNER TO preempt;
+
 --
--- Name: handlers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: handlers_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.handlers_id_seq
@@ -276,15 +307,17 @@ CREATE SEQUENCE public.handlers_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.handlers_id_seq OWNER TO preempt;
+
 --
--- Name: handlers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: handlers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.handlers_id_seq OWNED BY public.handlers.id;
 
 
 --
--- Name: sitesettings; Type: TABLE; Schema: public; Owner: -
+-- Name: sitesettings; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.sitesettings (
@@ -294,8 +327,10 @@ CREATE TABLE public.sitesettings (
 );
 
 
+ALTER TABLE public.sitesettings OWNER TO preempt;
+
 --
--- Name: tags; Type: TABLE; Schema: public; Owner: -
+-- Name: tags; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.tags (
@@ -304,8 +339,10 @@ CREATE TABLE public.tags (
 );
 
 
+ALTER TABLE public.tags OWNER TO preempt;
+
 --
--- Name: tags_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: tags_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.tags_id_seq
@@ -317,15 +354,17 @@ CREATE SEQUENCE public.tags_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.tags_id_seq OWNER TO preempt;
+
 --
--- Name: tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.tags_id_seq OWNED BY public.tags.id;
 
 
 --
--- Name: templatecomponents; Type: TABLE; Schema: public; Owner: -
+-- Name: templatecomponents; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.templatecomponents (
@@ -335,8 +374,10 @@ CREATE TABLE public.templatecomponents (
 );
 
 
+ALTER TABLE public.templatecomponents OWNER TO preempt;
+
 --
--- Name: templategroups; Type: TABLE; Schema: public; Owner: -
+-- Name: templategroups; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.templategroups (
@@ -346,8 +387,10 @@ CREATE TABLE public.templategroups (
 );
 
 
+ALTER TABLE public.templategroups OWNER TO preempt;
+
 --
--- Name: templategroups_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: templategroups_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.templategroups_id_seq
@@ -359,15 +402,17 @@ CREATE SEQUENCE public.templategroups_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.templategroups_id_seq OWNER TO preempt;
+
 --
--- Name: templategroups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: templategroups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.templategroups_id_seq OWNED BY public.templategroups.id;
 
 
 --
--- Name: templatehandlers; Type: TABLE; Schema: public; Owner: -
+-- Name: templatehandlers; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.templatehandlers (
@@ -378,8 +423,10 @@ CREATE TABLE public.templatehandlers (
 );
 
 
+ALTER TABLE public.templatehandlers OWNER TO preempt;
+
 --
--- Name: templates; Type: TABLE; Schema: public; Owner: -
+-- Name: templates; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.templates (
@@ -388,12 +435,17 @@ CREATE TABLE public.templates (
     payload jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    group_id integer
+    group_id integer,
+    original_id integer,
+    change_batch_id integer,
+    is_approved boolean DEFAULT true
 );
 
 
+ALTER TABLE public.templates OWNER TO preempt;
+
 --
--- Name: templates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: templates_id_seq; Type: SEQUENCE; Schema: public; Owner: preempt
 --
 
 CREATE SEQUENCE public.templates_id_seq
@@ -405,15 +457,17 @@ CREATE SEQUENCE public.templates_id_seq
     CACHE 1;
 
 
+ALTER TABLE public.templates_id_seq OWNER TO preempt;
+
 --
--- Name: templates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: templates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: preempt
 --
 
 ALTER SEQUENCE public.templates_id_seq OWNED BY public.templates.id;
 
 
 --
--- Name: templatetags; Type: TABLE; Schema: public; Owner: -
+-- Name: templatetags; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.templatetags (
@@ -422,8 +476,10 @@ CREATE TABLE public.templatetags (
 );
 
 
+ALTER TABLE public.templatetags OWNER TO preempt;
+
 --
--- Name: users; Type: TABLE; Schema: public; Owner: -
+-- Name: users; Type: TABLE; Schema: public; Owner: preempt
 --
 
 CREATE TABLE public.users (
@@ -435,54 +491,90 @@ CREATE TABLE public.users (
     is_shadowed boolean DEFAULT false,
     is_trusted_dev boolean DEFAULT false,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    is_2fa_enabled boolean DEFAULT false,
+    has_verified boolean DEFAULT false,
+    is_bot boolean DEFAULT false,
+    CONSTRAINT check_bot_roles CHECK ((NOT ((is_bot = true) AND ((is_admin = true) OR (is_contributor = true)))))
 );
 
 
+ALTER TABLE public.users OWNER TO preempt;
+
 --
--- Name: components id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: authtokens id; Type: DEFAULT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.authtokens ALTER COLUMN id SET DEFAULT nextval('public.authtokens_id_seq'::regclass);
+
+
+--
+-- Name: changebatches id; Type: DEFAULT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.changebatches ALTER COLUMN id SET DEFAULT nextval('public.changebatches_id_seq'::regclass);
+
+
+--
+-- Name: components id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.components ALTER COLUMN id SET DEFAULT nextval('public.components_id_seq'::regclass);
 
 
 --
--- Name: content id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: content id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.content ALTER COLUMN id SET DEFAULT nextval('public.content_id_seq'::regclass);
 
 
 --
--- Name: handlers id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: handlers id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.handlers ALTER COLUMN id SET DEFAULT nextval('public.handlers_id_seq'::regclass);
 
 
 --
--- Name: tags id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: tags id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.tags ALTER COLUMN id SET DEFAULT nextval('public.tags_id_seq'::regclass);
 
 
 --
--- Name: templategroups id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: templategroups id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templategroups ALTER COLUMN id SET DEFAULT nextval('public.templategroups_id_seq'::regclass);
 
 
 --
--- Name: templates id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: templates id; Type: DEFAULT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templates ALTER COLUMN id SET DEFAULT nextval('public.templates_id_seq'::regclass);
 
 
 --
--- Data for Name: componenthandlers; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: authtokens; Type: TABLE DATA; Schema: public; Owner: preempt
+--
+
+COPY public.authtokens (id, username, token_type, token_hash, expires_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: changebatches; Type: TABLE DATA; Schema: public; Owner: preempt
+--
+
+COPY public.changebatches (id, author_id, description, merged_at, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: componenthandlers; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.componenthandlers (component_id, handler_id, created_at, updated_at) FROM stdin;
@@ -498,26 +590,29 @@ COPY public.componenthandlers (component_id, handler_id, created_at, updated_at)
 
 
 --
--- Data for Name: components; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: components; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
-COPY public.components (id, name, payload, author_id, created_at, updated_at) FROM stdin;
-1	PreemptEditor	{"css": {"style": {"gap": "10px", "right": "10px", "border": "1px solid #444", "bottom": "10px", "zIndex": "9999", "display": "flex", "padding": "10px", "position": "fixed", "alignItems": "flex-end", "background": "#222", "borderRadius": "5px", "flexDirection": "column"}}, "type": "div", "content": [{"css": {"style": {"gap": "10px", "display": "flex"}}, "type": "div", "content": [{"css": {"style": {"padding": "5px"}}, "type": "input", "props": {"id": "template-tags", "placeholder": "Tags (comma separated)"}}, {"type": "button", "content": "Save", "component": [{"target": "handlers.click", "reference": "EditorSaveHandler"}]}]}, {"css": {"style": {"color": "#0f0", "width": "300px", "margin": "0", "fontSize": "10px", "overflow": "auto", "maxHeight": "200px", "background": "#000"}}, "type": "pre", "props": {"id": "editor-inspector-display"}, "component": [{"target": "content", "reference": "inspectedNodeData"}]}]}	admin	2026-05-27 21:54:43.744909+00	2026-05-27 21:54:43.744909+00
-2	LoginComponent	{"css": {"style": {"border": "1px solid #ccc", "padding": "20px", "maxWidth": "300px", "background": "#f9f9f9", "borderRadius": "8px"}, "classes": ["login-component-container"]}, "type": "div", "content": [{"css": {"style": {"gap": "10px", "display": "flex", "marginBottom": "15px"}}, "type": "div", "content": [{"type": "button", "props": {"data-target": "login"}, "content": "Login", "component": [{"target": "handlers.click", "reference": "TabToggleHandler"}]}, {"type": "button", "props": {"data-target": "register"}, "content": "Register", "component": [{"target": "handlers.click", "reference": "TabToggleHandler"}]}]}, {"css": {"style": {"display": "block"}, "classes": ["login-form-wrapper"]}, "type": "div", "content": [{"type": "form", "props": {"action": "#"}, "content": [{"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "username", "required": "true", "placeholder": "Username"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "password", "type": "password", "required": "true", "placeholder": "Password"}}, {"type": "button", "props": {"type": "submit"}, "content": "Login", "component": [{"target": "handlers.click", "reference": "LoginHandler"}]}]}]}, {"css": {"style": {"display": "none"}, "classes": ["register-form-wrapper"]}, "type": "div", "content": [{"type": "form", "props": {"action": "#"}, "content": [{"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "username", "required": "true", "placeholder": "Username"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "email", "type": "email", "required": "true", "placeholder": "Email"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "password", "type": "password", "required": "true", "placeholder": "Password"}}, {"type": "button", "props": {"type": "submit"}, "content": "Register", "component": [{"target": "handlers.click", "reference": "RegisterHandler"}]}]}]}, {"css": {"style": {"display": "none", "textAlign": "center"}, "classes": ["logged-in-wrapper"]}, "type": "div", "content": [{"type": "h3", "content": "Welcome"}, {"type": "button", "content": "Logout", "component": [{"target": "handlers.click", "reference": "LogoutHandler"}]}]}], "component": [{"target": "handlers.beforeRender", "reference": "CheckLoginHandler"}]}	admin	2026-05-27 22:52:47.316752+00	2026-05-27 22:52:47.316752+00
+COPY public.components (id, name, payload, author_id, created_at, updated_at, original_id, change_batch_id, is_approved) FROM stdin;
+1	PreemptEditor	{"css": {"style": {"gap": "10px", "right": "10px", "border": "1px solid #444", "bottom": "10px", "zIndex": "9999", "display": "flex", "padding": "10px", "position": "fixed", "alignItems": "flex-end", "background": "#222", "borderRadius": "5px", "flexDirection": "column"}}, "type": "div", "content": [{"css": {"style": {"gap": "10px", "display": "flex"}}, "type": "div", "content": [{"css": {"style": {"padding": "5px"}}, "type": "input", "props": {"id": "template-tags", "placeholder": "Tags (comma separated)"}}, {"type": "button", "content": "Save", "component": [{"target": "handlers.click", "reference": "EditorSaveHandler"}]}]}, {"css": {"style": {"color": "#0f0", "width": "300px", "margin": "0", "fontSize": "10px", "overflow": "auto", "maxHeight": "200px", "background": "#000"}}, "type": "pre", "props": {"id": "editor-inspector-display"}, "component": [{"target": "content", "reference": "inspectedNodeData"}]}]}	admin	2026-05-27 21:54:43.744909+00	2026-05-27 21:54:43.744909+00	\N	\N	t
+2	LoginComponent	{"css": {"style": {"border": "1px solid #ccc", "padding": "20px", "maxWidth": "300px", "background": "#f9f9f9", "borderRadius": "8px"}, "classes": ["login-component-container"]}, "type": "div", "content": [{"css": {"style": {"gap": "10px", "display": "flex", "marginBottom": "15px"}}, "type": "div", "content": [{"type": "button", "props": {"data-target": "login"}, "content": "Login", "component": [{"target": "handlers.click", "reference": "TabToggleHandler"}]}, {"type": "button", "props": {"data-target": "register"}, "content": "Register", "component": [{"target": "handlers.click", "reference": "TabToggleHandler"}]}]}, {"css": {"style": {"display": "block"}, "classes": ["login-form-wrapper"]}, "type": "div", "content": [{"type": "form", "props": {"action": "#"}, "content": [{"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "username", "required": "true", "placeholder": "Username"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "password", "type": "password", "required": "true", "placeholder": "Password"}}, {"type": "button", "props": {"type": "submit"}, "content": "Login", "component": [{"target": "handlers.click", "reference": "LoginHandler"}]}]}]}, {"css": {"style": {"display": "none"}, "classes": ["register-form-wrapper"]}, "type": "div", "content": [{"type": "form", "props": {"action": "#"}, "content": [{"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "username", "required": "true", "placeholder": "Username"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "email", "type": "email", "required": "true", "placeholder": "Email"}}, {"css": {"style": {"width": "100%", "display": "block", "marginBottom": "10px"}}, "type": "input", "props": {"name": "password", "type": "password", "required": "true", "placeholder": "Password"}}, {"type": "button", "props": {"type": "submit"}, "content": "Register", "component": [{"target": "handlers.click", "reference": "RegisterHandler"}]}]}]}, {"css": {"style": {"display": "none", "textAlign": "center"}, "classes": ["logged-in-wrapper"]}, "type": "div", "content": [{"type": "h3", "content": "Welcome"}, {"type": "button", "content": "Logout", "component": [{"target": "handlers.click", "reference": "LogoutHandler"}]}]}], "component": [{"target": "handlers.beforeRender", "reference": "CheckLoginHandler"}]}	admin	2026-05-27 22:52:47.316752+00	2026-05-27 22:52:47.316752+00	\N	\N	t
+3	AdminApprovalComponent	{"css": {"id": "preempt-node-0", "style": {"padding": "20px"}, "classes": ["admin-approvals", "container", "mx-auto", "p-4"]}, "type": "div", "props": {}, "content": [{"css": {"id": "preempt-node-1", "style": {"color": "white", "padding": "10px 20px", "background": "blue", "marginBottom": "20px"}}, "type": "button", "props": {}, "content": "Load Pending Batches", "component": [{"target": "handlers.click", "reference": "AdminFetchBatchesHandler"}]}, {"css": {"id": "preempt-node-2", "classes": ["batches-list"]}, "type": "div", "props": {}, "content": []}]}	admin	2026-06-04 01:45:21.799399+00	2026-06-04 01:45:21.799399+00	\N	\N	t
 \.
 
 
 --
--- Data for Name: content; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: content; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
-COPY public.content (id, author_id, payload, live_date, is_visible, headers, created_at, updated_at) FROM stdin;
-1	admin	{"content": [{"css": {"style": {"color": "#fff", "padding": "0.5rem", "marginTop": "1rem", "borderRadius": "4px", "backgroundColor": "#42b883"}}, "type": "div", "content": "This was dynamically placed here!", "placement": {"targetPlacement": ["test-zone"]}}, {"css": {"style": {"color": "#fff", "padding": "0.5rem", "marginTop": "1rem", "borderRadius": "4px", "backgroundColor": "#f06292"}}, "type": "div", "content": "I was looking for a fake zone, so I stayed here.", "placement": {"targetPlacement": ["fake-zone"]}}, {"css": {"style": {"gap": "1rem", "border": "1px solid #444", "display": "flex", "padding": "1rem", "marginTop": "2rem", "alignItems": "flex-start", "borderRadius": "8px"}}, "type": "div", "content": [{"css": {"style": {"width": "40px", "height": "40px", "flexShrink": "0", "borderRadius": "50%"}}, "type": "div", "component": [{"value": null, "target": "css.style.backgroundColor", "reference": "avatarColor"}]}, {"type": "div", "content": [{"css": {"style": {"color": "#42b883", "margin": "0 0 0.5rem 0"}}, "type": "h3", "component": [{"value": null, "target": "content", "reference": "writerName"}]}, {"css": {"style": {"color": "#eee", "margin": "0"}}, "type": "p", "component": [{"value": null, "target": "content", "reference": "commentText"}, {"value": null, "target": "css.style.border", "reference": "missingValue"}]}]}], "component": [{"value": null, "target": "css.style.boxShadow", "reference": "shadowColor"}], "placement": {"targetPlacement": ["comment-zone"]}}, {"css": {"style": {"color": "red", "fontSize": "50px"}}, "type": "div", "content": "This orphaned component should never be rendered!"}], "metadata": {"author": "System Admin", "timestamp": "2026-05-22T00:00:00Z"}, "component": [{"value": "Alice_Engineer", "reference": "writerName"}, {"value": "#9c27b0", "reference": "avatarColor"}, {"value": "This component assembly system is really powerful!", "reference": "commentText"}, {"value": "5px 5px 15px rgba(156, 39, 176, 0.5)", "reference": "shadowColor"}, {"value": "I am never consumed", "reference": "unusedValue"}]}	\N	t	<meta property="og:title" content="Preempt SSR Test" /><meta name="description" content="This is dynamically injected OpenGraph data!" />	2026-05-25 20:12:23.060658+00	2026-05-25 20:12:23.060658+00
+COPY public.content (id, author_id, payload, live_date, is_visible, headers, created_at, updated_at, original_id, change_batch_id) FROM stdin;
+1	admin	{"content": [{"css": {"style": {"color": "#fff", "padding": "0.5rem", "marginTop": "1rem", "borderRadius": "4px", "backgroundColor": "#42b883"}}, "type": "div", "content": "This was dynamically placed here!", "placement": {"targetPlacement": ["test-zone"]}}, {"css": {"style": {"color": "#fff", "padding": "0.5rem", "marginTop": "1rem", "borderRadius": "4px", "backgroundColor": "#f06292"}}, "type": "div", "content": "I was looking for a fake zone, so I stayed here.", "placement": {"targetPlacement": ["fake-zone"]}}, {"css": {"style": {"gap": "1rem", "border": "1px solid #444", "display": "flex", "padding": "1rem", "marginTop": "2rem", "alignItems": "flex-start", "borderRadius": "8px"}}, "type": "div", "content": [{"css": {"style": {"width": "40px", "height": "40px", "flexShrink": "0", "borderRadius": "50%"}}, "type": "div", "component": [{"value": null, "target": "css.style.backgroundColor", "reference": "avatarColor"}]}, {"type": "div", "content": [{"css": {"style": {"color": "#42b883", "margin": "0 0 0.5rem 0"}}, "type": "h3", "component": [{"value": null, "target": "content", "reference": "writerName"}]}, {"css": {"style": {"color": "#eee", "margin": "0"}}, "type": "p", "component": [{"value": null, "target": "content", "reference": "commentText"}, {"value": null, "target": "css.style.border", "reference": "missingValue"}]}]}], "component": [{"value": null, "target": "css.style.boxShadow", "reference": "shadowColor"}], "placement": {"targetPlacement": ["comment-zone"]}}, {"css": {"style": {"color": "red", "fontSize": "50px"}}, "type": "div", "content": "This orphaned component should never be rendered!"}], "metadata": {"author": "System Admin", "timestamp": "2026-05-22T00:00:00Z"}, "component": [{"value": "Alice_Engineer", "reference": "writerName"}, {"value": "#9c27b0", "reference": "avatarColor"}, {"value": "This component assembly system is really powerful!", "reference": "commentText"}, {"value": "5px 5px 15px rgba(156, 39, 176, 0.5)", "reference": "shadowColor"}, {"value": "I am never consumed", "reference": "unusedValue"}]}	\N	t	<meta property="og:title" content="Preempt SSR Test" /><meta name="description" content="This is dynamically injected OpenGraph data!" />	2026-05-25 20:12:23.060658+00	2026-05-25 20:12:23.060658+00	\N	\N
+2	admin	{"tag": "AdminApprovalComponent"}	\N	t	<title>Admin Approvals</title>	2026-06-04 01:43:45.83876+00	2026-06-04 01:43:45.83876+00	\N	\N
+3	admin	{"type": "div", "component": [{"target": "type", "reference": "AdminApprovalComponent"}]}	\N	t	<title>Admin Approvals</title>	2026-06-04 01:45:21.802121+00	2026-06-04 01:45:21.802121+00	\N	\N
 \.
 
 
 --
--- Data for Name: contentcomponents; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: contentcomponents; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.contentcomponents (content_id, component_id, created_at) FROM stdin;
@@ -525,7 +620,7 @@ COPY public.contentcomponents (content_id, component_id, created_at) FROM stdin;
 
 
 --
--- Data for Name: contenthandlers; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: contenthandlers; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.contenthandlers (content_id, handler_id, created_at, updated_at) FROM stdin;
@@ -533,7 +628,7 @@ COPY public.contenthandlers (content_id, handler_id, created_at, updated_at) FRO
 
 
 --
--- Data for Name: contenttags; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: contenttags; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.contenttags (content_id, tag_id) FROM stdin;
@@ -541,7 +636,7 @@ COPY public.contenttags (content_id, tag_id) FROM stdin;
 
 
 --
--- Data for Name: contenttemplategroups; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: contenttemplategroups; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.contenttemplategroups (content_id, group_id) FROM stdin;
@@ -550,33 +645,37 @@ COPY public.contenttemplategroups (content_id, group_id) FROM stdin;
 
 
 --
--- Data for Name: handlers; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: handlers; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
-COPY public.handlers (id, name, body, author_id, is_approved, created_at, updated_at) FROM stdin;
-1	EditorLoginHandler	\nasync (event, context) => {\n    try {\n      const res = await fetch("/api/login", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username: "admin", password: "password123" })\n      });\n      if (res.ok) alert("Logged in successfully!");\n      else alert("Login failed");\n    } catch(err) {\n      alert("Error logging in");\n    }\n}\n	admin	t	2026-05-27 21:54:43.739515+00	2026-05-27 21:54:43.739515+00
-2	EditorSaveHandler	\nasync (event, context) => {\n    const mode = event.target.closest("[mode]")?.getAttribute("mode") || "template";\n    const exportedData = Preempt.Supervisor.exportRootNode();\n    if (!exportedData) return alert("Nothing to save");\n\n    const tagsInput = document.getElementById("template-tags");\n    const tagsValue = tagsInput ? tagsInput.value.split(",").map(t => t.trim()).filter(t => t) : [];\n\n    const urlParts = window.location.pathname.split("/");\n    const id = urlParts[urlParts.length - 1].split("?")[0];\n    \n    let endpoint = mode === "content" ? `/api/content/${id}` : `/api/template/${id}`;\n\n    try {\n      const res = await fetch(endpoint, {\n        method: "PUT",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ payload: exportedData, tags: tagsValue })\n      });\n      if (res.ok) alert("Saved successfully!");\n      else alert(`Save failed: ${res.status}`);\n    } catch(err) {\n      alert("Error saving");\n    }\n}\n	admin	t	2026-05-27 21:54:43.739515+00	2026-05-27 21:54:43.739515+00
-3	LoginHandler	\nasync (event, context) => {\n    event.preventDefault();\n    const form = event.target.closest("form");\n    const username = form.querySelector("[name=username]").value;\n    const password = form.querySelector("[name=password]").value;\n    \n    try {\n      const res = await fetch("/api/login", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username, password })\n      });\n      if (res.ok) window.location.reload();\n      else alert("Login failed");\n    } catch(err) {\n      alert("Error logging in");\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00
-4	RegisterHandler	\nasync (event, context) => {\n    event.preventDefault();\n    const form = event.target.closest("form");\n    const username = form.querySelector("[name=username]").value;\n    const email = form.querySelector("[name=email]").value;\n    const password = form.querySelector("[name=password]").value;\n    \n    try {\n      const res = await fetch("/api/register", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username, email, password })\n      });\n      if (res.ok) window.location.reload();\n      else {\n        const errData = await res.json();\n        alert(`Registration failed: ${errData.error || res.status}`);\n      }\n    } catch(err) {\n      alert("Error registering");\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00
-6	EditorInspectHandler	\nasync (event, context) => {\n    event.stopPropagation();\n    \n    // Read the current node data\n    const nodeDataStr = JSON.stringify(context.node.data, null, 2);\n    \n    // Update the global raw template\n    const template = window.Preempt.templateData;\n    if (!template.component) template.component = [];\n    const existing = template.component.find(c => c.reference === "inspectedNodeData");\n    if (existing) {\n        existing.value = nodeDataStr;\n    } else {\n        template.component.push({ reference: "inspectedNodeData", value: nodeDataStr });\n    }\n    \n    // Trigger pipeline re-render\n    window.Preempt.Supervisor.resetInstantiation();\n    await window.Preempt.Supervisor.process(\n        template, \n        window.Preempt.contentData, \n        window.Preempt.pipelineConfig\n    );\n}\n	admin	t	2026-05-27 22:54:20.573625+00	2026-05-27 22:54:20.573625+00
-5	TabToggleHandler	(event, context) => {\n    const targetTab = context.node.data.props["data-target"];\n    const container = context.node.parent.parent;\n    \n    const loginFormNode = container.children[1];\n    const registerFormNode = container.children[2];\n    \n    if (targetTab === "login") {\n        loginFormNode.data.css.style.display = "block";\n        registerFormNode.data.css.style.display = "none";\n    } else {\n        loginFormNode.data.css.style.display = "none";\n        registerFormNode.data.css.style.display = "block";\n    }\n    \n    loginFormNode.hasChangedSinceRender = true;\n    registerFormNode.hasChangedSinceRender = true;\n    loginFormNode.render();\n    registerFormNode.render();\n}	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00
-7	CheckLoginHandler	\n(context) => {\n    const user = context.supervisor?.userData;\n    console.log("CheckLoginHandler executing, user:", user);\n    if (user) {\n        const container = context.node;\n        const tabToggle = container.children[0];\n        const loginForm = container.children[1];\n        const registerForm = container.children[2];\n        const loggedIn = container.children[3];\n        \n        tabToggle.data.css.style.display = "none";\n        loginForm.data.css.style.display = "none";\n        registerForm.data.css.style.display = "none";\n        loggedIn.data.css.style.display = "block";\n        \n        const usernameSpan = loggedIn.children[0];\n        usernameSpan.data.content = `Welcome, ${user.username}!`;\n        container.hasChangedSinceRender = true;\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00
-8	LogoutHandler	\nasync (event, context) => {\n    try {\n        const res = await fetch("/api/logout", { method: "POST" });\n        if (res.ok) {\n            window.location.reload();\n        }\n    } catch(e) {\n        console.error(e);\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00
+COPY public.handlers (id, name, body, author_id, is_approved, created_at, updated_at, original_id, change_batch_id) FROM stdin;
+1	EditorLoginHandler	\nasync (event, context) => {\n    try {\n      const res = await fetch("/api/login", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username: "admin", password: "password123" })\n      });\n      if (res.ok) alert("Logged in successfully!");\n      else alert("Login failed");\n    } catch(err) {\n      alert("Error logging in");\n    }\n}\n	admin	t	2026-05-27 21:54:43.739515+00	2026-05-27 21:54:43.739515+00	\N	\N
+2	EditorSaveHandler	\nasync (event, context) => {\n    const mode = event.target.closest("[mode]")?.getAttribute("mode") || "template";\n    const exportedData = Preempt.Supervisor.exportRootNode();\n    if (!exportedData) return alert("Nothing to save");\n\n    const tagsInput = document.getElementById("template-tags");\n    const tagsValue = tagsInput ? tagsInput.value.split(",").map(t => t.trim()).filter(t => t) : [];\n\n    const urlParts = window.location.pathname.split("/");\n    const id = urlParts[urlParts.length - 1].split("?")[0];\n    \n    let endpoint = mode === "content" ? `/api/content/${id}` : `/api/template/${id}`;\n\n    try {\n      const res = await fetch(endpoint, {\n        method: "PUT",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ payload: exportedData, tags: tagsValue })\n      });\n      if (res.ok) alert("Saved successfully!");\n      else alert(`Save failed: ${res.status}`);\n    } catch(err) {\n      alert("Error saving");\n    }\n}\n	admin	t	2026-05-27 21:54:43.739515+00	2026-05-27 21:54:43.739515+00	\N	\N
+3	LoginHandler	\nasync (event, context) => {\n    event.preventDefault();\n    const form = event.target.closest("form");\n    const username = form.querySelector("[name=username]").value;\n    const password = form.querySelector("[name=password]").value;\n    \n    try {\n      const res = await fetch("/api/login", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username, password })\n      });\n      if (res.ok) window.location.reload();\n      else alert("Login failed");\n    } catch(err) {\n      alert("Error logging in");\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00	\N	\N
+4	RegisterHandler	\nasync (event, context) => {\n    event.preventDefault();\n    const form = event.target.closest("form");\n    const username = form.querySelector("[name=username]").value;\n    const email = form.querySelector("[name=email]").value;\n    const password = form.querySelector("[name=password]").value;\n    \n    try {\n      const res = await fetch("/api/register", {\n        method: "POST",\n        headers: { "Content-Type": "application/json" },\n        body: JSON.stringify({ username, email, password })\n      });\n      if (res.ok) window.location.reload();\n      else {\n        const errData = await res.json();\n        alert(`Registration failed: ${errData.error || res.status}`);\n      }\n    } catch(err) {\n      alert("Error registering");\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00	\N	\N
+6	EditorInspectHandler	\nasync (event, context) => {\n    event.stopPropagation();\n    \n    // Read the current node data\n    const nodeDataStr = JSON.stringify(context.node.data, null, 2);\n    \n    // Update the global raw template\n    const template = window.Preempt.templateData;\n    if (!template.component) template.component = [];\n    const existing = template.component.find(c => c.reference === "inspectedNodeData");\n    if (existing) {\n        existing.value = nodeDataStr;\n    } else {\n        template.component.push({ reference: "inspectedNodeData", value: nodeDataStr });\n    }\n    \n    // Trigger pipeline re-render\n    window.Preempt.Supervisor.resetInstantiation();\n    await window.Preempt.Supervisor.process(\n        template, \n        window.Preempt.contentData, \n        window.Preempt.pipelineConfig\n    );\n}\n	admin	t	2026-05-27 22:54:20.573625+00	2026-05-27 22:54:20.573625+00	\N	\N
+5	TabToggleHandler	(event, context) => {\n    const targetTab = context.node.data.props["data-target"];\n    const container = context.node.parent.parent;\n    \n    const loginFormNode = container.children[1];\n    const registerFormNode = container.children[2];\n    \n    if (targetTab === "login") {\n        loginFormNode.data.css.style.display = "block";\n        registerFormNode.data.css.style.display = "none";\n    } else {\n        loginFormNode.data.css.style.display = "none";\n        registerFormNode.data.css.style.display = "block";\n    }\n    \n    loginFormNode.hasChangedSinceRender = true;\n    registerFormNode.hasChangedSinceRender = true;\n    loginFormNode.render();\n    registerFormNode.render();\n}	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00	\N	\N
+7	CheckLoginHandler	\n(context) => {\n    const user = context.supervisor?.userData;\n    console.log("CheckLoginHandler executing, user:", user);\n    if (user) {\n        const container = context.node;\n        const tabToggle = container.children[0];\n        const loginForm = container.children[1];\n        const registerForm = container.children[2];\n        const loggedIn = container.children[3];\n        \n        tabToggle.data.css.style.display = "none";\n        loginForm.data.css.style.display = "none";\n        registerForm.data.css.style.display = "none";\n        loggedIn.data.css.style.display = "block";\n        \n        const usernameSpan = loggedIn.children[0];\n        usernameSpan.data.content = `Welcome, ${user.username}!`;\n        container.hasChangedSinceRender = true;\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00	\N	\N
+8	LogoutHandler	\nasync (event, context) => {\n    try {\n        const res = await fetch("/api/logout", { method: "POST" });\n        if (res.ok) {\n            window.location.reload();\n        }\n    } catch(e) {\n        console.error(e);\n    }\n}\n	admin	t	2026-05-27 22:52:47.301998+00	2026-05-27 22:52:47.301998+00	\N	\N
+9	fetchBatches	\n    const res = await fetch('/api/admin/change-batches', {\n      headers: { 'Authorization': 'Bearer ' + document.cookie.split('token=')[1]?.split(';')[0] }\n    });\n    if (res.ok) {\n      const data = await res.json();\n      state.batches = data.batches;\n    }\n  	admin	t	2026-06-04 01:43:45.826093+00	2026-06-04 01:43:45.826093+00	\N	\N
+10	approveBatch	\n    const res = await fetch('/api/admin/change-batches/' + args.id + '/approve', {\n      method: 'POST',\n      headers: { 'Authorization': 'Bearer ' + document.cookie.split('token=')[1]?.split(';')[0] }\n    });\n    if (res.ok) {\n      await handlers.fetchBatches();\n    }\n  	admin	t	2026-06-04 01:43:45.832886+00	2026-06-04 01:43:45.832886+00	\N	\N
+11	rejectBatch	\n    const res = await fetch('/api/admin/change-batches/' + args.id + '/reject', {\n      method: 'POST',\n      headers: { 'Authorization': 'Bearer ' + document.cookie.split('token=')[1]?.split(';')[0] }\n    });\n    if (res.ok) {\n      await handlers.fetchBatches();\n    }\n  	admin	t	2026-06-04 01:43:45.835368+00	2026-06-04 01:43:45.835368+00	\N	\N
+15	AdminFetchBatchesHandler	\nasync (event, context) => {\n  try {\n    const res = await fetch('/api/mcp/admin/change-batches');\n    if (res.ok) {\n      const data = await res.json();\n      \n      const listNode = context.node.parent.children[1];\n      listNode.data.content = "";\n      listNode.children = [];\n      if (listNode.element) listNode.element.innerHTML = "";\n      \n      data.batches.forEach(b => {\n        listNode.addChild({\n          type: "div",\n          css: { style: { border: "1px solid #ccc", padding: "10px", marginBottom: "10px" } },\n          content: [\n            { type: "p", content: "Batch ID: " + b.id },\n            { type: "p", content: "Description: " + b.description },\n            { type: "p", content: "Author: " + b.author_id },\n            { \n              type: "button", \n              content: "Approve",\n              css: { style: { background: "green", color: "white", padding: "5px 10px", marginRight: "10px" } },\n              handlers: { \n                click: `async (e) => { \n                  const r = await fetch('/api/mcp/admin/change-batches/${b.id}/approve', {method: 'POST'});\n                  if (r.ok) alert('Approved');\n                  else alert('Approve failed');\n                }`\n              }\n            },\n            { \n              type: "button", \n              content: "Reject",\n              css: { style: { background: "red", color: "white", padding: "5px 10px" } },\n              handlers: { \n                click: `async (e) => { \n                  const r = await fetch('/api/mcp/admin/change-batches/${b.id}/reject', {method: 'POST'});\n                  if (r.ok) alert('Rejected');\n                  else alert('Reject failed');\n                }`\n              }\n            }\n          ]\n        });\n      });\n      listNode.render();\n    } else {\n      alert("Failed to fetch batches");\n    }\n  } catch (err) {\n    console.error(err);\n  }\n}\n  	admin	t	2026-06-04 01:45:21.793218+00	2026-06-04 01:45:21.793218+00	\N	\N
 \.
 
 
 --
--- Data for Name: sitesettings; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: sitesettings; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.sitesettings (key, value, updated_at) FROM stdin;
 default_index_content_id	{"id": 1}	2026-06-01 22:38:02.363471+00
-server_config	{"runInstantiation": false, "runAssembly": false, "runPreprocessing": false, "runValidation": false, "runRendering": false, "runPostprocessing": false, "runMonitoring": false}	2026-05-24 02:44:03.963177+00
+server_config	{"runAssembly": false, "runRendering": false, "runMonitoring": false, "runValidation": false, "runInstantiation": false, "runPreprocessing": false, "runPostprocessing": false}	2026-05-24 02:44:03.963177+00
 \.
 
 
 --
--- Data for Name: tags; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: tags; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.tags (id, name) FROM stdin;
@@ -589,7 +688,7 @@ COPY public.tags (id, name) FROM stdin;
 
 
 --
--- Data for Name: templatecomponents; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: templatecomponents; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.templatecomponents (template_id, component_id, created_at) FROM stdin;
@@ -598,7 +697,7 @@ COPY public.templatecomponents (template_id, component_id, created_at) FROM stdi
 
 
 --
--- Data for Name: templategroups; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: templategroups; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.templategroups (id, name, default_template_id) FROM stdin;
@@ -607,7 +706,7 @@ COPY public.templategroups (id, name, default_template_id) FROM stdin;
 
 
 --
--- Data for Name: templatehandlers; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: templatehandlers; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.templatehandlers (template_id, handler_id, created_at, updated_at) FROM stdin;
@@ -615,16 +714,16 @@ COPY public.templatehandlers (template_id, handler_id, created_at, updated_at) F
 
 
 --
--- Data for Name: templates; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: templates; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
-COPY public.templates (id, author_id, payload, created_at, updated_at, group_id) FROM stdin;
-1	admin	{"css": {"style": {"height": "100vh", "display": "flex", "alignItems": "center", "flexDirection": "column", "justifyContent": "center"}, "cssDef": [{"styles": {"fontFamily": "sans-serif", "backgroundColor": "#1a1a1a"}, "selector": ".hello-container"}, {"styles": {"color": "#42b883", "margin": "0", "fontSize": "3rem"}, "selector": "h1.dynamic-title"}], "classes": ["hello-container"]}, "type": "div", "content": [{"type": "div", "component": [{"target": "type", "reference": "LoginComponent"}]}, {"css": {"cssDef": [{"styles": {"color": "#888", "marginTop": "1rem", "fontWeight": "bold"}, "selector": ".dynamic-subtitle"}], "classes": ["dynamic-subtitle"]}, "type": "p", "content": "Rendered dynamically with cssDef styling rules."}, {"css": {}, "type": "img", "props": {"alt": "Missing src image"}}, {"css": {"style": {"color": "#42b883", "marginTop": "2rem", "textDecoration": "none"}}, "type": "a", "props": {"href": "https://example.com"}, "content": "Valid Link"}, {"css": {"style": {"border": "2px dashed #888", "padding": "1rem", "marginTop": "2rem", "borderRadius": "8px"}}, "type": "div", "content": [{"css": {"style": {"color": "#888", "margin": "0"}}, "type": "p", "content": "This is the placement zone."}], "placement": {"placementName": "test-zone"}}, {"css": {"style": {"border": "2px dashed #f06292", "padding": "1rem", "marginTop": "2rem", "minHeight": "50px", "borderRadius": "8px"}}, "type": "div", "content": "This is an empty placement zone.", "placement": {"placementName": "empty-zone"}}, {"css": {}, "type": "div", "placement": {"placementName": "comment-zone"}}], "component": [{"value": "Alice_Engineer", "reference": "writerName"}, {"value": "#9c27b0", "reference": "avatarColor"}, {"value": "This component assembly system is really powerful!", "reference": "commentText"}, {"value": "5px 5px 15px rgba(156, 39, 176, 0.5)", "reference": "shadowColor"}, {"value": "I am never consumed", "reference": "unusedValue"}]}	2026-05-25 20:12:23.058397+00	2026-05-27 23:03:09.987023+00	1
+COPY public.templates (id, author_id, payload, created_at, updated_at, group_id, original_id, change_batch_id, is_approved) FROM stdin;
+1	admin	{"css": {"style": {"height": "100vh", "display": "flex", "alignItems": "center", "flexDirection": "column", "justifyContent": "center"}, "cssDef": [{"styles": {"fontFamily": "sans-serif", "backgroundColor": "#1a1a1a"}, "selector": ".hello-container"}, {"styles": {"color": "#42b883", "margin": "0", "fontSize": "3rem"}, "selector": "h1.dynamic-title"}], "classes": ["hello-container"]}, "type": "div", "content": [{"type": "div", "component": [{"target": "type", "reference": "LoginComponent"}]}, {"css": {"cssDef": [{"styles": {"color": "#888", "marginTop": "1rem", "fontWeight": "bold"}, "selector": ".dynamic-subtitle"}], "classes": ["dynamic-subtitle"]}, "type": "p", "content": "Rendered dynamically with cssDef styling rules."}, {"css": {}, "type": "img", "props": {"alt": "Missing src image"}}, {"css": {"style": {"color": "#42b883", "marginTop": "2rem", "textDecoration": "none"}}, "type": "a", "props": {"href": "https://example.com"}, "content": "Valid Link"}, {"css": {"style": {"border": "2px dashed #888", "padding": "1rem", "marginTop": "2rem", "borderRadius": "8px"}}, "type": "div", "content": [{"css": {"style": {"color": "#888", "margin": "0"}}, "type": "p", "content": "This is the placement zone."}], "placement": {"placementName": "test-zone"}}, {"css": {"style": {"border": "2px dashed #f06292", "padding": "1rem", "marginTop": "2rem", "minHeight": "50px", "borderRadius": "8px"}}, "type": "div", "content": "This is an empty placement zone.", "placement": {"placementName": "empty-zone"}}, {"css": {}, "type": "div", "placement": {"placementName": "comment-zone"}}], "component": [{"value": "Alice_Engineer", "reference": "writerName"}, {"value": "#9c27b0", "reference": "avatarColor"}, {"value": "This component assembly system is really powerful!", "reference": "commentText"}, {"value": "5px 5px 15px rgba(156, 39, 176, 0.5)", "reference": "shadowColor"}, {"value": "I am never consumed", "reference": "unusedValue"}]}	2026-05-25 20:12:23.058397+00	2026-05-27 23:03:09.987023+00	1	\N	\N	t
 \.
 
 
 --
--- Data for Name: templatetags; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: templatetags; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
 COPY public.templatetags (template_id, tag_id) FROM stdin;
@@ -634,60 +733,89 @@ COPY public.templatetags (template_id, tag_id) FROM stdin;
 
 
 --
--- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: preempt
 --
 
-COPY public.users (username, email, password_hash, is_admin, is_contributor, is_shadowed, created_at, updated_at) FROM stdin;
-admin	admin@preempt.com	$2a$06$uLifkh6itCIWpC1ap5ttLuQfOuihd.4GNq254fViFiR057maiwnem	t	f	f	2026-05-25 20:12:23.054262+00	2026-05-25 20:12:23.054262+00
-testadmin	test@test.com	$2a$06$.3D8lyRliDsrRTOC3segfOAFp6M9wZkZSbxO/02fwVUtMc9DSSGde	t	f	f	2026-05-27 23:00:01.101547+00	2026-05-27 23:00:01.101547+00
-TestAdmin	testAdmin@example.com	$2a$10$45EUuEA86K76djC/HiLvrO7whyDvTQ5u6tCFp985gLn/KhYijw1Qu	t	f	f	2026-05-29 01:43:54.935977+00	2026-05-29 01:43:54.935977+00
+COPY public.users (username, email, password_hash, is_admin, is_contributor, is_shadowed, is_trusted_dev, created_at, updated_at, is_2fa_enabled, has_verified, is_bot) FROM stdin;
+admin	admin@preempt.com	$2a$06$uLifkh6itCIWpC1ap5ttLuQfOuihd.4GNq254fViFiR057maiwnem	t	f	f	f	2026-05-25 20:12:23.054262+00	2026-05-25 20:12:23.054262+00	f	t	f
+Ryan	rarasey@outlook.com	$2a$06$gI/AL.irBttV9NXf2ctzOerli15kQNc7PFihRmRrDvO19N2lv5h4i	t	f	f	f	2026-06-03 20:38:14.57951+00	2026-06-03 20:38:14.57951+00	f	t	f
 \.
 
 
 --
--- Name: components_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: authtokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
 --
 
-SELECT pg_catalog.setval('public.components_id_seq', 2, true);
-
-
---
--- Name: content_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
---
-
-SELECT pg_catalog.setval('public.content_id_seq', 1, true);
+SELECT pg_catalog.setval('public.authtokens_id_seq', 19, true);
 
 
 --
--- Name: handlers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: changebatches_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
 --
 
-SELECT pg_catalog.setval('public.handlers_id_seq', 8, true);
+SELECT pg_catalog.setval('public.changebatches_id_seq', 1, false);
 
 
 --
--- Name: tags_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: components_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
+--
+
+SELECT pg_catalog.setval('public.components_id_seq', 3, true);
+
+
+--
+-- Name: content_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
+--
+
+SELECT pg_catalog.setval('public.content_id_seq', 3, true);
+
+
+--
+-- Name: handlers_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
+--
+
+SELECT pg_catalog.setval('public.handlers_id_seq', 15, true);
+
+
+--
+-- Name: tags_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
 --
 
 SELECT pg_catalog.setval('public.tags_id_seq', 5, true);
 
 
 --
--- Name: templategroups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: templategroups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
 --
 
 SELECT pg_catalog.setval('public.templategroups_id_seq', 1, true);
 
 
 --
--- Name: templates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: templates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: preempt
 --
 
 SELECT pg_catalog.setval('public.templates_id_seq', 1, true);
 
 
 --
--- Name: componenthandlers componenthandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: authtokens authtokens_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.authtokens
+    ADD CONSTRAINT authtokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: changebatches changebatches_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.changebatches
+    ADD CONSTRAINT changebatches_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: componenthandlers componenthandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.componenthandlers
@@ -695,15 +823,7 @@ ALTER TABLE ONLY public.componenthandlers
 
 
 --
--- Name: components components_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.components
-    ADD CONSTRAINT components_name_key UNIQUE (name);
-
-
---
--- Name: components components_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: components components_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.components
@@ -711,7 +831,7 @@ ALTER TABLE ONLY public.components
 
 
 --
--- Name: content content_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: content content_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.content
@@ -719,7 +839,7 @@ ALTER TABLE ONLY public.content
 
 
 --
--- Name: contentcomponents contentcomponents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: contentcomponents contentcomponents_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contentcomponents
@@ -727,7 +847,7 @@ ALTER TABLE ONLY public.contentcomponents
 
 
 --
--- Name: contenthandlers contenthandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: contenthandlers contenthandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenthandlers
@@ -735,7 +855,7 @@ ALTER TABLE ONLY public.contenthandlers
 
 
 --
--- Name: contenttags contenttags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttags contenttags_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttags
@@ -743,7 +863,7 @@ ALTER TABLE ONLY public.contenttags
 
 
 --
--- Name: contenttemplategroups contenttemplategroups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttemplategroups contenttemplategroups_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttemplategroups
@@ -751,15 +871,7 @@ ALTER TABLE ONLY public.contenttemplategroups
 
 
 --
--- Name: handlers handlers_name_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.handlers
-    ADD CONSTRAINT handlers_name_key UNIQUE (name);
-
-
---
--- Name: handlers handlers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: handlers handlers_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.handlers
@@ -767,7 +879,7 @@ ALTER TABLE ONLY public.handlers
 
 
 --
--- Name: sitesettings sitesettings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: sitesettings sitesettings_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.sitesettings
@@ -775,7 +887,7 @@ ALTER TABLE ONLY public.sitesettings
 
 
 --
--- Name: tags tags_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: tags tags_name_key; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.tags
@@ -783,7 +895,7 @@ ALTER TABLE ONLY public.tags
 
 
 --
--- Name: tags tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: tags tags_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.tags
@@ -791,7 +903,7 @@ ALTER TABLE ONLY public.tags
 
 
 --
--- Name: templatecomponents templatecomponents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templatecomponents templatecomponents_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatecomponents
@@ -799,7 +911,7 @@ ALTER TABLE ONLY public.templatecomponents
 
 
 --
--- Name: templategroups templategroups_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templategroups templategroups_name_key; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templategroups
@@ -807,7 +919,7 @@ ALTER TABLE ONLY public.templategroups
 
 
 --
--- Name: templategroups templategroups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templategroups templategroups_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templategroups
@@ -815,7 +927,7 @@ ALTER TABLE ONLY public.templategroups
 
 
 --
--- Name: templatehandlers templatehandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templatehandlers templatehandlers_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatehandlers
@@ -823,7 +935,7 @@ ALTER TABLE ONLY public.templatehandlers
 
 
 --
--- Name: templates templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templates templates_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templates
@@ -831,7 +943,7 @@ ALTER TABLE ONLY public.templates
 
 
 --
--- Name: templatetags templatetags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: templatetags templatetags_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatetags
@@ -839,7 +951,7 @@ ALTER TABLE ONLY public.templatetags
 
 
 --
--- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.users
@@ -847,7 +959,7 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.users
@@ -855,7 +967,37 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: componenthandlers componenthandlers_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: idx_components_name; Type: INDEX; Schema: public; Owner: preempt
+--
+
+CREATE UNIQUE INDEX idx_components_name ON public.components USING btree (name) WHERE ((is_approved = true) AND (change_batch_id IS NULL));
+
+
+--
+-- Name: idx_handlers_name; Type: INDEX; Schema: public; Owner: preempt
+--
+
+CREATE UNIQUE INDEX idx_handlers_name ON public.handlers USING btree (name) WHERE ((is_approved = true) AND (change_batch_id IS NULL));
+
+
+--
+-- Name: authtokens authtokens_username_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.authtokens
+    ADD CONSTRAINT authtokens_username_fkey FOREIGN KEY (username) REFERENCES public.users(username) ON DELETE CASCADE;
+
+
+--
+-- Name: changebatches changebatches_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.changebatches
+    ADD CONSTRAINT changebatches_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.users(username);
+
+
+--
+-- Name: componenthandlers componenthandlers_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.componenthandlers
@@ -863,7 +1005,7 @@ ALTER TABLE ONLY public.componenthandlers
 
 
 --
--- Name: componenthandlers componenthandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: componenthandlers componenthandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.componenthandlers
@@ -871,7 +1013,7 @@ ALTER TABLE ONLY public.componenthandlers
 
 
 --
--- Name: components components_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: components components_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.components
@@ -879,7 +1021,23 @@ ALTER TABLE ONLY public.components
 
 
 --
--- Name: content content_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: components components_change_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.components
+    ADD CONSTRAINT components_change_batch_id_fkey FOREIGN KEY (change_batch_id) REFERENCES public.changebatches(id) ON DELETE CASCADE;
+
+
+--
+-- Name: components components_original_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.components
+    ADD CONSTRAINT components_original_id_fkey FOREIGN KEY (original_id) REFERENCES public.components(id) ON DELETE SET NULL;
+
+
+--
+-- Name: content content_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.content
@@ -887,7 +1045,23 @@ ALTER TABLE ONLY public.content
 
 
 --
--- Name: contentcomponents contentcomponents_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: content content_change_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.content
+    ADD CONSTRAINT content_change_batch_id_fkey FOREIGN KEY (change_batch_id) REFERENCES public.changebatches(id) ON DELETE CASCADE;
+
+
+--
+-- Name: content content_original_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.content
+    ADD CONSTRAINT content_original_id_fkey FOREIGN KEY (original_id) REFERENCES public.content(id) ON DELETE SET NULL;
+
+
+--
+-- Name: contentcomponents contentcomponents_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contentcomponents
@@ -895,7 +1069,7 @@ ALTER TABLE ONLY public.contentcomponents
 
 
 --
--- Name: contentcomponents contentcomponents_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contentcomponents contentcomponents_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contentcomponents
@@ -903,7 +1077,7 @@ ALTER TABLE ONLY public.contentcomponents
 
 
 --
--- Name: contenthandlers contenthandlers_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenthandlers contenthandlers_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenthandlers
@@ -911,7 +1085,7 @@ ALTER TABLE ONLY public.contenthandlers
 
 
 --
--- Name: contenthandlers contenthandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenthandlers contenthandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenthandlers
@@ -919,7 +1093,7 @@ ALTER TABLE ONLY public.contenthandlers
 
 
 --
--- Name: contenttags contenttags_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttags contenttags_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttags
@@ -927,7 +1101,7 @@ ALTER TABLE ONLY public.contenttags
 
 
 --
--- Name: contenttags contenttags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttags contenttags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttags
@@ -935,7 +1109,7 @@ ALTER TABLE ONLY public.contenttags
 
 
 --
--- Name: contenttemplategroups contenttemplategroups_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttemplategroups contenttemplategroups_content_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttemplategroups
@@ -943,7 +1117,7 @@ ALTER TABLE ONLY public.contenttemplategroups
 
 
 --
--- Name: contenttemplategroups contenttemplategroups_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: contenttemplategroups contenttemplategroups_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.contenttemplategroups
@@ -951,7 +1125,7 @@ ALTER TABLE ONLY public.contenttemplategroups
 
 
 --
--- Name: templategroups fk_default_template; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templategroups fk_default_template; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templategroups
@@ -959,7 +1133,7 @@ ALTER TABLE ONLY public.templategroups
 
 
 --
--- Name: handlers handlers_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: handlers handlers_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.handlers
@@ -967,7 +1141,23 @@ ALTER TABLE ONLY public.handlers
 
 
 --
--- Name: templatecomponents templatecomponents_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: handlers handlers_change_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.handlers
+    ADD CONSTRAINT handlers_change_batch_id_fkey FOREIGN KEY (change_batch_id) REFERENCES public.changebatches(id) ON DELETE CASCADE;
+
+
+--
+-- Name: handlers handlers_original_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.handlers
+    ADD CONSTRAINT handlers_original_id_fkey FOREIGN KEY (original_id) REFERENCES public.handlers(id) ON DELETE SET NULL;
+
+
+--
+-- Name: templatecomponents templatecomponents_component_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatecomponents
@@ -975,7 +1165,7 @@ ALTER TABLE ONLY public.templatecomponents
 
 
 --
--- Name: templatecomponents templatecomponents_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templatecomponents templatecomponents_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatecomponents
@@ -983,7 +1173,7 @@ ALTER TABLE ONLY public.templatecomponents
 
 
 --
--- Name: templatehandlers templatehandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templatehandlers templatehandlers_handler_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatehandlers
@@ -991,7 +1181,7 @@ ALTER TABLE ONLY public.templatehandlers
 
 
 --
--- Name: templatehandlers templatehandlers_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templatehandlers templatehandlers_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatehandlers
@@ -999,7 +1189,7 @@ ALTER TABLE ONLY public.templatehandlers
 
 
 --
--- Name: templates templates_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templates templates_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templates
@@ -1007,7 +1197,15 @@ ALTER TABLE ONLY public.templates
 
 
 --
--- Name: templates templates_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templates templates_change_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.templates
+    ADD CONSTRAINT templates_change_batch_id_fkey FOREIGN KEY (change_batch_id) REFERENCES public.changebatches(id) ON DELETE CASCADE;
+
+
+--
+-- Name: templates templates_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templates
@@ -1015,7 +1213,15 @@ ALTER TABLE ONLY public.templates
 
 
 --
--- Name: templatetags templatetags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templates templates_original_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
+--
+
+ALTER TABLE ONLY public.templates
+    ADD CONSTRAINT templates_original_id_fkey FOREIGN KEY (original_id) REFERENCES public.templates(id) ON DELETE SET NULL;
+
+
+--
+-- Name: templatetags templatetags_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatetags
@@ -1023,7 +1229,7 @@ ALTER TABLE ONLY public.templatetags
 
 
 --
--- Name: templatetags templatetags_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: templatetags templatetags_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: preempt
 --
 
 ALTER TABLE ONLY public.templatetags
@@ -1031,8 +1237,15 @@ ALTER TABLE ONLY public.templatetags
 
 
 --
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: preempt
+--
+
+REVOKE USAGE ON SCHEMA public FROM PUBLIC;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3ifB5qNNaWUevQUjmIlitY0Rh3uxFM7pST1p1715x6FdJEIHFgm9KirLdJY8lK5
+\unrestrict mKRxMyj7xwLYStEMV5vzDAIcNsj1w89R6sCVqhyq8xhhOwYjMINP0tN5CNtjVjQ
 
