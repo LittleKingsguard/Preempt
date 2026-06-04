@@ -495,7 +495,8 @@ CREATE TABLE public.users (
     is_2fa_enabled boolean DEFAULT false,
     has_verified boolean DEFAULT false,
     is_bot boolean DEFAULT false,
-    CONSTRAINT check_bot_roles CHECK ((NOT ((is_bot = true) AND ((is_admin = true) OR (is_contributor = true)))))
+    CONSTRAINT check_bot_roles CHECK ((NOT ((is_bot = true) AND ((is_admin = true) OR (is_contributor = true))))),
+    CONSTRAINT check_verified_roles CHECK ((has_verified = true) OR ((is_admin = false) AND (is_contributor = false)))
 );
 
 

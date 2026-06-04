@@ -62,3 +62,21 @@ export const mcpAuth = async (req: express.Request, res: express.Response, next:
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+export function validateUserRoles(user: any, permittedRoles: string[], creatorUsername?: string): { error: string, status: number } | null {
+  if (!user) return { error: "Unauthorized", status: 401 };
+  if (user.has_verified === false) return { error: "Please verify your email to perform this action", status: 403 };
+
+  let isAuthorized = false;
+  if (permittedRoles.includes("admin") && user.is_admin) isAuthorized = true;
+  if (permittedRoles.includes("contributor") && user.is_contributor) isAuthorized = true;
+  if (permittedRoles.includes("trusted_dev") && user.is_trusted_dev) isAuthorized = true;
+  if (permittedRoles.includes("author") && creatorUsername && user.username === creatorUsername) isAuthorized = true;
+
+  if (!isAuthorized) {
+    const rolesStr = permittedRoles.join(", ");
+    return { error: `Forbidden: Must be one of: ${rolesStr}`, status: 403 };
+  }
+
+  return null;
+}

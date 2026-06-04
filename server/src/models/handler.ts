@@ -13,15 +13,17 @@ export async function getHandlerById(id: number) {
 
 export async function createHandler(user: any, name: string, body: string) {
   const hasTrustedDevs = await getSetting("hasTrustedDevs");
-  const isAuthorized = user && (user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+  const isAuthorized = user && (user.is_admin || user.is_contributor || (hasTrustedDevs && user.is_trusted_dev));
   if (!isAuthorized) {
     return { error: "Forbidden: Not authorized to create handlers", status: 403 };
   }
 
+  const isApproved = Boolean(user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+
   try {
     const result = await pool.query(
       "INSERT INTO Handlers (name, body, author_id, is_approved) VALUES ($1, $2, $3, $4) RETURNING *",
-      [name, body, user.username, true]
+      [name, body, user.username, isApproved]
     );
     return { handler: result.rows[0] };
   } catch (err: any) {
@@ -34,7 +36,7 @@ export async function createHandler(user: any, name: string, body: string) {
 
 export async function updateHandler(id: number, user: any, name: string, body: string) {
   const hasTrustedDevs = await getSetting("hasTrustedDevs");
-  const isAuthorized = user && (user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+  const isAuthorized = user && (user.is_admin || user.is_contributor || (hasTrustedDevs && user.is_trusted_dev));
   if (!isAuthorized) {
     return { error: "Forbidden: Not authorized to update handlers", status: 403 };
   }
@@ -92,4 +94,43 @@ export async function stageHandler(user: any, name: string, body: string, origin
     [name, body, user.username, originalId, batchId]
   );
   return { handler: result.rows[0] };
+}
+
+export async function deleteHandler(id: number, user: any) {
+  const hasTrustedDevs = await getSetting("hasTrustedDevs");
+  const isAuthorized = user && (user.is_admin || user.is_contributor || (hasTrustedDevs && user.is_trusted_dev));
+  if (!isAuthorized) {
+    return { error: "Forbidden: Not authorized to delete handlers", status: 403 };
+  }
+
+  try {
+    const result = await pool.query("DELETE FROM Handlers WHERE id = $1 RETURNING *", [id]);
+    if (result.rows.length === 0) {
+      return { error: "Handler not found", status: 404 };
+    }
+    return { handler: result.rows[0] };
+  } catch (err: any) {
+    throw err;
+  }
+}
+
+export async function approveHandler(id: number, user: any, is_approved: boolean) {
+  const hasTrustedDevs = await getSetting("hasTrustedDevs");
+  const isAuthorized = user && (user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
+  if (!isAuthorized) {
+    return { error: "Forbidden: Not authorized to approve/reject handlers", status: 403 };
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE Handlers SET is_approved = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *",
+      [is_approved, id]
+    );
+    if (result.rows.length === 0) {
+      return { error: "Handler not found", status: 404 };
+    }
+    return { handler: result.rows[0] };
+  } catch (err: any) {
+    throw err;
+  }
 }

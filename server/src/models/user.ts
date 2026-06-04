@@ -84,3 +84,10 @@ export async function updateUserRoles(username: string, roles: { is_contributor?
     values
   );
 }
+
+export async function getUsers() {
+  const result = await pool.query(
+    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot FROM Users"
+  );
+  return result.rows;
+}
