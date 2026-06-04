@@ -71,7 +71,11 @@ export function validateUserRoles(user: any, permittedRoles: string[], creatorUs
   if (permittedRoles.includes("admin") && user.is_admin) isAuthorized = true;
   if (permittedRoles.includes("contributor") && user.is_contributor) isAuthorized = true;
   if (permittedRoles.includes("trusted_dev") && user.is_trusted_dev) isAuthorized = true;
-  if (permittedRoles.includes("author") && creatorUsername && user.username === creatorUsername) isAuthorized = true;
+  if (permittedRoles.includes("author") && creatorUsername && user.username === creatorUsername) {
+    if (user.is_contributor || user.is_trusted_dev || user.is_admin) {
+      isAuthorized = true;
+    }
+  }
 
   if (!isAuthorized) {
     const rolesStr = permittedRoles.join(", ");
