@@ -102,7 +102,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
       } else if (target.type === 'template') {
         await stageTemplate(user, validatedPayload, target.id || null, batch.id, target.tags, target.groupId || null);
       } else if (target.type === 'content') {
-        await stageContent(user, validatedPayload, target.headers, target.id || null, batch.id);
+        await stageContent(user, validatedPayload, target.headers, target.id || null, batch.id, target.tags, target.groupIds);
       }
     }
     return res.json({ success: true, batchId: batch.id });

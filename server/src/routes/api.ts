@@ -3,7 +3,7 @@ import { authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { updateUserRoles } from "../models/user.js";
 import { getTags } from "../models/tag.js";
 import { getTemplateById, createTemplate, updateTemplate } from "../models/template.js";
-import { getContentWithTemplate } from "../models/content.js";
+import { getContentWithTemplate, createContent, updateContent, deleteContent } from "../models/content.js";
 import { getHandlers, createHandler, updateHandler } from "../models/handler.js";
 import { getComponents, getComponentById, createComponent, updateComponent, deleteComponent } from "../models/component.js";
 import { setSetting } from "../models/settings.js";
@@ -132,6 +132,76 @@ router.get("/template/:id", authenticateToken, async (req, res) => {
     }
 
     res.json(template);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+router.post("/content", authenticateToken, async (req, res) => {
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ message: "Content created successfully", content: { id: 999999, ...req.body } });
+  if (!user.is_admin && !user.is_contributor) {
+    return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
+  }
+
+  const { payload, headers, tags, groupIds, isVisible, liveDate } = req.body;
+  if (!payload) return res.status(400).json({ error: "Payload is required" });
+
+  try {
+    const result = await createContent(user, payload, headers, tags, groupIds, isVisible, liveDate);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json({ message: "Content created successfully", content: result.content });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/content/:id", authenticateToken, async (req, res) => {
+  const contentId = parseInt(req.params.id as string, 10);
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ message: "Content updated successfully", content: { id: contentId, ...req.body } });
+  if (!user.is_admin && !user.is_contributor) {
+    return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
+  }
+
+  const { payload, headers, tags, groupIds, isVisible, liveDate } = req.body;
+  if (!payload) return res.status(400).json({ error: "Payload is required" });
+
+  try {
+    const result = await updateContent(contentId, user, payload, headers, tags, groupIds, isVisible, liveDate);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json({ message: "Content updated successfully", content: result.content });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/content/:id", authenticateToken, async (req, res) => {
+  const contentId = parseInt(req.params.id as string, 10);
+  const user = (req as any).user;
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (user.has_verified === false) return res.status(403).json({ error: "Please verify your email to perform this action" });
+  if (user.is_shadowed) return res.json({ success: true });
+  if (!user.is_admin && !user.is_contributor) {
+    return res.status(403).json({ error: "Forbidden: Must be contributor or admin" });
+  }
+
+  try {
+    const result = await deleteContent(contentId, user);
+    if (result.error) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

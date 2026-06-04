@@ -112,15 +112,18 @@ export async function approveChangeBatch(batchId: number) {
           );
           const archivedId = archived.rows[0].id;
 
-          // Copy original tags to the archived row
+          // Copy original tags and groups to the archived row
           await client.query("INSERT INTO ContentTags (content_id, tag_id) SELECT $1, tag_id FROM ContentTags WHERE content_id = $2", [archivedId, c.original_id]);
+          await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, group_id FROM ContentTemplateGroups WHERE content_id = $2", [archivedId, c.original_id]);
 
           // Update the original row with the new content payload and headers
           await client.query("UPDATE Content SET payload = $1, headers = $2, is_visible = true WHERE id = $3", [c.payload, c.headers, c.original_id]);
           
-          // Overwrite the original row's tags with the staged row's tags
+          // Overwrite the original row's tags and groups with the staged row's mappings
           await client.query("DELETE FROM ContentTags WHERE content_id = $1", [c.original_id]);
           await client.query("INSERT INTO ContentTags (content_id, tag_id) SELECT $1, tag_id FROM ContentTags WHERE content_id = $2", [c.original_id, c.id]);
+          await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [c.original_id]);
+          await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, group_id FROM ContentTemplateGroups WHERE content_id = $2", [c.original_id, c.id]);
         }
       }
     }

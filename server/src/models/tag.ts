@@ -35,3 +35,33 @@ export async function updateTemplateTags(client: any, templateId: number, tags: 
     await client.query("INSERT INTO TemplateTags (template_id, tag_id) SELECT $1, unnest($2::int[])", [templateId, tagIds]);
   }
 }
+
+export async function updateContentTags(client: any, contentId: number, tags: string[]) {
+  if (!tags || tags.length === 0) {
+    await client.query("DELETE FROM ContentTags WHERE content_id = $1", [contentId]);
+    return;
+  }
+  
+  // Batch insert tags
+  await client.query("INSERT INTO Tags (name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING", [tags]);
+  tags.forEach(tag => tagCache.add(tag));
+
+  // Get tag IDs
+  const result = await client.query("SELECT id FROM Tags WHERE name = ANY($1::text[])", [tags]);
+  const tagIds = result.rows.map((r: any) => r.id);
+  
+  // Replace mappings
+  await client.query("DELETE FROM ContentTags WHERE content_id = $1", [contentId]);
+  if (tagIds.length > 0) {
+    await client.query("INSERT INTO ContentTags (content_id, tag_id) SELECT $1, unnest($2::int[])", [contentId, tagIds]);
+  }
+}
+
+export async function updateContentTemplateGroups(client: any, contentId: number, groupIds: number[]) {
+  await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [contentId]);
+  
+  if (groupIds && groupIds.length > 0) {
+    await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, unnest($2::int[])", [contentId, groupIds]);
+  }
+}
+

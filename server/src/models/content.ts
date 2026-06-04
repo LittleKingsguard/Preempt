@@ -2,6 +2,7 @@ import { pool } from "../db.js";
 import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, populateContentHandlers, populateContentComponents } from "./contentUtils.js";
 import { queryFirstRow } from "../utils/db.js";
 import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
+import { updateContentTags, updateContentTemplateGroups } from "./tag.js";
 
 export async function getContentHeaders(id: number) {
   const row = await queryFirstRow("SELECT headers FROM Content WHERE id = $1", [id]);
@@ -104,10 +105,119 @@ export async function getContentCount(criteria: { tags?: string[]; author?: stri
   return parseInt(result.rows[0].count, 10);
 }
 
-export async function stageContent(user: any, payload: any, headers: string | null, originalId: number | null, batchId: number) {
-  const result = await pool.query(
-    "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
-    [user.username, payload, headers, originalId, batchId]
-  );
-  return { content: result.rows[0] };
+export async function stageContent(user: any, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[] = [], groupIds: number[] = []) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
+      [user.username, payload, headers, originalId, batchId]
+    );
+    const content = result.rows[0];
+    
+    if (tags && tags.length > 0) {
+      await updateContentTags(client, content.id, tags);
+    }
+    if (groupIds && groupIds.length > 0) {
+      await updateContentTemplateGroups(client, content.id, groupIds);
+    }
+    
+    await client.query('COMMIT');
+    return { content };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function createContent(user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null) {
+  if (!user || (!user.is_admin && !user.is_contributor)) {
+    return { error: "Forbidden: Only admins and contributors can create content directly", status: 403 };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO Content (author_id, payload, headers, is_visible, live_date) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [user.username, payload, headers, isVisible, liveDate || new Date()]
+    );
+    const content = result.rows[0];
+    
+    if (tags && tags.length > 0) {
+      await updateContentTags(client, content.id, tags);
+    }
+    if (groupIds && groupIds.length > 0) {
+      await updateContentTemplateGroups(client, content.id, groupIds);
+    }
+    
+    await client.query('COMMIT');
+    return { content };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateContent(contentId: number, user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null) {
+  if (!user || (!user.is_admin && !user.is_contributor)) {
+    return { error: "Forbidden: Only admins and contributors can update content directly", status: 403 };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Authorization check
+    const existing = await client.query("SELECT author_id FROM Content WHERE id = $1", [contentId]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { error: "Content not found", status: 404 };
+    }
+    if (!user.is_admin && existing.rows[0].author_id !== user.username) {
+      await client.query('ROLLBACK');
+      return { error: "Forbidden: You do not own this content", status: 403 };
+    }
+
+    const result = await client.query(
+      "UPDATE Content SET payload = $1, headers = $2, is_visible = $3, live_date = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5 RETURNING *",
+      [payload, headers, isVisible, liveDate || new Date(), contentId]
+    );
+    const content = result.rows[0];
+    
+    await updateContentTags(client, content.id, tags || []);
+    await updateContentTemplateGroups(client, content.id, groupIds || []);
+    
+    await client.query('COMMIT');
+    return { content };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteContent(contentId: number, user: any) {
+  if (!user || (!user.is_admin && !user.is_contributor)) {
+    return { error: "Forbidden: Only admins and contributors can delete content", status: 403 };
+  }
+  
+  try {
+    const existing = await queryFirstRow("SELECT author_id FROM Content WHERE id = $1", [contentId]);
+    if (!existing) return { error: "Content not found", status: 404 };
+    
+    if (!user.is_admin && existing.author_id !== user.username) {
+      return { error: "Forbidden: You do not own this content", status: 403 };
+    }
+
+    await pool.query("DELETE FROM Content WHERE id = $1", [contentId]);
+    return { success: true };
+  } catch (err: any) {
+    throw err;
+  }
 }
