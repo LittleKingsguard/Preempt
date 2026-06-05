@@ -303,6 +303,7 @@ export class Supervisor {
   }
 
   private executeHandlers(phase: string): void {
+    if (this.config.isValidationRun) return;
     if (this.rootNode) {
       this.rootNode.executeHandlers(phase, { supervisor: this });
     }

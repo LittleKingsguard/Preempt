@@ -26,7 +26,8 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
     runValidation: true,
     runRendering: false,
     runPostprocessing: false,
-    runMonitoring: false
+    runMonitoring: false,
+    isValidationRun: true
   };
 
   try {
@@ -47,13 +48,14 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
   }
 
   try {
+    const savedTargets = [];
     // Ensure the payload exactly matches the validated data by extracting it from the assembled tree
     for (const target of targets) {
       let validatedPayload = target.payload;
       let validatedBody = target.body;
 
       const rootNode = Supervisor.getRootNode();
-      
+
       // If a query is provided, use findNode to retrieve the exact NodeData or Handler body from the validated stack
       if (target.query) {
         let matchedNode = rootNode?.findNode(target.query) || null;
@@ -95,17 +97,25 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
         validatedPayload = { ...target.payload, content: exportedContentNodes };
       }
 
+      let savedData;
       if (target.type === 'component') {
-        await stageComponent(user, target.name, validatedPayload, target.id || null, batch.id);
+        savedData = await stageComponent(user, target.name, validatedPayload, target.id || null, batch.id);
       } else if (target.type === 'handler') {
-        await stageHandler(user, target.name, validatedBody, target.id || null, batch.id);
+        savedData = await stageHandler(user, target.name, validatedBody, target.id || null, batch.id);
       } else if (target.type === 'template') {
-        await stageTemplate(user, validatedPayload, target.id || null, batch.id, target.tags, target.groupId || null);
+        savedData = await stageTemplate(user, validatedPayload, target.id || null, batch.id, target.tags, target.groupId || null);
       } else if (target.type === 'content') {
-        await stageContent(user, validatedPayload, target.headers, target.id || null, batch.id, target.tags, target.groupIds);
+        savedData = await stageContent(user, validatedPayload, target.headers, target.id || null, batch.id, target.tags, target.groupIds);
       }
+
+      savedTargets.push({
+        type: target.type,
+        name: target.name,
+        id: target.id,
+        savedData: savedData
+      });
     }
-    return res.json({ success: true, batchId: batch.id });
+    return res.json({ success: true, batchId: batch.id, savedTargets });
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: "Failed to stage one or more targets: " + err.message });

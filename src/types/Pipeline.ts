@@ -6,4 +6,5 @@ export interface PipelineConfig {
   runRendering: boolean;
   runPostprocessing: boolean;
   runMonitoring: boolean;
+  isValidationRun?: boolean;
 }
