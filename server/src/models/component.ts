@@ -97,6 +97,21 @@ export async function updateContentComponents(client: any, contentId: number, co
 }
 
 export async function stageComponent(user: any, name: string, payload: any, originalId: number | null, batchId: number) {
+  if (originalId) {
+    const existing = await pool.query(`
+      SELECT c.change_batch_id 
+      FROM Components c 
+      JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
+      WHERE c.id = $1 AND cb.merged_at IS NULL
+    `, [originalId]);
+    if (existing.rows.length > 0) {
+      const result = await pool.query(
+        "UPDATE Components SET name = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
+        [name, payload, batchId, originalId]
+      );
+      return { component: result.rows[0] };
+    }
+  }
 
   const result = await pool.query(
     "INSERT INTO Components (name, payload, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",

@@ -96,20 +96,40 @@ export async function stageTemplate(user: any, payload: any, originalId: number 
   try {
     await client.query('BEGIN');
     let actualGroupId = groupId;
-    if (!actualGroupId && originalId) {
-      const orig = await client.query("SELECT group_id FROM Templates WHERE id = $1", [originalId]);
+    let isStagedRow = false;
+    
+    if (originalId) {
+      const orig = await client.query(`
+        SELECT t.group_id, t.change_batch_id, cb.merged_at
+        FROM Templates t
+        LEFT JOIN ChangeBatches cb ON t.change_batch_id = cb.id
+        WHERE t.id = $1
+      `, [originalId]);
       if (orig.rows.length > 0) {
-        actualGroupId = orig.rows[0].group_id;
+        if (!actualGroupId) actualGroupId = orig.rows[0].group_id;
+        if (orig.rows[0].change_batch_id !== null && orig.rows[0].merged_at === null) isStagedRow = true;
       }
     }
 
-    const result = await client.query(
-      "INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
-      [user.username, actualGroupId, payload, originalId, batchId]
-    );
-    const template = result.rows[0];
-    if (tags && Array.isArray(tags) && tags.length > 0) {
-      await updateTemplateTags(client, template.id, tags);
+    let template;
+    if (isStagedRow) {
+      const result = await client.query(
+        "UPDATE Templates SET group_id = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
+        [actualGroupId, payload, batchId, originalId]
+      );
+      template = result.rows[0];
+    } else {
+      const result = await client.query(
+        "INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
+        [user.username, actualGroupId, payload, originalId, batchId]
+      );
+      template = result.rows[0];
+    }
+
+    if (tags && Array.isArray(tags)) {
+      if (isStagedRow || tags.length > 0) {
+        await updateTemplateTags(client, template.id, tags);
+      }
     }
     await client.query('COMMIT');
     return { template };

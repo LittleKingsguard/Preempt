@@ -89,6 +89,22 @@ export async function updateContentHandlers(client: any, contentId: number, hand
 }
 
 export async function stageHandler(user: any, name: string, body: string, originalId: number | null, batchId: number) {
+  if (originalId) {
+    const existing = await pool.query(`
+      SELECT h.change_batch_id 
+      FROM Handlers h 
+      JOIN ChangeBatches cb ON h.change_batch_id = cb.id 
+      WHERE h.id = $1 AND cb.merged_at IS NULL
+    `, [originalId]);
+    if (existing.rows.length > 0) {
+      const result = await pool.query(
+        "UPDATE Handlers SET name = $1, body = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
+        [name, body, batchId, originalId]
+      );
+      return { handler: result.rows[0] };
+    }
+  }
+
   const result = await pool.query(
     "INSERT INTO Handlers (name, body, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
     [name, body, user.username, originalId, batchId]

@@ -109,17 +109,43 @@ export async function stageContent(user: any, payload: any, headers: string | nu
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
-      [user.username, payload, headers, originalId, batchId]
-    );
-    const content = result.rows[0];
-    
-    if (tags && tags.length > 0) {
-      await updateContentTags(client, content.id, tags);
+    let isStagedRow = false;
+    if (originalId) {
+      const existing = await client.query(`
+        SELECT c.change_batch_id 
+        FROM Content c 
+        JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
+        WHERE c.id = $1 AND cb.merged_at IS NULL
+      `, [originalId]);
+      if (existing.rows.length > 0) {
+        isStagedRow = true;
+      }
     }
-    if (groupIds && groupIds.length > 0) {
-      await updateContentTemplateGroups(client, content.id, groupIds);
+
+    let content;
+    if (isStagedRow) {
+      const result = await client.query(
+        "UPDATE Content SET author_id = $1, payload = $2, headers = $3, change_batch_id = $4 WHERE id = $5 RETURNING *",
+        [user.username, payload, headers, batchId, originalId]
+      );
+      content = result.rows[0];
+    } else {
+      const result = await client.query(
+        "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
+        [user.username, payload, headers, originalId, batchId]
+      );
+      content = result.rows[0];
+    }
+    
+    if (tags && Array.isArray(tags)) {
+      if (isStagedRow || tags.length > 0) {
+        await updateContentTags(client, content.id, tags);
+      }
+    }
+    if (groupIds && Array.isArray(groupIds)) {
+      if (isStagedRow || groupIds.length > 0) {
+        await updateContentTemplateGroups(client, content.id, groupIds);
+      }
     }
     
     await client.query('COMMIT');
