@@ -50,6 +50,7 @@ export interface UserData {
   isAdmin: boolean;
   isContributor: boolean;
   isShadowed: boolean;
+  hasAuthenticated?: boolean;
 }
 
 export interface ContentPayload {

@@ -13,41 +13,31 @@ router.get("/:id", authenticateToken, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    let content = null;
+    let contentRes = null;
     
     if (clientTemplateId) {
-      content = await getContentWithTemplate(contentId, clientTemplateId, null, null);
+      contentRes = await getContentWithTemplate(contentId, clientTemplateId, null, null, user);
     }
     
-    if (!content) {
-      content = await getContentWithTemplate(contentId, templateId, tagsParam, null);
+    if (!contentRes || 'error' in contentRes) {
+      contentRes = await getContentWithTemplate(contentId, templateId, tagsParam, null, user);
     }
 
-    if (!content) {
-      return res.status(404).json({ error: "Content or associated Template not found" });
+    if (!contentRes || 'error' in contentRes) {
+      return res.status((contentRes as any)?.status || 404).json({ error: (contentRes as any)?.error || "Content or associated Template not found" });
     }
 
-    // Access Control
-    const isAuthor = user?.username === content.author_id;
-    const isAdmin = user?.is_admin === true;
-    const now = new Date();
-
-    if (!isAuthor && !isAdmin) {
-      if (!content.is_visible) {
-        return res.status(403).json({ error: "Forbidden: Content is not visible" });
-      }
-      if (content.live_date && new Date(content.live_date) > now) {
-        return res.status(403).json({ error: "Forbidden: Content is not live yet" });
-      }
-    }
-
+    const contentData = (contentRes as any).content;
     const responsePayload: any = {
-      content: content.payload
+      content: contentData.payload
     };
+    if (contentData.headers) {
+      responsePayload.headers = contentData.headers;
+    }
 
-    if (clientTemplateId !== content.resolved_template_id) {
-      responsePayload.template = content.template_payload;
-      responsePayload.templateId = content.resolved_template_id;
+    if (clientTemplateId !== contentData.resolved_template_id) {
+      responsePayload.template = contentData.template_payload;
+      responsePayload.templateId = contentData.resolved_template_id;
     }
 
     res.json(responsePayload);

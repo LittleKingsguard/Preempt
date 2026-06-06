@@ -1,14 +1,15 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
 import { getSetting } from "./settings.js";
+import { validateUserRoles } from "../middleware/auth.js";
 
-export async function getHandlers() {
-  const result = await pool.query("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers");
-  return result.rows;
+export async function getHandlers(user: any) {
+  const result = await pool.query("SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers");
+  return result.rows.filter(h => !validateUserRoles(user, h.approved_roles || [], h.author_id));
 }
 
 export async function getHandlerById(id: number) {
-  return await queryFirstRow("SELECT id, name, body, author_id, is_approved, created_at, updated_at FROM Handlers WHERE id = $1", [id]);
+  return await queryFirstRow("SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers WHERE id = $1", [id]);
 }
 
 export async function createHandler(user: any, name: string, body: string) {

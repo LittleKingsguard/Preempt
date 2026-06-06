@@ -34,17 +34,26 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
+    let hasAuthenticated = true;
+    let authRequirement = null;
+
     if (user.has_verified === false) {
-      return await generateAndSendCode(res, user.username, user.email, 'VERIFY');
+      hasAuthenticated = false;
+      authRequirement = 'VERIFY';
+    } else if ((user.is_admin || user.is_2fa_enabled) && process.env.NODE_ENV !== 'test') {
+      hasAuthenticated = false;
+      authRequirement = '2FA';
     }
 
-    if ((user.is_admin || user.is_2fa_enabled) && process.env.NODE_ENV !== 'test') {
-      return await generateAndSendCode(res, user.username, user.email, '2FA');
-    }
-
+    user.hasAuthenticated = hasAuthenticated;
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
     
     res.cookie("token", token, { httpOnly: true, secure: false }); // secure: false for local dev
+
+    if (authRequirement) {
+      return await generateAndSendCode(res, user.username, user.email, authRequirement);
+    }
+
     res.json({ message: "Logged in successfully", user });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
@@ -67,6 +76,7 @@ router.post("/verify-2fa", async (req, res) => {
        return res.status(404).json({ error: "User not found" });
     }
 
+    user.hasAuthenticated = true;
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
     
     res.cookie("token", token, { httpOnly: true, secure: false });
@@ -89,6 +99,10 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: (user as any).error });
     }
 
+    user.hasAuthenticated = false;
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
+    res.cookie("token", token, { httpOnly: true, secure: false });
+
     return await generateAndSendCode(res, user.username, user.email, 'VERIFY');
   } catch (err) {
     console.error(err);
@@ -110,6 +124,7 @@ router.post("/verify-email", async (req, res) => {
     await verifyUserEmail(username);
 
     const user = await getUserByUsername(username);
+    user.hasAuthenticated = true;
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
     
     res.cookie("token", token, { httpOnly: true, secure: false });

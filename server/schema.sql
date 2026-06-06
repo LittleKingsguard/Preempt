@@ -47,6 +47,7 @@ CREATE TABLE Templates (
     original_id INT REFERENCES Templates(id) ON DELETE SET NULL,
     change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
     is_approved BOOLEAN DEFAULT TRUE,
+    approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -62,6 +63,7 @@ CREATE TABLE Content (
     headers TEXT,
     original_id INT REFERENCES Content(id) ON DELETE SET NULL,
     change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
+    approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -97,6 +99,7 @@ CREATE TABLE Handlers (
     is_approved BOOLEAN DEFAULT TRUE,
     original_id INT REFERENCES Handlers(id) ON DELETE SET NULL,
     change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
+    approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -127,6 +130,7 @@ CREATE TABLE Components (
     original_id INT REFERENCES Components(id) ON DELETE SET NULL,
     change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
     is_approved BOOLEAN DEFAULT TRUE,
+    approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

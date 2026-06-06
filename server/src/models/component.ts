@@ -1,13 +1,14 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
+import { validateUserRoles } from "../middleware/auth.js";
 
-export async function getComponents() {
-  const result = await pool.query("SELECT id, name, payload, author_id, created_at, updated_at FROM Components");
-  return result.rows;
+export async function getComponents(user: any) {
+  const result = await pool.query("SELECT id, name, payload, author_id, approved_roles, created_at, updated_at FROM Components");
+  return result.rows.filter(c => !validateUserRoles(user, c.approved_roles || [], c.author_id));
 }
 
 export async function getComponentById(id: number) {
-  return await queryFirstRow("SELECT id, name, payload, author_id, created_at, updated_at FROM Components WHERE id = $1", [id]);
+  return await queryFirstRow("SELECT id, name, payload, author_id, approved_roles, created_at, updated_at FROM Components WHERE id = $1", [id]);
 }
 
 export async function createComponent(user: any, name: string, payload: any) {

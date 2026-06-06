@@ -205,7 +205,7 @@ export class Supervisor {
     Node.clearPlacements();
     Node.nodeCounter = 0;
     Node.globalMetadata = contentData.metadata || {};
-    this.userData = contentData.metadata?.user;
+    this.userData = contentData.userData || contentData.metadata?.user;
 
     const safeTemplateData = JSON.parse(JSON.stringify(templateData));
     const safeContentData = JSON.parse(JSON.stringify(contentData));

@@ -64,7 +64,10 @@ export const mcpAuth = async (req: express.Request, res: express.Response, next:
 };
 
 export function validateUserRoles(user: any, permittedRoles: string[], creatorUsername?: string): { error: string, status: number } | null {
+  if (permittedRoles && permittedRoles.length === 0) return null;
+
   if (!user) return { error: "Unauthorized", status: 401 };
+  if (user.hasAuthenticated === false) return { error: "Authentication pending (2FA or Email Verification required)", status: 403 };
   if (user.has_verified === false) return { error: "Please verify your email to perform this action", status: 403 };
 
   let isAuthorized = false;

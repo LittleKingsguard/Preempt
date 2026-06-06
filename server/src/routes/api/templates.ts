@@ -10,13 +10,15 @@ router.get("/:id", authenticateToken, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    const template = await getTemplateById(templateId, null);
+    const result = await getTemplateById(templateId, null, user);
     
-    if (!template) {
-      return res.status(404).json({ error: "Template not found" });
+    if (result && 'error' in result) {
+      return res.status(result.status || 400).json({ error: result.error });
     }
 
-    res.json(template);
+    if (result && 'template' in result) {
+      res.json(result.template);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

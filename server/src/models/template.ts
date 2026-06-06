@@ -3,21 +3,25 @@ import { updateTemplateTags } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "./templateUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
 import { Node } from "../../../src/core/Node.js";
+import { validateUserRoles } from "../middleware/auth.js";
 
-export async function getTemplateById(id: number, editorMode: string | null = null) {
+export async function getTemplateById(id: number, editorMode: string | null = null, user: any = null) {
   const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
   const template = await fetchTemplateRecord(templateIdToFetch);
-  if (!template) return null;
+  if (!template) return { error: "Template not found", status: 404 };
 
-  await populateTemplateHandlers(template.payload, template.id);
-  await populateTemplateComponents(template.payload, template.id);
+  const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
+  if (authErr) return authErr;
+
+  await populateTemplateHandlers(template.payload, template.id, user);
+  await populateTemplateComponents(template.payload, template.id, user);
 
   if (editorMode) {
     const hasEditorTag = await checkHasEditorTag(template.id);
     await injectEditorDependencies(template.payload, null, editorMode, hasEditorTag);
   }
 
-  return template;
+  return { template };
 }
 
 export async function createTemplate(authorId: string, payload: any, tags: string[], groupId: number | null = null) {

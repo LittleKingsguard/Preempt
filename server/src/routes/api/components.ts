@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const components = await getComponents();
+    const components = await getComponents((req as any).user);
     res.json(components);
   } catch (err) {
     console.error(err);
@@ -21,6 +21,10 @@ router.get("/:id", authenticateToken, async (req, res) => {
     if (!component) {
       return res.status(404).json({ error: "Component not found" });
     }
+    const user = (req as any).user;
+    const authErr = validateUserRoles(user, component.approved_roles || [], component.author_id);
+    if (authErr) return res.status(authErr.status).json({ error: authErr.error });
+
     res.json(component);
   } catch (err) {
     console.error(err);

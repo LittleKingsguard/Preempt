@@ -3,32 +3,50 @@ import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, p
 import { queryFirstRow } from "../utils/db.js";
 import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
 import { updateContentTags, updateContentTemplateGroups } from "./tag.js";
+import { validateUserRoles } from "../middleware/auth.js";
 
 export async function getContentHeaders(id: number) {
   const row = await queryFirstRow("SELECT headers FROM Content WHERE id = $1", [id]);
   return row ? row.headers : null;
 }
 
-export async function getContentWithTemplate(contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null) {
+export async function getContentWithTemplate(contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
   const { query, params } = buildContentQuery(contentId, templateId, tagsParam, editorMode);
   const content = await queryFirstRow(query, params);
-  if (!content) return null;
+  if (!content) return { error: "Content not found", status: 404 };
 
   if (editorMode) {
     await applyEditorTemplateOverride(content);
   } else if (!(await checkContentSecurity(content.resolved_template_id, editorMode))) {
-    return null;
+    return { error: "Security check failed", status: 403 };
   }
 
-  await populateContentHandlers(content.payload, content.id, content.resolved_template_id);
-  await populateContentComponents(content.payload, content.id, content.resolved_template_id);
+  // Access Control (migrated from API layer)
+  const isAuthor = user?.username === content.author_id;
+  const isAdmin = user?.is_admin === true;
+  const now = new Date();
+
+  if (!isAuthor && !isAdmin) {
+    if (!content.is_visible) {
+      return { error: "Forbidden: Content is not visible", status: 403 };
+    }
+    if (content.live_date && new Date(content.live_date) > now) {
+      return { error: "Forbidden: Content is not live yet", status: 403 };
+    }
+  }
+
+  const authErr = validateUserRoles(user, content.approved_roles || [], content.author_id);
+  if (authErr) return authErr;
+
+  await populateContentHandlers(content.payload, content.id, content.resolved_template_id, user);
+  await populateContentComponents(content.payload, content.id, content.resolved_template_id, user);
 
   if (editorMode) {
     const hasEditorTag = await checkHasEditorTag(content.resolved_template_id);
     await injectEditorDependencies(content.payload, content.template_payload, editorMode, hasEditorTag);
   }
 
-  return content;
+  return { content };
 }
 
 export async function getLatestContent(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}) {

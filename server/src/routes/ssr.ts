@@ -23,14 +23,17 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 
   try {
-    const contentData = await getContentWithTemplate(contentId, null, null, editorMode);
-    if (!contentData) {
-      return res.status(404).send("Content not found");
+    const contentRes = await getContentWithTemplate(contentId, null, null, editorMode, req.user);
+    if (!contentRes || 'error' in contentRes) {
+      return res.status((contentRes as any)?.status || 404).send((contentRes as any)?.error || "Content not found");
     }
+
+    const contentData = (contentRes as any).content;
 
     if (req.user) {
       contentData.payload.metadata = contentData.payload.metadata || {};
       contentData.payload.metadata.user = req.user;
+      contentData.payload.userData = req.user;
     }
 
     const distPath = path.join(process.cwd(), "../dist/index.html");
@@ -52,7 +55,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
     let dbConfig = await getSetting('server_config');
     if (dbConfig) {
       if (typeof dbConfig === 'string') {
-        try { dbConfig = JSON.parse(dbConfig); } catch (e) {}
+        try { dbConfig = JSON.parse(dbConfig); } catch (e) { }
       }
       if (typeof dbConfig === 'object') {
         serverConfig = { ...serverConfig, ...dbConfig };
@@ -91,15 +94,15 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 }
 
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, async (req: any, res) => {
   try {
     const setting = await getSetting('default_index_content_id');
     const defaultIndexId = (setting && setting.id) ? setting.id : null;
-    
+
     if (!defaultIndexId) {
       return res.status(404).send("No default index configured");
     }
-
+    console.log(req.user);
     await renderContent(defaultIndexId, null, req, res);
   } catch (err) {
     console.error(err);
@@ -111,7 +114,7 @@ router.get("/reset-password", authenticateToken, async (req, res) => {
   try {
     const setting = await getSetting('default_index_content_id');
     const defaultIndexId = (setting && setting.id) ? setting.id : null;
-    
+
     if (!defaultIndexId) {
       return res.status(404).send("No default index configured");
     }

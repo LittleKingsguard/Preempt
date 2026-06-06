@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const handlers = await getHandlers();
+    const handlers = await getHandlers((req as any).user);
     res.json(handlers);
   } catch (err) {
     console.error(err);
