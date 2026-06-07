@@ -1,7 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { authenticateUser, createUser, getUserByEmail, getUserByUsername, updatePassword, createAuthToken, verifyAuthToken, deleteAuthTokens, verifyUserEmail } from "../models/user.js";
+import { authenticateUser, createUser, getUserByEmail, getUserByUsername, updatePassword, createAuthToken, verifyAuthToken, deleteAuthTokens, verifyUserEmail, updateUserHomePage } from "../models/user.js";
 import { JWT_SECRET, authenticateToken } from "../middleware/auth.js";
 import { sendPasswordResetEmail, send2FAEmail, sendVerificationEmail } from "../utils/email.js";
 
@@ -187,6 +187,29 @@ router.post("/change-password", authenticateToken, async (req, res) => {
 
     await updatePassword(username, new_password);
     res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/update-home-page", authenticateToken, async (req, res) => {
+  const { home_page } = req.body;
+  const username = (req as any).user?.username;
+
+  if (!username) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    await updateUserHomePage(username, home_page === undefined ? null : home_page);
+    
+    const user = await getUserByUsername(username);
+    user.hasAuthenticated = true;
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "24h" });
+    
+    res.cookie("token", token, { httpOnly: true, secure: false });
+    res.json({ message: "Home page updated successfully", user });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

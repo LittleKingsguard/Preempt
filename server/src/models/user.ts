@@ -85,6 +85,13 @@ export async function updateUserRoles(username: string, roles: { is_contributor?
   );
 }
 
+export async function updateUserHomePage(username: string, homePage: number | null) {
+  await pool.query(
+    "UPDATE Users SET home_page = $1 WHERE username = $2",
+    [homePage, username]
+  );
+}
+
 export async function getUsers() {
   const result = await pool.query(
     "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page FROM Users"
