@@ -11,6 +11,7 @@ CREATE TABLE Users (
     is_trusted_dev BOOLEAN DEFAULT FALSE,
     is_2fa_enabled BOOLEAN DEFAULT FALSE,
     is_bot BOOLEAN DEFAULT FALSE,
+    home_page INT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT check_bot_roles CHECK (NOT (is_bot = true AND (is_admin = true OR is_contributor = true)))
@@ -164,3 +165,4 @@ CREATE TABLE SiteSettings (
     value JSONB NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE Users ADD CONSTRAINT fk_user_home_page FOREIGN KEY (home_page) REFERENCES Content(id) ON DELETE SET NULL;

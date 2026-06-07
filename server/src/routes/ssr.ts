@@ -97,7 +97,11 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 router.get("/", authenticateToken, async (req: any, res) => {
   try {
     const setting = await getSetting('default_index_content_id');
-    const defaultIndexId = (setting && setting.id) ? setting.id : null;
+    let defaultIndexId = (setting && setting.id) ? setting.id : null;
+
+    if (req.user && req.user.home_page) {
+      defaultIndexId = req.user.home_page;
+    }
 
     if (!defaultIndexId) {
       return res.status(404).send("No default index configured");

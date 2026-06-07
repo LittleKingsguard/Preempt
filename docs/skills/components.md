@@ -52,6 +52,9 @@ During the `Supervisor.assemble()` stage, Preempt traverses the tree and calls `
 2. It searches the database-provided component library (merged into the root Node during the `Content` DB fetch) for a matching payload or function body.
 3. It assigns the resolved value directly to the path specified by `target` using deep injection (e.g., `target: "handlers.click"` injects the resolved string into `node.data.handlers.click`).
 
+> [!WARNING]
+> **Handler Mapping Requirement:** When a structural component's payload references a handler (e.g., `"reference": "MyHandler"`), that handler MUST be mapped to the component in the `componenthandlers` database table. If it is not mapped, the backend will not send the handler's function body to the client. This will result in silent interaction failures on the frontend because the payload will point to a non-existent function.
+
 ## Creating and Editing Components
 Components are created and modified globally via the Admin API.
 

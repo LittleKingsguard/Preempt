@@ -3,7 +3,7 @@ import { queryFirstRow } from "../utils/db.js";
 
 export async function authenticateUser(username: string, passwordPlain: string) {
   return await queryFirstRow(
-    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
+    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
     [username, passwordPlain]
   );
 }
@@ -11,7 +11,7 @@ export async function authenticateUser(username: string, passwordPlain: string) 
 export async function createUser(username: string, email: string, passwordPlain: string) {
   try {
     const result = await pool.query(
-      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot",
+      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page",
       [username, email, passwordPlain]
     );
     return result.rows[0];
@@ -28,7 +28,7 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function getUserByUsername(username: string) {
-  return await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot FROM Users WHERE username = $1", [username]);
+  return await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page FROM Users WHERE username = $1", [username]);
 }
 
 export async function updatePassword(username: string, newPasswordPlain: string) {
@@ -87,7 +87,7 @@ export async function updateUserRoles(username: string, roles: { is_contributor?
 
 export async function getUsers() {
   const result = await pool.query(
-    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot FROM Users"
+    "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page FROM Users"
   );
   return result.rows;
 }

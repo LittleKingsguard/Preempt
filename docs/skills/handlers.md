@@ -22,10 +22,19 @@ You can traverse the node tree using:
 
 **Example Traversal (Best Practice):**
 ```javascript
-// Navigating up to the top-level container, then finding a specific child by class name.
-// ALWAYS prefer findNode() over hardcoded array indices (e.g., container.children[1]) 
+// Navigating up to the top-level container safely, then finding a specific child by class name.
+// AVOID hardcoded DOM parent jumps (e.g. `context.node.parent.parent`) as they break when 
+// nested layers change (like adding a layout wrapper).
+// Instead, iterate upwards until a known root structural class is found.
+let container = context.node;
+while (container && !(container.data.css?.classes || []).includes("login-component-container")) {
+    container = container.parent;
+}
+if (!container) container = context.node.parent.parent; // fallback
+
+// AVOID hardcoded array indices (e.g., container.children[1]) 
 // because structural changes (like adding a new tab) will break hardcoded index logic!
-const container = context.node.parent.parent;
+// ALWAYS prefer findNode().
 const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
 ```
 
@@ -46,8 +55,11 @@ The `node.data` object holds a reference to the actual JSON configuration that t
 **Example Implementation:**
 ```javascript
 async (event, context) => {
-    // 1. Traverse to find the target node safely using findNode
-    const container = context.node.parent.parent;
+    // 1. Traverse to find the target node safely using an upward loop and findNode
+    let container = context.node;
+    while (container && !(container.data.css?.classes || []).includes("login-component-container")) {
+        container = container.parent;
+    }
     const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
     
     // 2. Mutate the target node's JSON data directly
@@ -62,6 +74,11 @@ async (event, context) => {
     loginFormNode.render();
 }
 ```
+
+## Component Handler Mapping Requirement
+For a handler function to be successfully loaded and sent to the frontend, it is **not enough** to just reference it by name in a component's JSON payload (e.g. `"reference": "MyHandler"`).
+
+The handler MUST be explicitly mapped to the structural Component in the `componenthandlers` table in the database. When the backend resolves the payload, it only looks up handlers that are formally joined to that component in the database. If the mapping is missing, the frontend will silently fail on interaction because the JavaScript function body was never sent to the client.
 
 By following this exact pattern, your UI state changes will successfully survive pipeline re-renders caused by the `Supervisor`.
 
