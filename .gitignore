@@ -45,3 +45,7 @@ server/seed.sql
 # Custom scripts
 rebuild_frontend.sh
 server/scripts/
+
+# Generated scripts
+*.py
+*.sql

@@ -48,6 +48,21 @@ router.get("/:id", authenticateToken, async (req, res) => {
   }
 });
 
+router.get("/", authenticateToken, async (req, res) => {
+  const user = (req as any).user;
+  const authErr = validateUserRoles(user, ["admin", "contributor"]);
+  if (authErr) return res.status(authErr.status).json({ error: authErr.error });
+
+  try {
+    const { getLatestContent } = await import("../../models/content.js");
+    const contents = await getLatestContent();
+    res.json(contents);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/", authenticateToken, async (req, res) => {
   const user = (req as any).user;
   const authErr = validateUserRoles(user, ["admin", "contributor"]);

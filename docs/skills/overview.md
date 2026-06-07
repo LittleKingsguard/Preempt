@@ -33,3 +33,10 @@ The pipeline executes the following stages sequentially:
 Preempt is designed for highly dynamic platforms where administrators or non-technical operators need the power to restructure layouts, edit styles, and deploy new interactive logic instantly, without requiring a codebase recompilation, pull request, or deployment cycle. 
 
 It acts as a hybrid between a high-performance component framework and a deeply customizable Headless CMS.
+
+## User State and Authentication
+Preempt handles user state through a JWT-based authentication system. When a user is authenticated, their session data (including roles, verification status, and preferences like `home_page`) is injected into the frontend during the Server-Side Rendering (SSR) phase.
+
+1. **SSR Data Injection**: In the `ssr.ts` route, the `req.user` object is automatically appended to the root Content Node payload at `contentData.payload.userData` and `contentData.payload.metadata.user`. This allows frontend Handlers and Components to access the current user's state directly from the virtual DOM tree.
+2. **Dynamic Routing**: The root path (`/`) dynamically resolves the content to display. If a logged-in user has a `home_page` preference set in the `Users` table, Preempt will route them to that specific `Content(id)`. Otherwise, it falls back to the server's global `default_index_content_id` setting.
+3. **Updating User Preferences**: Users can update their preferences using the `/api/auth/update-home-page` endpoint (requires `POST` with `home_page` containing the target `Content(id)`). This instantly updates the database and issues a new JWT reflecting the updated state.

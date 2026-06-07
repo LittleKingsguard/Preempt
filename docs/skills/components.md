@@ -45,6 +45,22 @@ Example of calling a structural component:
 }
 ```
 
+> [!TIP]
+> **Root Content Placement:** If you are injecting a structural component via the database `Content` payload and want it to be placed into a specific Template placement (e.g., `<main>`), do NOT place the component reference at the absolute root of the payload. The root `Content` node itself is never "placed" into the template; instead, its *children* are distributed into the template. 
+> 
+> Therefore, you must wrap your component inside the root's `content` array so it is treated as a distributable child:
+> ```json
+> {
+>   "content": [
+>     {
+>       "type": "div",
+>       "component": [{ "target": "type", "reference": "MyComponent" }],
+>       "placement": { "targetPlacement": ["main"] }
+>     }
+>   ]
+> }
+> ```
+
 ## Applying Components
 During the `Supervisor.assemble()` stage, Preempt traverses the tree and calls `applyComponentsTree()`. 
 

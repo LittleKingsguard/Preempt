@@ -89,6 +89,9 @@ While interaction handlers (like `click`) fire based on user actions, Preempt al
 You can bind handlers to specific phases of the `Supervisor` pipeline. When defining a node, you can add these hooks to the `handlers` object (e.g., `"beforeRender": "async (context) => { ... }"`).
 
 ### Available Lifecycle Hooks
+> [!WARNING]
+> **Strict Phase Naming:** Only use the exact string keys listed below (e.g., `beforePreprocess`, `afterAssembly`). Do NOT invent or guess lifecycle phases like `init`, `preprocess`, or `postprocess`. If a string key doesn't exactly match the phases below, the handler will **never execute**.
+
 1. **`onDBLoad`**: Runs immediately after the pipeline configuration is pulled from the database (Server-Side Rendering stack only). Useful for injecting server-side data (like fetching recent articles) via `context.supervisor.serverApi`.
 2. **`afterInstantiate`**: Runs after nodes are initially constructed from JSON but before placement resolution or component injection.
 3. **`beforeAssembly` / `afterAssembly`**: Wraps the assembly phase where content nodes are reparented into template target placements and component references are resolved.
@@ -138,3 +141,19 @@ const username = form.querySelector("[name=username]").value || localStorage.get
 ```
 
 This guarantees your state survives any unexpected DOM rehydrations triggered by the pipeline monitoring loop.
+
+## Accessing Current User Data
+Because the Server-Side Render pipeline injects the active user into the root payload, you can access the current user's profile and preferences (like their custom `home_page` route) in any handler by inspecting the `userData` object on the root Content Node.
+
+```javascript
+async (event, context) => {
+    // Traverse up to the root node
+    let root = context.node;
+    while (root.parent) root = root.parent;
+    
+    const currentUser = root.data.userData;
+    if (currentUser) {
+        console.log(`Welcome back, ${currentUser.username}!`);
+    }
+}
+```
