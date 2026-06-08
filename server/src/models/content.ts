@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
-import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, populateContentHandlers, populateContentComponents } from "./contentUtils.js";
+import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
 import { queryFirstRow } from "../utils/db.js";
-import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
+import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { updateContentTags, updateContentTemplateGroups } from "./tag.js";
 import { validateUserRoles } from "../middleware/auth.js";
 

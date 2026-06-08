@@ -1,5 +1,5 @@
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow } from "./db.js";
 import { validateUserRoles } from "../middleware/auth.js";
 
 export async function resolveEditorTemplateId(baseId: number, editorMode: string | null): Promise<number> {

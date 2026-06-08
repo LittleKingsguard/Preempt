@@ -1,6 +1,6 @@
 import { pool } from "../db.js";
 import { fetchTemplateHandlers, fetchTemplateComponents } from "./templateUtils.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow } from "./db.js";
 import { validateUserRoles } from "../middleware/auth.js";
 
 export function buildContentQuery(contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null) {

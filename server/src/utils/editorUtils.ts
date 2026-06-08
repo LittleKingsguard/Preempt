@@ -1,5 +1,5 @@
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow } from "./db.js";
 
 export async function checkHasEditorTag(templateId: number): Promise<boolean> {
   const tagCheck = await queryFirstRow(`

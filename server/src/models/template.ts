@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import { updateTemplateTags } from "./tag.js";
-import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "./templateUtils.js";
-import { checkHasEditorTag, injectEditorDependencies } from "./editorUtils.js";
+import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
+import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
 
