@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
-import { initTagCache } from "./models/tag.js";
+import { Tag } from "./models/tag.js";
 
 import authRoutes from "./routes/auth.js";
 import apiRoutes from "./routes/api.js";
@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Initialize cache
-initTagCache();
+Tag.initCache();
 
 // Mount routers
 app.use("/api", authRoutes);

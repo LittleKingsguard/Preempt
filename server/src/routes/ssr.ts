@@ -1,6 +1,6 @@
 import express from "express";
-import { getContentWithTemplate, getLatestContent, getContentCount } from "../models/content.js";
-import { getSetting } from "../models/settings.js";
+import { Content } from "../models/content.js";
+import { Setting } from "../models/settings.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
 import path from "path";
 import fs from "fs";
@@ -8,10 +8,9 @@ import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
-
 const serverApi = {
-  getLatestContent,
-  getContentCount
+  getLatestContent: Content.getLatest,
+  getContentCount: Content.getCount
 };
 
 async function renderContent(contentId: number, editorMode: string | null, req: any, res: any) {
@@ -23,7 +22,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 
   try {
-    const contentRes = await getContentWithTemplate(contentId, null, null, editorMode, req.user);
+    const contentRes = await Content.getWithTemplate(contentId, null, null, editorMode, req.user);
     if (!contentRes || 'error' in contentRes) {
       return res.status((contentRes as any)?.status || 404).send((contentRes as any)?.error || "Content not found");
     }
@@ -52,7 +51,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
       runMonitoring: false
     };
 
-    let dbConfig = await getSetting('server_config');
+    let dbConfig = await Setting.get('server_config');
     if (dbConfig) {
       if (typeof dbConfig === 'string') {
         try { dbConfig = JSON.parse(dbConfig); } catch (e) { }
@@ -96,7 +95,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 
 router.get("/", authenticateToken, async (req: any, res) => {
   try {
-    const setting = await getSetting('default_index_content_id');
+    const setting = await Setting.get('default_index_content_id');
     let defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (req.user && req.user.home_page) {
@@ -116,7 +115,7 @@ router.get("/", authenticateToken, async (req: any, res) => {
 
 router.get("/reset-password", authenticateToken, async (req, res) => {
   try {
-    const setting = await getSetting('default_index_content_id');
+    const setting = await Setting.get('default_index_content_id');
     const defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (!defaultIndexId) {

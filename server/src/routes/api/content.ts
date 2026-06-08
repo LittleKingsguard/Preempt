@@ -1,7 +1,6 @@
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
-import { pool } from "../../db.js";
-import { getContentWithTemplate, createContent, updateContent, deleteContent } from "../../models/content.js";
+import { Content } from "../../models/content.js";
 
 const router = express.Router();
 
@@ -16,11 +15,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
     let contentRes = null;
     
     if (clientTemplateId) {
-      contentRes = await getContentWithTemplate(contentId, clientTemplateId, null, null, user);
+      contentRes = await Content.getWithTemplate(contentId, clientTemplateId, null, null, user);
     }
     
     if (!contentRes || 'error' in contentRes) {
-      contentRes = await getContentWithTemplate(contentId, templateId, tagsParam, null, user);
+      contentRes = await Content.getWithTemplate(contentId, templateId, tagsParam, null, user);
     }
 
     if (!contentRes || 'error' in contentRes) {
@@ -54,8 +53,7 @@ router.get("/", authenticateToken, async (req, res) => {
   if (authErr) return res.status(authErr.status).json({ error: authErr.error });
 
   try {
-    const { getLatestContent } = await import("../../models/content.js");
-    const contents = await getLatestContent();
+    const contents = await Content.getLatest();
     res.json(contents);
   } catch (err) {
     console.error(err);
@@ -65,17 +63,16 @@ router.get("/", authenticateToken, async (req, res) => {
 
 router.post("/", authenticateToken, async (req, res) => {
   const user = (req as any).user;
-  const authErr = validateUserRoles(user, ["admin", "contributor"]);
-  if (authErr) return res.status(authErr.status).json({ error: authErr.error });
 
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
   if (user.is_shadowed) return res.json({ message: "Content created successfully", content: { id: 999999, ...req.body } });
 
   const { payload, headers, tags, groupIds, isVisible, liveDate } = req.body;
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const result = await createContent(user, payload, headers, tags, groupIds, isVisible, liveDate);
-    if (result.error) {
+    const result = await Content.create(user, payload, headers, tags, groupIds, isVisible, liveDate);
+    if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
     res.json({ message: "Content created successfully", content: result.content });
@@ -89,21 +86,18 @@ router.put("/:id", authenticateToken, async (req, res) => {
   const contentId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
 
-  const result = await pool.query("SELECT author_id FROM Content WHERE id = $1", [contentId]);
-  if (result.rows.length === 0) return res.status(404).json({ error: "Content not found" });
-  const authorUsername = result.rows[0].author_id;
-
-  const authErr = validateUserRoles(user, ["admin", "author"], authorUsername);
-  if (authErr) return res.status(authErr.status).json({ error: authErr.error });
-
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
   if (user.is_shadowed) return res.json({ message: "Content updated successfully", content: { id: contentId, ...req.body } });
 
   const { payload, headers, tags, groupIds, isVisible, liveDate } = req.body;
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const result = await updateContent(contentId, user, payload, headers, tags, groupIds, isVisible, liveDate);
-    if (result.error) {
+    const content = await Content.getById(contentId);
+    if (!content) return res.status(404).json({ error: "Content not found" });
+
+    const result = await content.update(user, payload, headers, tags, groupIds, isVisible, liveDate);
+    if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
     res.json({ message: "Content updated successfully", content: result.content });
@@ -117,18 +111,15 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   const contentId = parseInt(req.params.id as string, 10);
   const user = (req as any).user;
   
-  const result = await pool.query("SELECT author_id FROM Content WHERE id = $1", [contentId]);
-  if (result.rows.length === 0) return res.status(404).json({ error: "Content not found" });
-  const authorUsername = result.rows[0].author_id;
-
-  const authErr = validateUserRoles(user, ["admin", "author"], authorUsername);
-  if (authErr) return res.status(authErr.status).json({ error: authErr.error });
-
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
   if (user.is_shadowed) return res.json({ success: true });
 
   try {
-    const result = await deleteContent(contentId, user);
-    if (result.error) {
+    const content = await Content.getById(contentId);
+    if (!content) return res.status(404).json({ error: "Content not found" });
+
+    const result = await content.delete(user);
+    if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
     res.json(result);

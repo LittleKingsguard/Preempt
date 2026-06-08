@@ -1,146 +1,164 @@
 import { pool } from "../db.js";
-import { updateTemplateTags } from "./tag.js";
+import { Tag } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
+import * as templateSource from "../sources/templateSource.js";
 
-export async function getTemplateById(id: number, editorMode: string | null = null, user: any = null) {
-  const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
-  const template = await fetchTemplateRecord(templateIdToFetch);
-  if (!template) return { error: "Template not found", status: 404 };
+export class Template {
+  id: number;
+  payload: any;
+  author_id: string;
+  approved_roles: string[];
+  group_id: number | null;
+  change_batch_id: number | null;
+  original_id: number | null;
+  is_approved: boolean;
+  created_at: Date;
+  updated_at: Date;
 
-  const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
-  if (authErr) return authErr;
-
-  await populateTemplateHandlers(template.payload, template.id, user);
-  await populateTemplateComponents(template.payload, template.id, user);
-
-  if (editorMode) {
-    const hasEditorTag = await checkHasEditorTag(template.id);
-    await injectEditorDependencies(template.payload, null, editorMode, hasEditorTag);
+  constructor(data: any) {
+    this.id = data.id;
+    this.payload = data.payload;
+    this.author_id = data.author_id;
+    this.approved_roles = data.approved_roles || [];
+    this.group_id = data.group_id;
+    this.change_batch_id = data.change_batch_id;
+    this.original_id = data.original_id;
+    this.is_approved = data.is_approved;
+    this.created_at = data.created_at;
+    this.updated_at = data.updated_at;
   }
 
-  return { template };
-}
+  static async getById(id: number, editorMode: string | null = null, user: any = null) {
+    const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
+    const row = await fetchTemplateRecord(templateIdToFetch);
+    if ('error' in row) return row;
 
-export async function createTemplate(authorId: string, payload: any, tags: string[], groupId: number | null = null) {
-  const virtualNode = new Node(payload);
-  if (!virtualNode.validate(true)) {
-    return { error: "Validation Error", status: 400 };
-  }
+    const template = new Template(row);
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO Templates (author_id, group_id, payload) VALUES ($1, $2, $3) RETURNING *",
-      [authorId, groupId, payload]
-    );
-    const template = result.rows[0];
-    if (tags && Array.isArray(tags)) {
-      await updateTemplateTags(client, template.id, tags);
+    const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
+    if (authErr) return authErr;
+
+    await populateTemplateHandlers(template.payload, template.id, user);
+    await populateTemplateComponents(template.payload, template.id, user);
+
+    if (editorMode) {
+      const hasEditorTag = await checkHasEditorTag(template.id);
+      await injectEditorDependencies(template.payload, null, editorMode, hasEditorTag);
     }
-    await client.query('COMMIT');
+
     return { template };
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
-export async function updateTemplate(templateId: number, authorId: string, isAdmin: boolean, payload: any, tags: string[], groupId: number | null = null) {
-  const virtualNode = new Node(payload);
-  if (!virtualNode.validate(true)) {
-    return { error: "Validation Error", status: 400 };
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    // Check ownership
-    const check = await client.query("SELECT author_id FROM Templates WHERE id = $1", [templateId]);
-    if (check.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { error: "Template not found", status: 404 };
+  static async create(authorId: string, payload: any, tags: string[], groupId: number | null = null) {
+    const virtualNode = new Node(payload);
+    if (!virtualNode.validate(true)) {
+      return { error: "Validation Error", status: 400 };
     }
 
-    if (check.rows[0].author_id !== authorId && !isAdmin) {
-      await client.query('ROLLBACK');
-      return { error: "Forbidden: Not the author", status: 403 };
-    }
-
-    const result = await client.query(
-      "UPDATE Templates SET payload = $1, group_id = COALESCE($2, group_id), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
-      [payload, groupId, templateId]
-    );
-    if (tags && Array.isArray(tags)) {
-      await updateTemplateTags(client, templateId, tags);
-    }
-    await client.query('COMMIT');
-    return { template: result.rows[0] };
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
-export async function stageTemplate(user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
-  const virtualNode = new Node(payload);
-  if (!virtualNode.validate(true)) {
-    return { error: "Validation Error", status: 400 };
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    let actualGroupId = groupId;
-    let isStagedRow = false;
-    
-    if (originalId) {
-      const orig = await client.query(`
-        SELECT t.group_id, t.change_batch_id, cb.merged_at
-        FROM Templates t
-        LEFT JOIN ChangeBatches cb ON t.change_batch_id = cb.id
-        WHERE t.id = $1
-      `, [originalId]);
-      if (orig.rows.length > 0) {
-        if (!actualGroupId) actualGroupId = orig.rows[0].group_id;
-        if (orig.rows[0].change_batch_id !== null && orig.rows[0].merged_at === null) isStagedRow = true;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const row = await templateSource.dbCreateTemplate(client, authorId, payload, groupId);
+      const template = new Template(row);
+      if (tags && Array.isArray(tags)) {
+        await Tag.updateTemplateTags(client, template.id, tags);
       }
+      await client.query('COMMIT');
+      return { template };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async update(user: any, payload: any, tags: string[], groupId: number | null = null): Promise<{ error: string, status: number } | { template: Template }> {
+    const virtualNode = new Node(payload);
+    if (!virtualNode.validate(true)) {
+      return { error: "Validation Error", status: 400 };
     }
 
-    let template;
-    if (isStagedRow) {
-      const result = await client.query(
-        "UPDATE Templates SET group_id = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
-        [actualGroupId, payload, batchId, originalId]
-      );
-      template = result.rows[0];
-    } else {
-      const result = await client.query(
-        "INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
-        [user.username, actualGroupId, payload, originalId, batchId]
-      );
-      template = result.rows[0];
-    }
-
-    if (tags && Array.isArray(tags)) {
-      if (isStagedRow || tags.length > 0) {
-        await updateTemplateTags(client, template.id, tags);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      if (this.author_id !== user.username && !user.is_admin) {
+        await client.query('ROLLBACK');
+        return { error: "Forbidden: Not the author", status: 403 };
       }
+
+      const row = await templateSource.dbUpdateTemplate(client, this.id, payload, groupId);
+      if ('error' in row) {
+        await client.query('ROLLBACK');
+        return row;
+      }
+      Object.assign(this, row);
+      
+      if (tags && Array.isArray(tags)) {
+        await Tag.updateTemplateTags(client, this.id, tags);
+      }
+      await client.query('COMMIT');
+      return { template: this };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
     }
-    await client.query('COMMIT');
-    return { template };
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+  }
+
+  static async stage(user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
+    const virtualNode = new Node(payload);
+    if (!virtualNode.validate(true)) {
+      return { error: "Validation Error", status: 400 };
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let actualGroupId = groupId;
+      let isStagedRow = false;
+      
+      if (originalId) {
+        const origRow = await templateSource.dbGetTemplateForStaging(client, originalId);
+        if ('error' in origRow) {
+          await client.query('ROLLBACK');
+          return origRow;
+        }
+        if (!actualGroupId) actualGroupId = origRow.group_id;
+        if (origRow.change_batch_id !== null && origRow.merged_at === null) isStagedRow = true;
+      }
+
+      let row;
+      if (isStagedRow) {
+        row = await templateSource.dbUpdateStagedTemplate(client, originalId!, actualGroupId, payload, batchId);
+      } else {
+        row = await templateSource.dbInsertStagedTemplate(client, user.username, actualGroupId, payload, originalId, batchId);
+      }
+
+      if ('error' in row) {
+        await client.query('ROLLBACK');
+        return row;
+      }
+      
+      const template = new Template(row);
+
+      if (tags && Array.isArray(tags)) {
+        if (isStagedRow || tags.length > 0) {
+          await Tag.updateTemplateTags(client, template.id, tags);
+        }
+      }
+      await client.query('COMMIT');
+      return { template };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 }

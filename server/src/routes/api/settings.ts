@@ -1,6 +1,6 @@
 import express from "express";
 import { authenticateToken } from "../../middleware/auth.js";
-import { setSetting } from "../../models/settings.js";
+import { Setting } from "../../models/settings.js";
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.post("/default-index", authenticateToken, async (req, res) => {
   }
 
   try {
-    await setSetting('default_index_content_id', { id: contentId });
+    await Setting.set('default_index_content_id', { id: contentId });
     res.json({ message: "Default index updated successfully" });
   } catch (err) {
     console.error(err);

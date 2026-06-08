@@ -17,7 +17,7 @@ export async function resolveEditorTemplateId(baseId: number, editorMode: string
 }
 
 export async function fetchTemplateRecord(templateId: number): Promise<any> {
-  return await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [templateId]);
+  return await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [templateId], "Template not found");
 }
 
 export async function fetchTemplateHandlers(templateId: number) {

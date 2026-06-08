@@ -27,7 +27,7 @@ export const requireAdmin = (req: express.Request, res: express.Response, next: 
   next();
 };
 
-import { authenticateUser } from "../models/user.js";
+import { User } from "../models/user.js";
 
 export const mcpAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -45,7 +45,7 @@ export const mcpAuth = async (req: express.Request, res: express.Response, next:
   }
 
   try {
-    const user = await authenticateUser(username, password);
+    const user = await User.authenticate(username, password);
     if (!user) {
       res.status(401).json({ error: "Unauthorized: Invalid credentials" });
       return;

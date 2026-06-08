@@ -1,122 +1,110 @@
-import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import * as componentSource from "../sources/componentSource.js";
 import { validateUserRoles } from "../middleware/auth.js";
 
-export async function getComponents(user: any) {
-  const result = await pool.query("SELECT id, name, payload, author_id, approved_roles, created_at, updated_at FROM Components");
-  return result.rows.filter(c => !validateUserRoles(user, c.approved_roles || [], c.author_id));
-}
+export class Component {
+  id: number;
+  name: string;
+  payload: any;
+  author_id: string;
+  approved_roles: string[];
+  created_at: Date;
+  updated_at: Date;
 
-export async function getComponentById(id: number) {
-  return await queryFirstRow("SELECT id, name, payload, author_id, approved_roles, created_at, updated_at FROM Components WHERE id = $1", [id]);
-}
-
-export async function createComponent(user: any, name: string, payload: any) {
-  // admin or contributor can create
-  if (!user || (!user.is_admin && !user.is_contributor)) {
-    return { error: "Forbidden: Only admins and contributors can create components", status: 403 };
+  constructor(data: any) {
+    this.id = data.id;
+    this.name = data.name;
+    this.payload = data.payload;
+    this.author_id = data.author_id;
+    this.approved_roles = data.approved_roles || [];
+    this.created_at = data.created_at;
+    this.updated_at = data.updated_at;
   }
 
-  try {
-    const result = await pool.query(
-      "INSERT INTO Components (name, payload, author_id) VALUES ($1, $2, $3) RETURNING *",
-      [name, payload, user.username]
-    );
-    return { component: result.rows[0] };
-  } catch (err: any) {
-    if (err.code === '23505') { // unique violation
-      return { error: "Component with this name already exists", status: 409 };
+  static async getAll(user: any) {
+    const rows = await componentSource.dbGetComponents();
+    return rows
+      .filter(c => !validateUserRoles(user, c.approved_roles || [], c.author_id))
+      .map(c => new Component(c));
+  }
+
+  static async getById(id: number) {
+    const row = await componentSource.dbGetComponentById(id);
+    if ('error' in row) return row;
+    return new Component(row);
+  }
+
+  static async create(user: any, data: any) {
+    if (!user || (!user.is_admin && !user.is_contributor)) {
+      return { error: "Forbidden: Only admins and contributors can create components", status: 403 };
     }
-    throw err;
-  }
-}
 
-export async function updateComponent(id: number, user: any, name: string, payload: any) {
-  // only admin can update
-  if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can update components", status: 403 };
-  }
-
-  try {
-    const result = await pool.query(
-      "UPDATE Components SET name = $1, payload = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
-      [name, payload, id]
-    );
-    if (result.rows.length === 0) {
-      return { error: "Component not found", status: 404 };
+    if (user.is_shadowed) {
+      return { component: new Component({ id: 999999, name: data.name || "", payload: data.payload || {}, author_id: user.username }) };
     }
-    return { component: result.rows[0] };
-  } catch (err: any) {
-    if (err.code === '23505') { // unique violation
-      return { error: "Component with this name already exists", status: 409 };
+
+    if (!data.name || !data.payload) {
+      return { error: "Name and payload are required", status: 400 };
     }
-    throw err;
-  }
-}
 
-export async function deleteComponent(id: number, user: any) {
-  // only admin can delete
-  if (!user || !user.is_admin) {
-    return { error: "Forbidden: Only admins can delete components", status: 403 };
-  }
-
-  const result = await pool.query("DELETE FROM Components WHERE id = $1 RETURNING id", [id]);
-  if (result.rows.length === 0) {
-    return { error: "Component not found", status: 404 };
-  }
-  return { success: true };
-}
-
-export async function updateTemplateComponents(client: any, templateId: number, componentNames: string[]) {
-  if (!componentNames || componentNames.length === 0) {
-    await client.query("DELETE FROM TemplateComponents WHERE template_id = $1", [templateId]);
-    return;
-  }
-
-  const result = await client.query("SELECT id FROM Components WHERE name = ANY($1::text[])", [componentNames]);
-  const componentIds = result.rows.map((r: any) => r.id);
-
-  await client.query("DELETE FROM TemplateComponents WHERE template_id = $1", [templateId]);
-  if (componentIds.length > 0) {
-    await client.query("INSERT INTO TemplateComponents (template_id, component_id) SELECT $1, unnest($2::int[])", [templateId, componentIds]);
-  }
-}
-
-export async function updateContentComponents(client: any, contentId: number, componentNames: string[]) {
-  if (!componentNames || componentNames.length === 0) {
-    await client.query("DELETE FROM ContentComponents WHERE content_id = $1", [contentId]);
-    return;
-  }
-
-  const result = await client.query("SELECT id FROM Components WHERE name = ANY($1::text[])", [componentNames]);
-  const componentIds = result.rows.map((r: any) => r.id);
-
-  await client.query("DELETE FROM ContentComponents WHERE content_id = $1", [contentId]);
-  if (componentIds.length > 0) {
-    await client.query("INSERT INTO ContentComponents (content_id, component_id) SELECT $1, unnest($2::int[])", [contentId, componentIds]);
-  }
-}
-
-export async function stageComponent(user: any, name: string, payload: any, originalId: number | null, batchId: number) {
-  if (originalId) {
-    const existing = await pool.query(`
-      SELECT c.change_batch_id 
-      FROM Components c 
-      JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
-      WHERE c.id = $1 AND cb.merged_at IS NULL
-    `, [originalId]);
-    if (existing.rows.length > 0) {
-      const result = await pool.query(
-        "UPDATE Components SET name = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
-        [name, payload, batchId, originalId]
-      );
-      return { component: result.rows[0] };
+    try {
+      const row = await componentSource.dbCreateComponent(data.name, data.payload, user.username);
+      return { component: new Component(row) };
+    } catch (err: any) {
+      if (err.code === '23505') {
+        return { error: "Component with this name already exists", status: 409 };
+      }
+      throw err;
     }
   }
 
-  const result = await pool.query(
-    "INSERT INTO Components (name, payload, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
-    [name, payload, user.username, originalId, batchId]
-  );
-  return { component: result.rows[0] };
+  async update(user: any, data: any): Promise<{ error: string, status: number } | { component: Component }> {
+    if (!user || !user.is_admin) {
+      const authErr = validateUserRoles(user, ["admin", "author"], this.author_id);
+      if (authErr) return { error: authErr.error, status: authErr.status };
+    }
+
+    if (user.is_shadowed) {
+      return { component: new Component({ id: this.id, name: data.name || "", payload: data.payload || {} }) };
+    }
+
+    if (!data.name || !data.payload) {
+      return { error: "Name and payload are required", status: 400 };
+    }
+
+    try {
+      const row = await componentSource.dbUpdateComponent(this.id, data.name, data.payload);
+      if ('error' in row) return row;
+      Object.assign(this, row);
+      return { component: this };
+    } catch (err: any) {
+      if (err.code === '23505') {
+        return { error: "Component with this name already exists", status: 409 };
+      }
+      throw err;
+    }
+  }
+
+  async delete(user: any) {
+    const authErr = validateUserRoles(user, ["admin", "author"], this.author_id);
+    if (authErr) return { error: authErr.error, status: authErr.status };
+
+    if (user.is_shadowed) return { success: true };
+
+    const row = await componentSource.dbDeleteComponent(this.id);
+    if ('error' in row) return row;
+    return { success: true };
+  }
+
+  static async updateTemplateComponents(client: any, templateId: number, componentNames: string[]) {
+    await componentSource.dbUpdateTemplateComponents(client, templateId, componentNames);
+  }
+
+  static async updateContentComponents(client: any, contentId: number, componentNames: string[]) {
+    await componentSource.dbUpdateContentComponents(client, contentId, componentNames);
+  }
+
+  static async stage(user: any, name: string, payload: any, originalId: number | null, batchId: number) {
+    const row = await componentSource.dbStageComponent(name, payload, user.username, originalId, batchId);
+    return { component: new Component(row) };
+  }
 }
