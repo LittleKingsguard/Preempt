@@ -9,10 +9,17 @@ export async function dbAuthenticateUser(username: string, passwordPlain: string
 }
 
 export async function dbCreateUser(username: string, email: string, passwordPlain: string) {
-  return await queryFirstRow(
-    "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page",
-    [username, email, passwordPlain]
-  );
+  try {
+    return await queryFirstRow(
+      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page",
+      [username, email, passwordPlain]
+    );
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return { error: "Username or email already exists", status: 409 };
+    }
+    throw err;
+  }
 }
 
 export async function dbGetUserByEmail(email: string) {
@@ -27,24 +34,7 @@ export async function dbUpdatePassword(username: string, newPasswordPlain: strin
   await pool.query("UPDATE Users SET password_hash = crypt($1, gen_salt('bf')) WHERE username = $2", [newPasswordPlain, username]);
 }
 
-export async function dbCreateAuthToken(username: string, type: string, tokenValue: string, expiresInMinutes: number) {
-  const expiresAt = new Date(Date.now() + expiresInMinutes * 60000);
-  await pool.query(
-    "INSERT INTO AuthTokens (username, token_type, token_hash, expires_at) VALUES ($1, $2, crypt($3, gen_salt('bf')), $4)",
-    [username, type, tokenValue, expiresAt]
-  );
-}
 
-export async function dbVerifyAuthToken(username: string, type: string, tokenValue: string) {
-  return await queryFirstRow(
-    "SELECT id FROM AuthTokens WHERE username = $1 AND token_type = $2 AND token_hash = crypt($3, token_hash) AND expires_at > CURRENT_TIMESTAMP",
-    [username, type, tokenValue]
-  );
-}
-
-export async function dbDeleteAuthTokens(username: string, type: string) {
-  await pool.query("DELETE FROM AuthTokens WHERE username = $1 AND token_type = $2", [username, type]);
-}
 
 export async function dbVerifyUserEmail(username: string) {
   await pool.query("UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1", [username]);
@@ -71,10 +61,20 @@ export async function dbUpdateUserRoles(username: string, roles: { is_contributo
   if (updates.length === 0) return;
 
   values.push(username);
-  await pool.query(
-    `UPDATE Users SET ${updates.join(', ')} WHERE username = $${index}`,
-    values
-  );
+  try {
+    await pool.query(
+      `UPDATE Users SET ${updates.join(', ')} WHERE username = $${index}`,
+      values
+    );
+  } catch (err: any) {
+    if (err.code === '23514' && err.constraint === 'check_bot_roles') {
+      return { error: "A bot cannot have admin or contributor roles", status: 400 };
+    }
+    if (err.code === '23514' && err.constraint === 'check_verified_roles') {
+      return { error: "User must verify their email before receiving admin or contributor roles", status: 400 };
+    }
+    throw err;
+  }
 }
 
 export async function dbUpdateUserHomePage(username: string, homePage: number | null) {
@@ -90,3 +90,16 @@ export async function dbGetUsers() {
   );
   return result.rows;
 }
+
+import type { IUserSource } from "../models/interfaces.js";
+export const pgUserSource: IUserSource = {
+  authenticate: dbAuthenticateUser,
+  create: dbCreateUser,
+  getByEmail: dbGetUserByEmail,
+  getByUsername: dbGetUserByUsername,
+  updatePassword: dbUpdatePassword,
+  verifyEmail: dbVerifyUserEmail,
+  updateRoles: dbUpdateUserRoles,
+  updateHomePage: dbUpdateUserHomePage,
+  getAll: dbGetUsers
+};

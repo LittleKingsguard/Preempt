@@ -1,12 +1,13 @@
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Component } from "../../models/component.js";
+import { pgComponentSource } from "../../sources/componentSource.js";
 
 const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const components = await Component.getAll((req as any).user);
+    const components = await Component.getAll(pgComponentSource, (req as any).user);
     res.json(components);
   } catch (err) {
     console.error(err);
@@ -17,7 +18,7 @@ router.get("/", authenticateToken, async (req, res) => {
 router.get("/:id", authenticateToken, async (req, res) => {
   const componentId = parseInt(req.params.id as string, 10);
   try {
-    const component = await Component.getById(componentId);
+    const component = await Component.getById(pgComponentSource, componentId);
     if (!component) {
       return res.status(404).json({ error: "Component not found" });
     }
@@ -37,7 +38,7 @@ router.post("/", authenticateToken, async (req, res) => {
   const { name, payload } = req.body;
 
   try {
-    const result = await Component.create(user, { name, payload });
+    const result = await Component.create(pgComponentSource, user, { name, payload });
     if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
@@ -54,7 +55,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
   const { name, payload } = req.body;
 
   try {
-    const component = await Component.getById(componentId);
+    const component = await Component.getById(pgComponentSource, componentId);
     if (!component) return res.status(404).json({ error: "Component not found" });
 
     const result = await component.update(user, { name, payload });
@@ -73,7 +74,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    const component = await Component.getById(componentId);
+    const component = await Component.getById(pgComponentSource, componentId);
     if (!component) return res.status(404).json({ error: "Component not found" });
 
     const result = await component.delete(user);

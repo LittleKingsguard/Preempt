@@ -11,10 +11,17 @@ export async function dbGetHandlerById(id: number) {
 }
 
 export async function dbCreateHandler(name: string, body: string, authorId: string, isApproved: boolean) {
-  return await queryFirstRow(
-    "INSERT INTO Handlers (name, body, author_id, is_approved) VALUES ($1, $2, $3, $4) RETURNING *",
-    [name, body, authorId, isApproved]
-  );
+  try {
+    return await queryFirstRow(
+      "INSERT INTO Handlers (name, body, author_id, is_approved) VALUES ($1, $2, $3, $4) RETURNING *",
+      [name, body, authorId, isApproved]
+    );
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return { error: "Handler with this name already exists", status: 409 };
+    }
+    throw err;
+  }
 }
 
 export async function dbUpdateHandler(id: number, name: string, body: string) {
@@ -88,3 +95,15 @@ export async function dbApproveHandler(id: number, is_approved: boolean) {
     "Handler not found"
   );
 }
+import type { IHandlerSource } from "../models/interfaces.js";
+export const pgHandlerSource: IHandlerSource = {
+  getAll: dbGetHandlers,
+  getById: dbGetHandlerById,
+  create: dbCreateHandler,
+  update: dbUpdateHandler,
+  delete: dbDeleteHandler,
+  updateTemplateHandlers: dbUpdateTemplateHandlers,
+  updateContentHandlers: dbUpdateContentHandlers,
+  stage: dbStageHandler,
+  approve: dbApproveHandler
+};

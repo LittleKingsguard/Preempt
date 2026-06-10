@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Template } from "../../models/template.js";
+import { pgTemplateSource } from "../../sources/templateSource.js";
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    const result = await Template.getById(templateId, null, user);
+    const result = await Template.getById(pgTemplateSource, templateId, null, user);
     
     if (result && 'error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
@@ -36,7 +37,7 @@ router.post("/", authenticateToken, async (req, res) => {
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const result = await Template.create(user.username, payload, tags, groupId);
+    const result = await Template.create(pgTemplateSource, user.username, payload, tags, groupId);
     if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
@@ -58,7 +59,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const getRes = await Template.getById(templateId, null, user);
+    const getRes = await Template.getById(pgTemplateSource, templateId, null, user);
     if ('error' in getRes) return res.status(getRes.status || 404).json({ error: getRes.error });
 
     const template = getRes.template!;

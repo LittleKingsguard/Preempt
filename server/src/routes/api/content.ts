@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Content } from "../../models/content.js";
+import { pgContentSource } from "../../sources/contentSource.js";
 
 const router = express.Router();
 
@@ -15,11 +16,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
     let contentRes = null;
     
     if (clientTemplateId) {
-      contentRes = await Content.getWithTemplate(contentId, clientTemplateId, null, null, user);
+      contentRes = await Content.getWithTemplate(pgContentSource, contentId, clientTemplateId, null, null, user);
     }
     
     if (!contentRes || 'error' in contentRes) {
-      contentRes = await Content.getWithTemplate(contentId, templateId, tagsParam, null, user);
+      contentRes = await Content.getWithTemplate(pgContentSource, contentId, templateId, tagsParam, null, user);
     }
 
     if (!contentRes || 'error' in contentRes) {
@@ -53,7 +54,7 @@ router.get("/", authenticateToken, async (req, res) => {
   if (authErr) return res.status(authErr.status).json({ error: authErr.error });
 
   try {
-    const contents = await Content.getLatest();
+    const contents = await Content.getLatest(pgContentSource, );
     res.json(contents);
   } catch (err) {
     console.error(err);
@@ -71,7 +72,7 @@ router.post("/", authenticateToken, async (req, res) => {
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const result = await Content.create(user, payload, headers, tags, groupIds, isVisible, liveDate);
+    const result = await Content.create(pgContentSource, user, payload, headers, tags, groupIds, isVisible, liveDate);
     if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
@@ -93,7 +94,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
   if (!payload) return res.status(400).json({ error: "Payload is required" });
 
   try {
-    const content = await Content.getById(contentId);
+    const content = await Content.getById(pgContentSource, contentId);
     if (!content) return res.status(404).json({ error: "Content not found" });
 
     const result = await content.update(user, payload, headers, tags, groupIds, isVisible, liveDate);
@@ -115,7 +116,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   if (user.is_shadowed) return res.json({ success: true });
 
   try {
-    const content = await Content.getById(contentId);
+    const content = await Content.getById(pgContentSource, contentId);
     if (!content) return res.status(404).json({ error: "Content not found" });
 
     const result = await content.delete(user);

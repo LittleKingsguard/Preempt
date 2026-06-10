@@ -144,3 +144,13 @@ export async function dbApproveChangeBatch(batchId: number) {
     client.release();
   }
 }
+
+import type { IChangeBatchSource } from "../models/interfaces.js";
+export const pgChangeBatchSource: IChangeBatchSource = {
+  create: dbCreateChangeBatch,
+  getPending: dbGetPendingChangeBatches,
+  getById: dbGetChangeBatchById,
+  delete: dbDeleteChangeBatch,
+  markMerged: dbMarkChangeBatchMerged,
+  approve: dbApproveChangeBatch
+};

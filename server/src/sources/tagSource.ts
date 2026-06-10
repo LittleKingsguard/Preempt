@@ -39,10 +39,11 @@ export async function dbUpdateContentTags(client: any, contentId: number, tags: 
   }
 }
 
-export async function dbUpdateContentTemplateGroups(client: any, contentId: number, groupIds: number[]) {
-  await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [contentId]);
-  
-  if (groupIds && groupIds.length > 0) {
-    await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, unnest($2::int[])", [contentId, groupIds]);
-  }
-}
+
+
+import type { ITagSource } from "../models/interfaces.js";
+export const pgTagSource: ITagSource = {
+  fetchAll: dbFetchAllTags,
+  updateTemplateTags: dbUpdateTemplateTags,
+  updateContentTags: dbUpdateContentTags
+};

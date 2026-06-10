@@ -12,3 +12,9 @@ export async function dbSetSetting(key: string, valueStr: string) {
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
   `, [key, valueStr]);
 }
+
+import type { ISettingSource } from "../models/interfaces.js";
+export const pgSettingSource: ISettingSource = {
+  get: dbGetSetting,
+  set: dbSetSetting
+};

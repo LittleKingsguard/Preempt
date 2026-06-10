@@ -4,9 +4,12 @@ import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers,
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
-import * as templateSource from "../sources/templateSource.js";
+import { pgTemplateSource } from "../sources/templateSource.js";
+import { pgTagSource } from "../sources/tagSource.js";
+import type { ITemplateData, ITemplateSource } from "./interfaces.js";
 
 export class Template {
+  source: ITemplateSource;
   id: number;
   payload: any;
   author_id: string;
@@ -18,25 +21,26 @@ export class Template {
   created_at: Date;
   updated_at: Date;
 
-  constructor(data: any) {
+  constructor(data: ITemplateData, source: ITemplateSource = pgTemplateSource) {
+    this.source = source;
     this.id = data.id;
     this.payload = data.payload;
     this.author_id = data.author_id;
     this.approved_roles = data.approved_roles || [];
-    this.group_id = data.group_id;
-    this.change_batch_id = data.change_batch_id;
-    this.original_id = data.original_id;
-    this.is_approved = data.is_approved;
-    this.created_at = data.created_at;
-    this.updated_at = data.updated_at;
+    this.group_id = data.group_id || null;
+    this.change_batch_id = data.change_batch_id || null;
+    this.original_id = data.original_id || null;
+    this.is_approved = data.is_approved || false;
+    this.created_at = data.created_at || new Date();
+    this.updated_at = data.updated_at || new Date();
   }
 
-  static async getById(id: number, editorMode: string | null = null, user: any = null) {
+  static async getById(source: ITemplateSource = pgTemplateSource, id: number, editorMode: string | null = null, user: any = null) {
     const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
     const row = await fetchTemplateRecord(templateIdToFetch);
     if ('error' in row) return row;
 
-    const template = new Template(row);
+    const template = new Template(row, source);
 
     const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
     if (authErr) return authErr;
@@ -52,7 +56,7 @@ export class Template {
     return { template };
   }
 
-  static async create(authorId: string, payload: any, tags: string[], groupId: number | null = null) {
+  static async create(source: ITemplateSource = pgTemplateSource, authorId: string, payload: any, tags: string[], groupId: number | null = null) {
     const virtualNode = new Node(payload);
     if (!virtualNode.validate(true)) {
       return { error: "Validation Error", status: 400 };
@@ -61,10 +65,10 @@ export class Template {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const row = await templateSource.dbCreateTemplate(client, authorId, payload, groupId);
-      const template = new Template(row);
+      const row = await source.create(client, authorId, payload, groupId);
+      const template = new Template(row, source);
       if (tags && Array.isArray(tags)) {
-        await Tag.updateTemplateTags(client, template.id, tags);
+        await Tag.updateTemplateTags(pgTagSource, client, template.id, tags);
       }
       await client.query('COMMIT');
       return { template };
@@ -91,7 +95,7 @@ export class Template {
         return { error: "Forbidden: Not the author", status: 403 };
       }
 
-      const row = await templateSource.dbUpdateTemplate(client, this.id, payload, groupId);
+      const row = await this.source.update(client, this.id, payload, groupId);
       if ('error' in row) {
         await client.query('ROLLBACK');
         return row;
@@ -99,7 +103,7 @@ export class Template {
       Object.assign(this, row);
       
       if (tags && Array.isArray(tags)) {
-        await Tag.updateTemplateTags(client, this.id, tags);
+        await Tag.updateTemplateTags(pgTagSource, client, this.id, tags);
       }
       await client.query('COMMIT');
       return { template: this };
@@ -111,7 +115,7 @@ export class Template {
     }
   }
 
-  static async stage(user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
+  static async stage(source: ITemplateSource = pgTemplateSource, user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
     const virtualNode = new Node(payload);
     if (!virtualNode.validate(true)) {
       return { error: "Validation Error", status: 400 };
@@ -124,7 +128,7 @@ export class Template {
       let isStagedRow = false;
       
       if (originalId) {
-        const origRow = await templateSource.dbGetTemplateForStaging(client, originalId);
+        const origRow = await source.getForStaging(client, originalId);
         if ('error' in origRow) {
           await client.query('ROLLBACK');
           return origRow;
@@ -135,9 +139,9 @@ export class Template {
 
       let row;
       if (isStagedRow) {
-        row = await templateSource.dbUpdateStagedTemplate(client, originalId!, actualGroupId, payload, batchId);
+        row = await source.updateStaged(client, originalId!, actualGroupId, payload, batchId);
       } else {
-        row = await templateSource.dbInsertStagedTemplate(client, user.username, actualGroupId, payload, originalId, batchId);
+        row = await source.insertStaged(client, user.username, actualGroupId, payload, originalId, batchId);
       }
 
       if ('error' in row) {
@@ -145,11 +149,11 @@ export class Template {
         return row;
       }
       
-      const template = new Template(row);
+      const template = new Template(row, source);
 
       if (tags && Array.isArray(tags)) {
         if (isStagedRow || tags.length > 0) {
-          await Tag.updateTemplateTags(client, template.id, tags);
+          await Tag.updateTemplateTags(pgTagSource, client, template.id, tags);
         }
       }
       await client.query('COMMIT');

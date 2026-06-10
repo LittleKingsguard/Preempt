@@ -1,6 +1,9 @@
-import * as userSource from "../sources/userSource.js";
+import { pgUserSource } from "../sources/userSource.js";
+import { pgAuthTokenSource } from "../sources/authTokenSource.js";
+import type { IUserData, IUserSource, IAuthTokenSource } from "./interfaces.js";
 
 export class User {
+  source: IUserSource;
   username: string;
   email: string;
   is_admin: boolean;
@@ -12,79 +15,75 @@ export class User {
   is_bot: boolean;
   home_page: number | null;
 
-  constructor(data: any) {
+  constructor(data: IUserData, source: IUserSource = pgUserSource) {
+    this.source = source;
     this.username = data.username;
     this.email = data.email;
-    this.is_admin = data.is_admin;
-    this.is_contributor = data.is_contributor;
-    this.is_trusted_dev = data.is_trusted_dev;
-    this.is_2fa_enabled = data.is_2fa_enabled;
-    this.is_shadowed = data.is_shadowed;
-    this.has_verified = data.has_verified;
-    this.is_bot = data.is_bot;
-    this.home_page = data.home_page;
+    this.is_admin = data.is_admin || false;
+    this.is_contributor = data.is_contributor || false;
+    this.is_trusted_dev = data.is_trusted_dev || false;
+    this.is_2fa_enabled = data.is_2fa_enabled || false;
+    this.is_shadowed = data.is_shadowed || false;
+    this.has_verified = data.has_verified || false;
+    this.is_bot = data.is_bot || false;
+    this.home_page = data.home_page || null;
   }
 
-  static async authenticate(username: string, passwordPlain: string) {
-    const row = await userSource.dbAuthenticateUser(username, passwordPlain);
+  static async authenticate(source: IUserSource = pgUserSource, username: string, passwordPlain: string) {
+    const row = await source.authenticate(username, passwordPlain);
     if (!row) return null;
-    return new User(row);
-  }
-
-  static async create(username: string, email: string, passwordPlain: string) {
-    try {
-      const row = await userSource.dbCreateUser(username, email, passwordPlain);
-      return { user: new User(row) };
-    } catch (err: any) {
-      if (err.code === '23505') { // Unique constraint violation
-        return { error: "Username or email already exists" };
-      }
-      throw err;
-    }
-  }
-
-  static async getByEmail(email: string) {
-    const row = await userSource.dbGetUserByEmail(email);
     if ('error' in row) return row;
-    return new User(row);
+    return new User(row, source);
   }
 
-  static async getByUsername(username: string) {
-    const row = await userSource.dbGetUserByUsername(username);
+  static async create(source: IUserSource = pgUserSource, username: string, email: string, passwordPlain: string) {
+    const row = await source.create(username, email, passwordPlain);
+    if (row && 'error' in row) return row;
+    return { user: new User(row, source) };
+  }
+
+  static async getByEmail(source: IUserSource = pgUserSource, email: string) {
+    const row = await source.getByEmail(email);
     if ('error' in row) return row;
-    return new User(row);
+    return new User(row, source);
+  }
+
+  static async getByUsername(source: IUserSource = pgUserSource, username: string) {
+    const row = await source.getByUsername(username);
+    if ('error' in row) return row;
+    return new User(row, source);
   }
 
   async updatePassword(newPasswordPlain: string) {
-    await userSource.dbUpdatePassword(this.username, newPasswordPlain);
+    return await this.source.updatePassword(this.username, newPasswordPlain);
   }
 
-  static async createAuthToken(username: string, type: string, tokenValue: string, expiresInMinutes: number) {
-    await userSource.dbCreateAuthToken(username, type, tokenValue, expiresInMinutes);
+  static async createAuthToken(tokenSource: IAuthTokenSource = pgAuthTokenSource, username: string, type: string, tokenValue: string, expiresInMinutes: number) {
+    return await tokenSource.create(username, type, tokenValue, expiresInMinutes);
   }
 
-  static async verifyAuthToken(username: string, type: string, tokenValue: string) {
-    return await userSource.dbVerifyAuthToken(username, type, tokenValue);
+  static async verifyAuthToken(tokenSource: IAuthTokenSource = pgAuthTokenSource, username: string, type: string, tokenValue: string) {
+    return await tokenSource.verify(username, type, tokenValue);
   }
 
-  static async deleteAuthTokens(username: string, type: string) {
-    await userSource.dbDeleteAuthTokens(username, type);
+  static async deleteAuthTokens(tokenSource: IAuthTokenSource = pgAuthTokenSource, username: string, type: string) {
+    return await tokenSource.delete(username, type);
   }
 
   async verifyEmail() {
-    await userSource.dbVerifyUserEmail(this.username);
+    return await this.source.verifyEmail(this.username);
   }
 
   async updateRoles(roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
-    await userSource.dbUpdateUserRoles(this.username, roles);
+    return await this.source.updateRoles(this.username, roles);
   }
 
   async updateHomePage(homePage: number | null) {
-    await userSource.dbUpdateUserHomePage(this.username, homePage);
+    return await this.source.updateHomePage(this.username, homePage);
   }
 
-  static async getAll() {
-    const rows = await userSource.dbGetUsers();
-    return rows.map(r => new User(r));
+  static async getAll(source: IUserSource = pgUserSource) {
+    const rows = await source.getAll();
+    return rows.map(r => new User(r, source));
   }
 }

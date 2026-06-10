@@ -11,10 +11,17 @@ export async function dbGetComponentById(id: number) {
 }
 
 export async function dbCreateComponent(name: string, payload: any, authorId: string) {
-  return await queryFirstRow(
-    "INSERT INTO Components (name, payload, author_id) VALUES ($1, $2, $3) RETURNING *",
-    [name, payload, authorId]
-  );
+  try {
+    return await queryFirstRow(
+      "INSERT INTO Components (name, payload, author_id) VALUES ($1, $2, $3) RETURNING *",
+      [name, payload, authorId]
+    );
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return { error: "Component with this name already exists", status: 409 };
+    }
+    throw err;
+  }
 }
 
 export async function dbUpdateComponent(id: number, name: string, payload: any) {
@@ -80,3 +87,14 @@ export async function dbStageComponent(name: string, payload: any, authorId: str
     [name, payload, authorId, originalId, batchId]
   );
 }
+import type { IComponentSource } from "../models/interfaces.js";
+export const pgComponentSource: IComponentSource = {
+  getAll: dbGetComponents,
+  getById: dbGetComponentById,
+  create: dbCreateComponent,
+  update: dbUpdateComponent,
+  delete: dbDeleteComponent,
+  updateTemplateComponents: dbUpdateTemplateComponents,
+  updateContentComponents: dbUpdateContentComponents,
+  stage: dbStageComponent
+};

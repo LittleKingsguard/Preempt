@@ -1,12 +1,13 @@
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Handler } from "../../models/handler.js";
+import { pgHandlerSource } from "../../sources/handlerSource.js";
 
 const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const handlers = await Handler.getAll((req as any).user);
+    const handlers = await Handler.getAll(pgHandlerSource, (req as any).user);
     res.json(handlers);
   } catch (err) {
     console.error(err);
@@ -19,7 +20,7 @@ router.post("/", authenticateToken, async (req, res) => {
   const { name, body } = req.body;
 
   try {
-    const result = await Handler.create(user, { name, body });
+    const result = await Handler.create(pgHandlerSource, user, { name, body });
     if ('error' in result) {
       return res.status(result.status || 400).json({ error: result.error });
     }
@@ -36,7 +37,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
   const { name, body } = req.body;
 
   try {
-    const handler = await Handler.getById(handlerId);
+    const handler = await Handler.getById(pgHandlerSource, handlerId);
     if (!handler) return res.status(404).json({ error: "Handler not found" });
 
     const result = await handler.update(user, { name, body });
@@ -55,7 +56,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   const user = (req as any).user;
 
   try {
-    const handler = await Handler.getById(handlerId);
+    const handler = await Handler.getById(pgHandlerSource, handlerId);
     if (!handler) return res.status(404).json({ error: "Handler not found" });
 
     const result = await handler.delete(user);
@@ -75,7 +76,7 @@ router.put("/:id/approve", authenticateToken, async (req, res) => {
   const { is_approved } = req.body;
 
   try {
-    const handler = await Handler.getById(handlerId);
+    const handler = await Handler.getById(pgHandlerSource, handlerId);
     if (!handler) return res.status(404).json({ error: "Handler not found" });
 
     const result = await handler.approve(user, is_approved);

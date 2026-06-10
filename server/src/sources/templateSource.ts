@@ -50,3 +50,17 @@ export async function dbInsertStagedTemplate(client: any, authorId: string, actu
   );
   return result.rows[0];
 }
+
+import type { ITemplateSource } from "../models/interfaces.js";
+export const pgTemplateSource: ITemplateSource = {
+  getById: (id: number) => { throw new Error("Not implemented yet"); },
+  getForGroup: (id: number) => { throw new Error("Not implemented yet"); },
+  getAll: () => { throw new Error("Not implemented yet"); },
+  create: dbCreateTemplate,
+  getAuthorId: dbGetTemplateAuthorId as any,
+  update: dbUpdateTemplate,
+  getForStaging: dbGetTemplateForStaging,
+  updateStaged: dbUpdateStagedTemplate,
+  insertStaged: dbInsertStagedTemplate,
+  delete: (id: number) => { throw new Error("Not implemented"); }
+};

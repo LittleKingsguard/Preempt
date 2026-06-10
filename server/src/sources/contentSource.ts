@@ -135,6 +135,29 @@ export async function dbUpdateContent(client: any, contentId: number, payload: a
   return result.rows[0];
 }
 
+export async function dbUpdateContentTemplateGroups(client: any, contentId: number, groupIds: number[]) {
+  await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [contentId]);
+  
+  if (groupIds && groupIds.length > 0) {
+    await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, unnest($2::int[])", [contentId, groupIds]);
+  }
+}
+
 export async function dbDeleteContent(contentId: number) {
   return await queryFirstRow("DELETE FROM Content WHERE id = $1 RETURNING id", [contentId], "Content not found");
 }
+import type { IContentSource } from "../models/interfaces.js";
+export const pgContentSource: IContentSource = {
+  getById: dbGetContentById,
+  getHeaders: dbGetContentHeaders,
+  query: dbGetContentQuery,
+  getLatest: dbGetLatestContent,
+  getCount: dbGetContentCount,
+  getForStaging: dbGetContentForStaging,
+  updateStaged: dbUpdateStagedContent,
+  insertStaged: dbInsertStagedContent,
+  create: dbCreateContent,
+  update: dbUpdateContent,
+  delete: dbDeleteContent,
+  updateTemplateGroups: dbUpdateContentTemplateGroups
+};

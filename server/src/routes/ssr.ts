@@ -1,5 +1,7 @@
 import express from "express";
 import { Content } from "../models/content.js";
+import { pgContentSource } from "../sources/contentSource.js";
+import { pgSettingSource } from "../sources/settingsSource.js";
 import { Setting } from "../models/settings.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
 import path from "path";
@@ -22,7 +24,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 
   try {
-    const contentRes = await Content.getWithTemplate(contentId, null, null, editorMode, req.user);
+    const contentRes = await Content.getWithTemplate(pgContentSource, contentId, null, null, editorMode, req.user);
     if (!contentRes || 'error' in contentRes) {
       return res.status((contentRes as any)?.status || 404).send((contentRes as any)?.error || "Content not found");
     }
@@ -51,7 +53,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
       runMonitoring: false
     };
 
-    let dbConfig = await Setting.get('server_config');
+    let dbConfig = await Setting.get(pgSettingSource, 'server_config');
     if (dbConfig) {
       if (typeof dbConfig === 'string') {
         try { dbConfig = JSON.parse(dbConfig); } catch (e) { }
@@ -95,7 +97,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 
 router.get("/", authenticateToken, async (req: any, res) => {
   try {
-    const setting = await Setting.get('default_index_content_id');
+    const setting = await Setting.get(pgSettingSource, 'default_index_content_id');
     let defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (req.user && req.user.home_page) {
@@ -115,7 +117,7 @@ router.get("/", authenticateToken, async (req: any, res) => {
 
 router.get("/reset-password", authenticateToken, async (req, res) => {
   try {
-    const setting = await Setting.get('default_index_content_id');
+    const setting = await Setting.get(pgSettingSource, 'default_index_content_id');
     const defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (!defaultIndexId) {

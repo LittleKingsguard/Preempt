@@ -7,6 +7,10 @@ import { Component } from "../models/component.js";
 import { Handler } from "../models/handler.js";
 import { Template } from "../models/template.js";
 import { Content } from "../models/content.js";
+import { pgComponentSource } from "../sources/componentSource.js";
+import { pgTemplateSource } from "../sources/templateSource.js";
+import { pgContentSource } from "../sources/contentSource.js";
+import { pgHandlerSource } from "../sources/handlerSource.js";
 
 const router = Router();
 
@@ -40,7 +44,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
   const user = (req as any).user;
   let batch;
   try {
-    batch = await ChangeBatch.create(user.username, description);
+    batch = await ChangeBatch.create(undefined, user.username, description);
   } catch (err: any) {
     console.error(err);
     return res.status(500).json({ error: "Failed to create change batch: " + err.message });
@@ -102,13 +106,13 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
 
       let savedData;
       if (target.type === 'component') {
-        savedData = await Component.stage(user, target.name, validatedPayload, target.id || null, batch.id);
+        savedData = await Component.stage(pgComponentSource, user, target.name, validatedPayload, target.id || null, batch.id);
       } else if (target.type === 'handler') {
-        savedData = await Handler.stage(user, target.name, validatedBody, target.id || null, batch.id);
+        savedData = await Handler.stage(pgHandlerSource, user, target.name, validatedBody, target.id || null, batch.id);
       } else if (target.type === 'template') {
-        savedData = await Template.stage(user, validatedPayload, target.id || null, batch.id, target.tags, target.groupId || null);
+        savedData = await Template.stage(pgTemplateSource, user, validatedPayload, target.id || null, batch.id, target.tags, target.groupId || null);
       } else if (target.type === 'content') {
-        savedData = await Content.stage(user, validatedPayload, target.headers, target.id || null, batch.id, target.tags, target.groupIds);
+        savedData = await Content.stage(pgContentSource, user, validatedPayload, target.headers, target.id || null, batch.id, target.tags, target.groupIds);
       }
 
       savedTargets.push({
@@ -129,7 +133,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
 
 router.get("/admin/change-batches", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const batches = await ChangeBatch.getPending();
+    const batches = await ChangeBatch.getPending(undefined);
     res.json({ batches });
   } catch (err) {
     console.error(err);
@@ -140,7 +144,7 @@ router.get("/admin/change-batches", authenticateToken, requireAdmin, async (req,
 router.post("/admin/change-batches/:id/reject", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const batchId = parseInt(req.params.id as string);
-    const batch = await ChangeBatch.getById(batchId);
+    const batch = await ChangeBatch.getById(undefined, batchId);
     if ('error' in batch) return res.status(batch.status || 404).json({ error: batch.error });
 
     // Cascading delete handles removing staged rows
@@ -155,7 +159,7 @@ router.post("/admin/change-batches/:id/reject", authenticateToken, requireAdmin,
 router.post("/admin/change-batches/:id/approve", authenticateToken, requireAdmin, async (req, res) => {
   const batchId = parseInt(req.params.id as string);
   try {
-    const batch = await ChangeBatch.getById(batchId);
+    const batch = await ChangeBatch.getById(undefined, batchId);
     if ('error' in batch) return res.status(batch.status || 404).json({ error: batch.error });
 
     await batch.approve();

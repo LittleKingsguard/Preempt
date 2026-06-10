@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../../middleware/auth.js";
 import { Setting } from "../../models/settings.js";
+import { pgSettingSource } from "../../sources/settingsSource.js";
 
 const router = express.Router();
 
@@ -16,7 +17,10 @@ router.post("/default-index", authenticateToken, async (req, res) => {
   }
 
   try {
-    await Setting.set('default_index_content_id', { id: contentId });
+    const result = await Setting.set(pgSettingSource, 'default_index_content_id', { id: contentId });
+    if (result && 'error' in result) {
+      return res.status(result.status || 400).json({ error: result.error });
+    }
     res.json({ message: "Default index updated successfully" });
   } catch (err) {
     console.error(err);

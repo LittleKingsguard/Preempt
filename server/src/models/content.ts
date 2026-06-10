@@ -3,9 +3,12 @@ import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, p
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Tag } from "./tag.js";
 import { validateUserRoles } from "../middleware/auth.js";
-import * as contentSource from "../sources/contentSource.js";
+import { pgContentSource } from "../sources/contentSource.js";
+import { pgTagSource } from "../sources/tagSource.js";
+import type { IContentData, IContentSource } from "./interfaces.js";
 
 export class Content {
+  source: IContentSource;
   id: number;
   author_id: string;
   payload: any;
@@ -18,36 +21,37 @@ export class Content {
   created_at: Date;
   updated_at: Date;
 
-  constructor(data: any) {
+  constructor(data: IContentData, source: IContentSource = pgContentSource) {
+    this.source = source;
     this.id = data.id;
     this.author_id = data.author_id;
     this.payload = data.payload;
     this.template_payload = data.template_payload;
-    this.headers = data.headers;
-    this.is_visible = data.is_visible;
-    this.live_date = data.live_date;
+    this.headers = data.headers || null;
+    this.is_visible = data.is_visible || false;
+    this.live_date = data.live_date || null;
     this.approved_roles = data.approved_roles || [];
     this.resolved_template_id = data.resolved_template_id;
-    this.created_at = data.created_at;
-    this.updated_at = data.updated_at;
+    this.created_at = data.created_at || new Date();
+    this.updated_at = data.updated_at || new Date();
   }
 
-  static async getById(id: number) {
-    const row = await contentSource.dbGetContentById(id);
+  static async getById(source: IContentSource = pgContentSource, id: number) {
+    const row = await source.getById(id);
     if ('error' in row) return row;
-    return new Content(row);
+    return new Content(row, source);
   }
 
-  static async getHeaders(id: number) {
-    return await contentSource.dbGetContentHeaders(id);
+  static async getHeaders(source: IContentSource = pgContentSource, id: number) {
+    return await source.getHeaders(id);
   }
 
-  static async getWithTemplate(contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
+  static async getWithTemplate(source: IContentSource = pgContentSource, contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
     const { query, params } = buildContentQuery(contentId, templateId, tagsParam, editorMode);
-    const row = await contentSource.dbGetContentQuery(query, params);
+    const row = await source.query(query, params);
     if ('error' in row) return row;
 
-    const content = new Content(row);
+    const content = new Content(row, source);
 
     if (editorMode) {
       await applyEditorTemplateOverride(row);
@@ -83,41 +87,41 @@ export class Content {
     return { content };
   }
 
-  static async getLatest(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}) {
-    const rows = await contentSource.dbGetLatestContent(criteria);
-    return rows.map(r => new Content(r));
+  static async getLatest(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}) {
+    const rows = await source.getLatest(criteria);
+    return rows.map(r => new Content(r, source));
   }
 
-  static async getCount(criteria: { tags?: string[]; author?: string } = {}) {
-    return await contentSource.dbGetContentCount(criteria);
+  static async getCount(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string } = {}) {
+    return await source.getCount(criteria);
   }
 
-  static async stage(user: any, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[] = [], groupIds: number[] = []) {
+  static async stage(source: IContentSource = pgContentSource, user: any, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[] = [], groupIds: number[] = []) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       let isStagedRow = false;
       if (originalId) {
-        isStagedRow = await contentSource.dbGetContentForStaging(client, originalId);
+        isStagedRow = await source.getForStaging(client, originalId);
       }
 
       let row;
       if (isStagedRow) {
-        row = await contentSource.dbUpdateStagedContent(client, user.username, payload, headers, originalId!, batchId);
+        row = await source.updateStaged(client, user.username, payload, headers, originalId!, batchId);
       } else {
-        row = await contentSource.dbInsertStagedContent(client, user.username, payload, headers, originalId, batchId);
+        row = await source.insertStaged(client, user.username, payload, headers, originalId, batchId);
       }
       
-      const content = new Content(row);
+      const content = new Content(row, source);
 
       if (tags && Array.isArray(tags)) {
         if (isStagedRow || tags.length > 0) {
-          await Tag.updateContentTags(client, content.id, tags);
+          await Tag.updateContentTags(pgTagSource, client, content.id, tags);
         }
       }
       if (groupIds && Array.isArray(groupIds)) {
         if (isStagedRow || groupIds.length > 0) {
-          await Tag.updateContentTemplateGroups(client, content.id, groupIds);
+          await source.updateTemplateGroups(client, content.id, groupIds);
         }
       }
       
@@ -131,7 +135,7 @@ export class Content {
     }
   }
 
-  static async create(user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null) {
+  static async create(source: IContentSource = pgContentSource, user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null) {
     if (!user || (!user.is_admin && !user.is_contributor)) {
       return { error: "Forbidden: Only admins and contributors can create content directly", status: 403 };
     }
@@ -139,14 +143,14 @@ export class Content {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const row = await contentSource.dbCreateContent(client, user.username, payload, headers, isVisible, liveDate || new Date());
-      const content = new Content(row);
+      const row = await source.create(client, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date());
+      const content = new Content(row, source);
       
       if (tags && tags.length > 0) {
-        await Tag.updateContentTags(client, content.id, tags);
+        await Tag.updateContentTags(pgTagSource, client, content.id, tags);
       }
       if (groupIds) {
-        await Tag.updateContentTemplateGroups(client, content.id, groupIds);
+        await source.updateTemplateGroups(client, content.id, groupIds);
       }
       
       await client.query('COMMIT');
@@ -173,15 +177,15 @@ export class Content {
         return { error: "Forbidden: You do not own this content", status: 403 };
       }
 
-      const row = await contentSource.dbUpdateContent(client, this.id, payload, headers, isVisible, liveDate || new Date());
+      const row = await this.source.update(client, this.id, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date());
       if ('error' in row) {
         await client.query('ROLLBACK');
         return row;
       }
       Object.assign(this, row);
       
-      await Tag.updateContentTags(client, this.id, tags || []);
-      await Tag.updateContentTemplateGroups(client, this.id, groupIds || []);
+      await Tag.updateContentTags(pgTagSource, client, this.id, tags || []);
+      await this.source.updateTemplateGroups(client, this.id, groupIds || []);
       
       await client.query('COMMIT');
       return { content: this };
@@ -203,7 +207,7 @@ export class Content {
         return { error: "Forbidden: You do not own this content", status: 403 };
       }
 
-      const row = await contentSource.dbDeleteContent(this.id);
+      const row = await this.source.delete(this.id);
       if ('error' in row) return row;
       return { success: true };
     } catch (err: any) {
