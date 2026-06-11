@@ -58,6 +58,7 @@ export interface IContentData {
   payload: any;
   template_payload?: any;
   promo?: any;
+  metadata?: any;
   headers: string | null;
   is_visible: boolean;
   live_date: Date | null;
@@ -73,15 +74,15 @@ export interface IContentSource {
   getById(id: number, user?: any): Promise<any | { error: string; status: number }>;
   getHeaders(id: number): Promise<any>;
   query(query: string, params: any[]): Promise<any | { error: string; status: number }>;
-  getLatestOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any): Promise<any[]>;
-  getLatestGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any, placeholder?: any): Promise<any[]>;
-  getLatestPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any): Promise<any[]>;
+  getLatestOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number }, user?: any): Promise<any[]>;
+  getLatestGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number }, user?: any, placeholder?: any): Promise<any[]>;
+  getLatestPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number }, user?: any): Promise<any[]>;
   getCountOverlook(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   getCountGuard(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   getCountPaywall(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
-  stage(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any): Promise<any>;
-  create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any): Promise<any>;
-  update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any): Promise<any | { error: string; status: number }>;
+  stage(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
+  create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
+  update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any | { error: string; status: number }>;
   delete(id: number): Promise<any | { error: string; status: number }>;
   
   addUser(contentId: number, username: string, role: string): Promise<any>;
@@ -91,6 +92,7 @@ export interface IContentSource {
   addGroup(contentId: number, groupId: number, role: string): Promise<any>;
   removeGroup(contentId: number, groupId: number): Promise<void>;
   getGroups(contentId: number): Promise<IContentUserGroupData[]>;
+  getSubjectContext?(commentListId: number): Promise<any>;
 }
 
 export interface IHandlerData {

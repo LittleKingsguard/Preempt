@@ -29,7 +29,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     const contentData = (contentRes as any).content;
     const responsePayload: any = {
-      content: contentData.payload
+      content: contentData.payload,
+      metadata: contentData.metadata
     };
     if (contentData.headers) {
       responsePayload.headers = contentData.headers;

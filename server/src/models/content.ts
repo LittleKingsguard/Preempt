@@ -16,6 +16,7 @@ export class Content {
   payload: any;
   template_payload: any;
   promo?: any;
+  metadata?: any;
   headers: string | null;
   is_visible: boolean;
   live_date: Date | null;
@@ -33,6 +34,7 @@ export class Content {
     this.payload = data.payload;
     this.template_payload = data.template_payload;
     this.promo = data.promo;
+    this.metadata = data.metadata;
     this.headers = data.headers || null;
     this.is_visible = data.is_visible || false;
     this.live_date = data.live_date || null;
@@ -42,6 +44,27 @@ export class Content {
     this.updated_at = data.updated_at || new Date();
     this.users = data.users || [];
     this.groups = data.groups || [];
+  }
+
+  hasViewAccess(user: any): boolean {
+    if (user?.is_admin === true) return true;
+    const userRole = this.users?.find(u => u.username === user?.username)?.role;
+    if (userRole) return true; // Any role (Owner, Contributor, Commenter, Viewer) gives view access
+    const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
+    const groupRole = this.groups?.find(g => userGroupIds.includes(g.group_id))?.role;
+    if (groupRole) return true;
+    return false;
+  }
+
+  hasCommentAccess(user: any): boolean {
+    if (user?.is_admin === true) return true;
+    const allowedRoles = ['Owner', 'Contributor', 'Commenter'];
+    const userRole = this.users?.find(u => u.username === user?.username)?.role;
+    if (userRole && allowedRoles.includes(userRole)) return true;
+    const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
+    const groupRole = this.groups?.find(g => userGroupIds.includes(g.group_id))?.role;
+    if (groupRole && allowedRoles.includes(groupRole)) return true;
+    return false;
   }
 
   static async getById(source: IContentSource = pgContentSource, id: number, user?: any) {
@@ -68,11 +91,7 @@ export class Content {
       return { error: "Security check failed", status: 403 };
     }
 
-    const isAdmin = user?.is_admin === true;
-    const userRole = content.users?.find(u => u.username === user?.username)?.role;
-    const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
-    const groupRole = content.groups?.find(g => userGroupIds.includes(g.group_id))?.role;
-    const hasViewAccess = isAdmin || userRole || groupRole;
+    const hasViewAccess = content.hasViewAccess(user);
 
     const now = new Date();
     const isPublic = content.is_visible && (!content.live_date || new Date(content.live_date) <= now);

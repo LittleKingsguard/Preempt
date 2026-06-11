@@ -65,6 +65,7 @@ CREATE TABLE Content (
     headers TEXT,
     original_id INT REFERENCES Content(id) ON DELETE SET NULL,
     change_batch_id INT REFERENCES ChangeBatches(id) ON DELETE CASCADE,
+    metadata JSONB,
     approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -192,3 +193,25 @@ CREATE TABLE SiteSettings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 ALTER TABLE Users ADD CONSTRAINT fk_user_home_page FOREIGN KEY (home_page) REFERENCES Content(id) ON DELETE SET NULL;
+
+CREATE TABLE CommentLists (
+    id SERIAL PRIMARY KEY,
+    subject_type VARCHAR(50) NOT NULL,
+    subject_id INTEGER NOT NULL,
+    UNIQUE(subject_type, subject_id)
+);
+
+CREATE TABLE Comments (
+    id SERIAL PRIMARY KEY,
+    comment_list_id INTEGER NOT NULL REFERENCES CommentLists(id) ON DELETE CASCADE,
+    parent_comment_id INTEGER REFERENCES Comments(id) ON DELETE CASCADE,
+    target_placement VARCHAR(100),
+    author_id VARCHAR(50) NOT NULL REFERENCES Users(username) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_placement_target CHECK (
+        (parent_comment_id IS NOT NULL AND target_placement IS NULL) OR 
+        (parent_comment_id IS NULL AND target_placement IS NOT NULL)
+    )
+);

@@ -8,13 +8,28 @@ export async function dbGetContentHeaders(id: number) {
   return row ? row.headers : null;
 }
 
+async function attachContentMetadata(row: any) {
+  if (!row.metadata) {
+    row.metadata = {};
+  }
+  let commentList = await queryFirstRow("SELECT id FROM CommentLists WHERE subject_type = 'Content' AND subject_id = $1", [row.id]);
+  
+  if (!commentList || 'error' in commentList) {
+    commentList = await queryFirstRow("INSERT INTO CommentLists (subject_type, subject_id) VALUES ('Content', $1) ON CONFLICT (subject_type, subject_id) DO UPDATE SET subject_id = EXCLUDED.subject_id RETURNING id", [row.id]);
+  }
 
+  if (commentList && !('error' in commentList)) {
+    row.metadata.comment_list_id = commentList.id;
+  }
+  return row.metadata;
+}
 
 export async function dbGetContentQuery(query: string, params: any[]) {
   const row = await queryFirstRow(query, params, "Content not found");
   if (row && !('error' in row)) {
     row.users = await dbGetContentUsers(row.id);
     row.groups = await dbGetContentGroups(row.id);
+    row.metadata = await attachContentMetadata(row);
   }
   return row;
 }
@@ -24,11 +39,12 @@ export async function dbGetContentById(id: number, user?: any) {
   if (row && !('error' in row)) {
     row.users = await dbGetContentUsers(row.id);
     row.groups = await dbGetContentGroups(row.id);
+    row.metadata = await attachContentMetadata(row);
   }
   return row;
 }
 
-export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}, user?: any) {
+export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any) {
   let query = `
     SELECT c.* 
     FROM Content c
@@ -89,11 +105,12 @@ export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; au
   for (const row of rows) {
     row.users = await dbGetContentUsers(row.id);
     row.groups = await dbGetContentGroups(row.id);
+    row.metadata = await attachContentMetadata(row);
   }
   return rows;
 }
 
-export async function dbGetLatestContentGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}, user?: any, placeholder?: any) {
+export async function dbGetLatestContentGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any, placeholder?: any) {
   const rows = await dbGetLatestContentAll(criteria);
   const now = new Date();
   for (const row of rows) {
@@ -113,7 +130,7 @@ export async function dbGetLatestContentGuard(criteria: { tags?: string[]; autho
   return rows;
 }
 
-export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}, user?: any) {
+export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any) {
   const rows = await dbGetLatestContentAll(criteria);
   const now = new Date();
   for (const row of rows) {
@@ -132,7 +149,7 @@ export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; aut
   return rows;
 }
 
-async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}) {
+async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}) {
   let query = `
     SELECT c.* 
     FROM Content c
@@ -176,6 +193,7 @@ async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: strin
   for (const row of rows) {
     row.users = await dbGetContentUsers(row.id);
     row.groups = await dbGetContentGroups(row.id);
+    row.metadata = await attachContentMetadata(row);
   }
   return rows;
 }
