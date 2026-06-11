@@ -1,4 +1,3 @@
-import { pool } from "../db.js";
 import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Tag } from "./tag.js";
@@ -141,42 +140,13 @@ export class Content {
 
 
   static async stage(source: IContentSource = pgContentSource, user: any, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[] = [], groupIds: number[] = [], promo?: any) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      let isStagedRow = false;
-      if (originalId) {
-        isStagedRow = await source.getForStaging(client, originalId);
-      }
-
-      let row;
-      if (isStagedRow) {
-        row = await source.updateStaged(client, user.username, payload, headers, originalId!, batchId, promo);
-      } else {
-        row = await source.insertStaged(client, user.username, payload, headers, originalId, batchId, promo);
-      }
-      
-      const content = new Content(row, source);
-
-      if (tags && Array.isArray(tags)) {
-        if (isStagedRow || tags.length > 0) {
-          await Tag.updateContentTags(pgTagSource, client, content.id, tags);
-        }
-      }
-      if (groupIds && Array.isArray(groupIds)) {
-        if (isStagedRow || groupIds.length > 0) {
-          await source.updateTemplateGroups(client, content.id, groupIds);
-        }
-      }
-      
-      await client.query('COMMIT');
-      return { content };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    const row = await source.stage(user.username, payload, headers, originalId, batchId, tags, groupIds, promo);
+    if ('error' in row) return row;
+    const content = new Content(row, source);
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
     }
+    return { content };
   }
 
   static async create(source: IContentSource = pgContentSource, user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null, promo?: any) {
@@ -184,30 +154,16 @@ export class Content {
       return { error: "Forbidden: Only admins and contributors can create content directly", status: 403 };
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const row = await source.create(client, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), promo);
-      const content = new Content(row, source);
-      
-      await source.addUser(client, content.id, user.username, 'Owner');
-      content.users = [{ content_id: content.id, username: user.username, role: 'Owner' }];
+    const row = await source.create(user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
+    if ('error' in row) return row;
+    const content = new Content(row, source);
+    content.users = [{ content_id: content.id, username: user.username, role: 'Owner' }];
 
-      if (tags && tags.length > 0) {
-        await Tag.updateContentTags(pgTagSource, client, content.id, tags);
-      }
-      if (groupIds) {
-        await source.updateTemplateGroups(client, content.id, groupIds);
-      }
-      
-      await client.query('COMMIT');
-      return { content };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
     }
+    
+    return { content };
   }
 
   async update(user: any, payload: any, headers: string | null, tags: string[] = [], groupIds: number[] = [], isVisible: boolean = true, liveDate: string | null = null, promo?: any): Promise<{ error: string, status: number } | { content: Content }> {
@@ -221,28 +177,15 @@ export class Content {
       return { error: "Forbidden: You do not have permission to update this content", status: 403 };
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      const row = await this.source.update(client, this.id, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), promo);
-      if ('error' in row) {
-        await client.query('ROLLBACK');
-        return row;
-      }
-      Object.assign(this, row);
-      
-      await Tag.updateContentTags(pgTagSource, client, this.id, tags || []);
-      await this.source.updateTemplateGroups(client, this.id, groupIds || []);
-      
-      await client.query('COMMIT');
-      return { content: this };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    const row = await this.source.update(this.id, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
+    if ('error' in row) return row;
+    Object.assign(this, row);
+
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
     }
+    
+    return { content: this };
   }
 
   async delete(user: any) {
@@ -273,15 +216,8 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const client = await pool.connect();
-    try {
-      const result = await this.source.addUser(client, this.id, targetUsername, role);
-      return { success: true, role: result };
-    } catch (e) {
-      throw e;
-    } finally {
-      client.release();
-    }
+    const result = await this.source.addUser(this.id, targetUsername, role);
+    return { success: true, role: result };
   }
 
   async removeRole(user: any, targetUsername: string) {
@@ -292,15 +228,8 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const client = await pool.connect();
-    try {
-      await this.source.removeUser(client, this.id, targetUsername);
-      return { success: true };
-    } catch (e) {
-      throw e;
-    } finally {
-      client.release();
-    }
+    await this.source.removeUser(this.id, targetUsername);
+    return { success: true };
   }
 
   async addGroupRole(user: any, targetGroupId: number, role: string) {
@@ -311,15 +240,8 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const client = await pool.connect();
-    try {
-      const result = await this.source.addGroup(client, this.id, targetGroupId, role);
-      return { success: true, role: result };
-    } catch (e) {
-      throw e;
-    } finally {
-      client.release();
-    }
+    const result = await this.source.addGroup(this.id, targetGroupId, role);
+    return { success: true, role: result };
   }
 
   async removeGroupRole(user: any, targetGroupId: number) {
@@ -330,14 +252,7 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const client = await pool.connect();
-    try {
-      await this.source.removeGroup(client, this.id, targetGroupId);
-      return { success: true };
-    } catch (e) {
-      throw e;
-    } finally {
-      client.release();
-    }
+    await this.source.removeGroup(this.id, targetGroupId);
+    return { success: true };
   }
 }

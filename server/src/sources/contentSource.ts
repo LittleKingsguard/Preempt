@@ -1,44 +1,14 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "../utils/db.js";
+import { pgTagSource } from "./tagSource.js";
+import type { IContentSource } from "../models/interfaces.js";
 
 export async function dbGetContentHeaders(id: number) {
   const row = await queryFirstRow("SELECT headers FROM Content WHERE id = $1", [id]);
   return row ? row.headers : null;
 }
 
-export async function dbGetContentUsers(contentId: number) {
-  const result = await pool.query("SELECT * FROM ContentUsers WHERE content_id = $1", [contentId]);
-  return result.rows;
-}
 
-export async function dbAddContentUser(client: any, contentId: number, username: string, role: string) {
-  const result = await client.query(
-    "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING *",
-    [contentId, username, role]
-  );
-  return result.rows[0];
-}
-
-export async function dbRemoveContentUser(client: any, contentId: number, username: string) {
-  await client.query("DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2", [contentId, username]);
-}
-
-export async function dbGetContentGroups(contentId: number) {
-  const result = await pool.query("SELECT * FROM ContentUserGroups WHERE content_id = $1", [contentId]);
-  return result.rows;
-}
-
-export async function dbAddContentGroup(client: any, contentId: number, groupId: number, role: string) {
-  const result = await client.query(
-    "INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING *",
-    [contentId, groupId, role]
-  );
-  return result.rows[0];
-}
-
-export async function dbRemoveContentGroup(client: any, contentId: number, groupId: number) {
-  await client.query("DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2", [contentId, groupId]);
-}
 
 export async function dbGetContentQuery(query: string, params: any[]) {
   const row = await queryFirstRow(query, params, "Content not found");
@@ -296,52 +266,118 @@ async function dbGetContentCountAll(criteria: { tags?: string[]; author?: string
   return parseInt(row.count, 10);
 }
 
-
 export async function dbGetContentAuthor(contentId: number) {
   return await queryFirstRow("SELECT author_id FROM Content WHERE id = $1", [contentId], "Content not found");
 }
 
-export async function dbGetContentForStaging(client: any, originalId: number) {
-  const result = await client.query(`
-    SELECT c.change_batch_id 
-    FROM Content c 
-    JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
-    WHERE c.id = $1 AND cb.merged_at IS NULL
-  `, [originalId]);
-  return result.rows.length > 0;
+export async function dbStageContent(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    let isStagedRow = false;
+    if (originalId) {
+      const result = await client.query(`
+        SELECT c.change_batch_id 
+        FROM Content c 
+        JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
+        WHERE c.id = $1 AND cb.merged_at IS NULL
+      `, [originalId]);
+      isStagedRow = result.rows.length > 0;
+    }
+
+    let row;
+    if (isStagedRow) {
+      const result = await client.query(
+        "UPDATE Content SET author_id = $1, payload = $2, headers = $3, change_batch_id = $4, promo = $5 WHERE id = $6 RETURNING *",
+        [authorId, payload, headers, batchId, promo, originalId]
+      );
+      row = result.rows[0];
+    } else {
+      const result = await client.query(
+        "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id, promo) VALUES ($1, $2, $3, false, $4, $5, $6) RETURNING *",
+        [authorId, payload, headers, originalId, batchId, promo]
+      );
+      row = result.rows[0];
+    }
+
+    if (tags && Array.isArray(tags) && (isStagedRow || tags.length > 0)) {
+      await pgTagSource.updateContentTags(client, row.id, tags);
+    }
+    if (groupIds && Array.isArray(groupIds) && (isStagedRow || groupIds.length > 0)) {
+      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+    }
+
+    await client.query('COMMIT');
+    return row;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbUpdateStagedContent(client: any, authorId: string, payload: any, headers: string | null, originalId: number, batchId: number) {
-  const result = await client.query(
-    "UPDATE Content SET author_id = $1, payload = $2, headers = $3, change_batch_id = $4 WHERE id = $5 RETURNING *",
-    [authorId, payload, headers, batchId, originalId]
-  );
-  return result.rows[0];
+export async function dbCreateContent(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO Content (author_id, payload, headers, is_visible, live_date, promo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [authorId, payload, headers, isVisible, liveDate, promo]
+    );
+    const row = result.rows[0];
+    
+    await client.query(
+      "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3)",
+      [row.id, authorId, 'Owner']
+    );
+
+    if (tags && Array.isArray(tags)) {
+      await pgTagSource.updateContentTags(client, row.id, tags);
+    }
+    if (groupIds && Array.isArray(groupIds)) {
+      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+    }
+
+    await client.query('COMMIT');
+    return row;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbInsertStagedContent(client: any, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number) {
-  const result = await client.query(
-    "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id) VALUES ($1, $2, $3, false, $4, $5) RETURNING *",
-    [authorId, payload, headers, originalId, batchId]
-  );
-  return result.rows[0];
-}
+export async function dbUpdateContent(contentId: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "UPDATE Content SET author_id = $1, payload = $2, headers = $3, is_visible = $4, live_date = $5, promo = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7 RETURNING *",
+      [authorId, payload, headers, isVisible, liveDate, promo, contentId]
+    );
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { error: "Content not found", status: 404 };
+    }
+    const row = result.rows[0];
 
-export async function dbCreateContent(client: any, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string) {
-  const result = await client.query(
-    "INSERT INTO Content (author_id, payload, headers, is_visible, live_date) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-    [authorId, payload, headers, isVisible, liveDate]
-  );
-  return result.rows[0];
-}
+    if (tags && Array.isArray(tags)) {
+      await pgTagSource.updateContentTags(client, row.id, tags);
+    }
+    if (groupIds && Array.isArray(groupIds)) {
+      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+    }
 
-export async function dbUpdateContent(client: any, contentId: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string) {
-  const result = await client.query(
-    "UPDATE Content SET author_id = $1, payload = $2, headers = $3, is_visible = $4, live_date = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $6 RETURNING *",
-    [authorId, payload, headers, isVisible, liveDate, contentId]
-  );
-  if (result.rows.length === 0) return { error: "Content not found", status: 404 };
-  return result.rows[0];
+    await client.query('COMMIT');
+    return row;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function dbUpdateContentTemplateGroups(client: any, contentId: number, groupIds: number[]) {
@@ -355,7 +391,41 @@ export async function dbUpdateContentTemplateGroups(client: any, contentId: numb
 export async function dbDeleteContent(contentId: number) {
   return await queryFirstRow("DELETE FROM Content WHERE id = $1 RETURNING id", [contentId], "Content not found");
 }
-import type { IContentSource } from "../models/interfaces.js";
+
+export async function dbAddContentUser(contentId: number, username: string, role: string) {
+  const result = await pool.query(
+    "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING role",
+    [contentId, username, role]
+  );
+  return result.rows[0].role;
+}
+
+export async function dbRemoveContentUser(contentId: number, username: string) {
+  await pool.query("DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2", [contentId, username]);
+}
+
+export async function dbGetContentUsers(contentId: number) {
+  const result = await pool.query("SELECT username, role FROM ContentUsers WHERE content_id = $1", [contentId]);
+  return result.rows;
+}
+
+export async function dbAddContentGroup(contentId: number, groupId: number, role: string) {
+  const result = await pool.query(
+    "INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING role",
+    [contentId, groupId, role]
+  );
+  return result.rows[0].role;
+}
+
+export async function dbRemoveContentGroup(contentId: number, groupId: number) {
+  await pool.query("DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2", [contentId, groupId]);
+}
+
+export async function dbGetContentGroups(contentId: number) {
+  const result = await pool.query("SELECT group_id, role FROM ContentUserGroups WHERE content_id = $1", [contentId]);
+  return result.rows;
+}
+
 export const pgContentSource: IContentSource = {
   getById: dbGetContentById,
   getHeaders: dbGetContentHeaders,
@@ -366,13 +436,10 @@ export const pgContentSource: IContentSource = {
   getCountOverlook: dbGetContentCountOverlook,
   getCountGuard: dbGetContentCountGuard,
   getCountPaywall: dbGetContentCountPaywall,
-  getForStaging: dbGetContentForStaging,
-  updateStaged: dbUpdateStagedContent,
-  insertStaged: dbInsertStagedContent,
+  stage: dbStageContent,
   create: dbCreateContent,
   update: dbUpdateContent,
   delete: dbDeleteContent,
-  updateTemplateGroups: dbUpdateContentTemplateGroups,
   addUser: dbAddContentUser,
   removeUser: dbRemoveContentUser,
   getUsers: dbGetContentUsers,
@@ -380,3 +447,5 @@ export const pgContentSource: IContentSource = {
   removeGroup: dbRemoveContentGroup,
   getGroups: dbGetContentGroups
 };
+
+

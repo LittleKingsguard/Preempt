@@ -1,4 +1,3 @@
-import { pool } from "../db.js";
 import { Tag } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
@@ -62,22 +61,15 @@ export class Template {
       return { error: "Validation Error", status: 400 };
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const row = await source.create(client, authorId, payload, groupId);
-      const template = new Template(row, source);
-      if (tags && Array.isArray(tags)) {
-        await Tag.updateTemplateTags(pgTagSource, client, template.id, tags);
-      }
-      await client.query('COMMIT');
-      return { template };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    const row = await source.create(authorId, payload, groupId, tags);
+    if ('error' in row) return row;
+    
+    const template = new Template(row, source);
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
     }
+    
+    return { template };
   }
 
   async update(user: any, payload: any, tags: string[], groupId: number | null = null): Promise<{ error: string, status: number } | { template: Template }> {
@@ -86,33 +78,19 @@ export class Template {
       return { error: "Validation Error", status: 400 };
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      if (this.author_id !== user.username && !user.is_admin) {
-        await client.query('ROLLBACK');
-        return { error: "Forbidden: Not the author", status: 403 };
-      }
-
-      const row = await this.source.update(client, this.id, payload, groupId);
-      if ('error' in row) {
-        await client.query('ROLLBACK');
-        return row;
-      }
-      Object.assign(this, row);
-      
-      if (tags && Array.isArray(tags)) {
-        await Tag.updateTemplateTags(pgTagSource, client, this.id, tags);
-      }
-      await client.query('COMMIT');
-      return { template: this };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    if (this.author_id !== user.username && !user.is_admin) {
+      return { error: "Forbidden: Not the author", status: 403 };
     }
+
+    const row = await this.source.update(this.id, payload, groupId, tags);
+    if ('error' in row) return row;
+    
+    Object.assign(this, row);
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
+    }
+    
+    return { template: this };
   }
 
   static async stage(source: ITemplateSource = pgTemplateSource, user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
@@ -121,48 +99,14 @@ export class Template {
       return { error: "Validation Error", status: 400 };
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      let actualGroupId = groupId;
-      let isStagedRow = false;
-      
-      if (originalId) {
-        const origRow = await source.getForStaging(client, originalId);
-        if ('error' in origRow) {
-          await client.query('ROLLBACK');
-          return origRow;
-        }
-        if (!actualGroupId) actualGroupId = origRow.group_id;
-        if (origRow.change_batch_id !== null && origRow.merged_at === null) isStagedRow = true;
-      }
-
-      let row;
-      if (isStagedRow) {
-        row = await source.updateStaged(client, originalId!, actualGroupId, payload, batchId);
-      } else {
-        row = await source.insertStaged(client, user.username, actualGroupId, payload, originalId, batchId);
-      }
-
-      if ('error' in row) {
-        await client.query('ROLLBACK');
-        return row;
-      }
-      
-      const template = new Template(row, source);
-
-      if (tags && Array.isArray(tags)) {
-        if (isStagedRow || tags.length > 0) {
-          await Tag.updateTemplateTags(pgTagSource, client, template.id, tags);
-        }
-      }
-      await client.query('COMMIT');
-      return { template };
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
+    const row = await source.stage(user.username, payload, originalId, batchId, groupId, tags);
+    if ('error' in row) return row;
+    
+    const template = new Template(row, source);
+    if (tags && tags.length > 0) {
+      Tag.addTagsToCache(tags);
     }
+    
+    return { template };
   }
 }

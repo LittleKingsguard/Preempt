@@ -26,15 +26,7 @@ export class Tag {
     return Array.from(this.tagCache);
   }
 
-  static async updateTemplateTags(source: ITagSource = pgTagSource, client: any, templateId: number, tags: string[]) {
-    await source.updateTemplateTags(client, templateId, tags);
-    if (tags) {
-      tags.forEach(t => this.tagCache.add(t));
-    }
-  }
-
-  static async updateContentTags(source: ITagSource = pgTagSource, client: any, contentId: number, tags: string[]) {
-    await source.updateContentTags(client, contentId, tags);
+  static addTagsToCache(tags: string[]) {
     if (tags) {
       tags.forEach(t => this.tagCache.add(t));
     }

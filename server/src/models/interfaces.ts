@@ -79,20 +79,17 @@ export interface IContentSource {
   getCountOverlook(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   getCountGuard(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   getCountPaywall(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
-  getForStaging(client: any, originalId: number): Promise<boolean>;
-  updateStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number, batchId: number, promo?: any): Promise<any>;
-  insertStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, promo?: any): Promise<any>;
-  create(client: any, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date, promo?: any): Promise<any>;
-  update(client: any, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date, promo?: any): Promise<any | { error: string; status: number }>;
+  stage(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any): Promise<any>;
+  create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any): Promise<any>;
+  update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any): Promise<any | { error: string; status: number }>;
   delete(id: number): Promise<any | { error: string; status: number }>;
-  updateTemplateGroups(client: any, contentId: number, groupIds: number[]): Promise<void>;
   
-  addUser(client: any, contentId: number, username: string, role: string): Promise<any>;
-  removeUser(client: any, contentId: number, username: string): Promise<void>;
+  addUser(contentId: number, username: string, role: string): Promise<any>;
+  removeUser(contentId: number, username: string): Promise<void>;
   getUsers(contentId: number): Promise<IContentUserData[]>;
   
-  addGroup(client: any, contentId: number, groupId: number, role: string): Promise<any>;
-  removeGroup(client: any, contentId: number, groupId: number): Promise<void>;
+  addGroup(contentId: number, groupId: number, role: string): Promise<any>;
+  removeGroup(contentId: number, groupId: number): Promise<void>;
   getGroups(contentId: number): Promise<IContentUserGroupData[]>;
 }
 
@@ -113,8 +110,8 @@ export interface IHandlerSource {
   create(name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
   update(id: number, name: string, body: string): Promise<any | { error: string; status: number }>;
   delete(id: number): Promise<any | { error: string; status: number }>;
-  updateTemplateHandlers(client: any, templateId: number, handlerNames: string[]): Promise<void>;
-  updateContentHandlers(client: any, contentId: number, handlerNames: string[]): Promise<void>;
+  updateTemplateHandlers(templateId: number, handlerNames: string[]): Promise<void>;
+  updateContentHandlers(contentId: number, handlerNames: string[]): Promise<void>;
   stage(name: string, body: string, authorId: string, originalId: number | null, batchId: number): Promise<any>;
   approve(id: number, isApproved: boolean): Promise<any | { error: string; status: number }>;
 }
@@ -136,13 +133,11 @@ export interface ITemplateSource {
   getById(id: number): Promise<any | { error: string; status: number }>;
   getForGroup(groupId: number): Promise<any[]>;
   getAll(): Promise<any[]>;
-  getAuthorId(client: any, templateId: number): Promise<string | { error: string; status: number }>;
-  create(client: any, authorId: string, payload: any, groupId: number | null): Promise<any>;
-  update(client: any, id: number, payload: any, groupId: number | null): Promise<any | { error: string; status: number }>;
+  getAuthorId(templateId: number): Promise<string | { error: string; status: number }>;
+  create(authorId: string, payload: any, groupId: number | null, tags: string[]): Promise<any>;
+  update(id: number, payload: any, groupId: number | null, tags: string[]): Promise<any | { error: string; status: number }>;
   delete(id: number): Promise<any | { error: string; status: number }>;
-  getForStaging(client: any, originalId: number): Promise<any | { error: string; status: number }>;
-  updateStaged(client: any, originalId: number, actualGroupId: number | null, payload: any, batchId: number): Promise<any>;
-  insertStaged(client: any, authorId: string, groupId: number | null, payload: any, originalId: number | null, batchId: number): Promise<any>;
+  stage(authorId: string, payload: any, originalId: number | null, batchId: number, groupId: number | null, tags: string[]): Promise<any>;
 }
 
 export interface IUserData {
