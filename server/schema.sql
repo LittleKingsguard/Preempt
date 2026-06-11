@@ -59,6 +59,7 @@ CREATE TABLE Content (
     id SERIAL PRIMARY KEY,
     author_id VARCHAR(255) REFERENCES Users(username),
     payload JSONB NOT NULL,
+    promo JSONB,
     live_date TIMESTAMP WITH TIME ZONE,
     is_visible BOOLEAN DEFAULT TRUE,
     headers TEXT,
@@ -67,6 +68,31 @@ CREATE TABLE Content (
     approved_roles TEXT[] DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ContentUsers (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    username VARCHAR(255) REFERENCES Users(username) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('Owner', 'Contributor', 'Commenter', 'Viewer')),
+    PRIMARY KEY (content_id, username)
+);
+
+CREATE TABLE UserGroups (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE UserGroupMembers (
+    group_id INT REFERENCES UserGroups(id) ON DELETE CASCADE,
+    username VARCHAR(255) REFERENCES Users(username) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, username)
+);
+
+CREATE TABLE ContentUserGroups (
+    content_id INT REFERENCES Content(id) ON DELETE CASCADE,
+    group_id INT REFERENCES UserGroups(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('Owner', 'Contributor', 'Commenter', 'Viewer')),
+    PRIMARY KEY (content_id, group_id)
 );
 
 CREATE TABLE ContentTemplateGroups (

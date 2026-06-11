@@ -101,7 +101,12 @@ router.get("/", authenticateToken, async (req: any, res) => {
     let defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (req.user && req.user.home_page) {
-      defaultIndexId = req.user.home_page;
+      const contentRes = await Content.getWithTemplate(pgContentSource, req.user.home_page, null, null, null, req.user);
+      if (contentRes && !('error' in contentRes)) {
+        defaultIndexId = req.user.home_page;
+      } else {
+        console.warn(`User homepage ${req.user.home_page} not found or forbidden, falling back to default`);
+      }
     }
 
     if (!defaultIndexId) {

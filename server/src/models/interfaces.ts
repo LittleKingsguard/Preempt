@@ -19,11 +19,45 @@ export interface IComponentSource {
   stage(name: string, payload: any, authorId: string, originalId: number | null, batchId: number): Promise<any>;
 }
 
+export interface IContentUserData {
+  content_id: number;
+  username: string;
+  role: string;
+}
+
+export interface IContentUserGroupData {
+  content_id: number;
+  group_id: number;
+  role: string;
+}
+
+export interface IUserGroupData {
+  id: number;
+  name: string;
+}
+
+export interface IUserGroupMemberData {
+  group_id: number;
+  username: string;
+}
+
+export interface IUserGroupSource {
+  getAll(): Promise<IUserGroupData[]>;
+  getById(id: number): Promise<IUserGroupData | { error: string; status: number }>;
+  create(name: string): Promise<IUserGroupData | { error: string; status: number }>;
+  delete(id: number): Promise<any | { error: string; status: number }>;
+  getMembers(groupId: number): Promise<IUserGroupMemberData[]>;
+  addMember(groupId: number, username: string): Promise<void>;
+  removeMember(groupId: number, username: string): Promise<void>;
+  getUserGroups(username: string): Promise<IUserGroupData[]>;
+}
+
 export interface IContentData {
   id: number;
   author_id: string;
   payload: any;
   template_payload?: any;
+  promo?: any;
   headers: string | null;
   is_visible: boolean;
   live_date: Date | null;
@@ -31,21 +65,35 @@ export interface IContentData {
   resolved_template_id: number;
   created_at?: Date;
   updated_at?: Date;
+  users?: IContentUserData[];
+  groups?: IContentUserGroupData[];
 }
 
 export interface IContentSource {
-  getById(id: number): Promise<any | { error: string; status: number }>;
+  getById(id: number, user?: any): Promise<any | { error: string; status: number }>;
   getHeaders(id: number): Promise<any>;
   query(query: string, params: any[]): Promise<any | { error: string; status: number }>;
-  getLatest(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }): Promise<any[]>;
-  getCount(criteria: { tags?: string[]; author?: string }): Promise<any>;
+  getLatestOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any): Promise<any[]>;
+  getLatestGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any, placeholder?: any): Promise<any[]>;
+  getLatestPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number }, user?: any): Promise<any[]>;
+  getCountOverlook(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
+  getCountGuard(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
+  getCountPaywall(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   getForStaging(client: any, originalId: number): Promise<boolean>;
-  updateStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number, batchId: number): Promise<any>;
-  insertStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number): Promise<any>;
-  create(client: any, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date): Promise<any>;
-  update(client: any, id: number, payload: any, headers: string | null, isVisible: boolean, liveDate: Date): Promise<any | { error: string; status: number }>;
+  updateStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number, batchId: number, promo?: any): Promise<any>;
+  insertStaged(client: any, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, promo?: any): Promise<any>;
+  create(client: any, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date, promo?: any): Promise<any>;
+  update(client: any, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date, promo?: any): Promise<any | { error: string; status: number }>;
   delete(id: number): Promise<any | { error: string; status: number }>;
   updateTemplateGroups(client: any, contentId: number, groupIds: number[]): Promise<void>;
+  
+  addUser(client: any, contentId: number, username: string, role: string): Promise<any>;
+  removeUser(client: any, contentId: number, username: string): Promise<void>;
+  getUsers(contentId: number): Promise<IContentUserData[]>;
+  
+  addGroup(client: any, contentId: number, groupId: number, role: string): Promise<any>;
+  removeGroup(client: any, contentId: number, groupId: number): Promise<void>;
+  getGroups(contentId: number): Promise<IContentUserGroupData[]>;
 }
 
 export interface IHandlerData {

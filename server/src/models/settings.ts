@@ -9,6 +9,10 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute cache
 
+export function clearCache() {
+  cache.clear();
+}
+
 export class Setting {
   static async get(source: ISettingSource = pgSettingSource, key: string): Promise<any> {
     const now = Date.now();
