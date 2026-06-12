@@ -41,10 +41,20 @@ export const pgUserGroupSource: IUserGroupSource = {
     return result.rows;
   },
 
-  async addMember(groupId: number, username: string): Promise<void> {
+  async addMember(groupId: number, username: string | string[]): Promise<void> {
+    const usernames = Array.isArray(username) ? username : [username];
+    if (usernames.length === 0) return;
+
+    const values = [];
+    const params: any[] = [];
+    for (let i = 0; i < usernames.length; i++) {
+      values.push(`($${i * 2 + 1}, $${i * 2 + 2})`);
+      params.push(groupId, usernames[i]);
+    }
+
     await pool.query(
-      "INSERT INTO UserGroupMembers (group_id, username) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-      [groupId, username]
+      `INSERT INTO UserGroupMembers (group_id, username) VALUES ${values.join(', ')} ON CONFLICT DO NOTHING`,
+      params
     );
   },
 

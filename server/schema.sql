@@ -215,3 +215,19 @@ CREATE TABLE Comments (
         (parent_comment_id IS NULL AND target_placement IS NOT NULL)
     )
 );
+
+CREATE TABLE MessageLists (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    group_id INTEGER NOT NULL REFERENCES UserGroups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Messages (
+    id SERIAL PRIMARY KEY,
+    message_list_id INTEGER NOT NULL REFERENCES MessageLists(id) ON DELETE CASCADE,
+    reply_target_id INTEGER REFERENCES Messages(id) ON DELETE CASCADE,
+    author_id VARCHAR(50) NOT NULL REFERENCES Users(username) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

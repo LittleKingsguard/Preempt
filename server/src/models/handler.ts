@@ -82,12 +82,12 @@ export class Handler {
     }
   }
 
-  static async updateTemplateHandlers(source: IHandlerSource = pgHandlerSource, client: any, templateId: number, handlerNames: string[]) {
-    await source.updateTemplateHandlers(client, templateId, handlerNames);
+  static async updateTemplateHandlers(source: IHandlerSource = pgHandlerSource, templateId: number, handlerNames: string[]) {
+    await source.updateTemplateHandlers(templateId, handlerNames);
   }
 
-  static async updateContentHandlers(source: IHandlerSource = pgHandlerSource, client: any, contentId: number, handlerNames: string[]) {
-    await source.updateContentHandlers(client, contentId, handlerNames);
+  static async updateContentHandlers(source: IHandlerSource = pgHandlerSource, contentId: number, handlerNames: string[]) {
+    await source.updateContentHandlers(contentId, handlerNames);
   }
 
   static async stage(source: IHandlerSource = pgHandlerSource, user: any, name: string, body: string, originalId: number | null, batchId: number) {

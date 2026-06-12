@@ -28,38 +28,58 @@ async function getDefaultCommentComponent() {
   return cachedDefaultComment;
 }
 
-function compileCommentToContent(commentRow: any, defaultCommentComp: any): IContentData {
-  let targetPlacement = [];
-  if (commentRow.parent_comment_id) {
-    targetPlacement.push(`comment-${commentRow.parent_comment_id}`);
-  } else if (commentRow.target_placement) {
-    targetPlacement.push(commentRow.target_placement);
+function compileCommentsToContent(commentRows: any[], defaultCommentComp: any): IContentData {
+  let minCreatedAt = Date.now();
+  let maxUpdatedAt = 0;
+
+  if (commentRows.length > 0) {
+    minCreatedAt = new Date(commentRows[0].created_at).getTime();
+    maxUpdatedAt = new Date(commentRows[0].updated_at).getTime();
   }
 
-  const payload = {
-    ...defaultCommentComp,
-    placement: targetPlacement.length > 0 ? { targetPlacement } : undefined,
-    component: [
-      { reference: 'commentAuthor', value: commentRow.author_id },
-      { reference: 'commentDate', value: new Date(commentRow.created_at).toISOString() },
-      { reference: 'commentBody', value: commentRow.body },
-      { reference: 'commentId', value: commentRow.id }
-    ]
-  };
+  const payload = commentRows.map(commentRow => {
+    const cTime = new Date(commentRow.created_at).getTime();
+    const uTime = new Date(commentRow.updated_at).getTime();
+    if (cTime < minCreatedAt) minCreatedAt = cTime;
+    if (uTime > maxUpdatedAt) maxUpdatedAt = uTime;
+
+    let targetPlacement = [];
+    if (commentRow.parent_comment_id) {
+      targetPlacement.push(`comment-${commentRow.parent_comment_id}`);
+    } else if (commentRow.target_placement) {
+      targetPlacement.push(commentRow.target_placement);
+    }
+
+    return {
+      ...defaultCommentComp,
+      placement: targetPlacement.length > 0 ? { targetPlacement } : undefined,
+      component: [
+        { reference: 'commentAuthor', value: commentRow.author_id },
+        { reference: 'commentDate', value: new Date(commentRow.created_at).toISOString() },
+        { reference: 'commentBody', value: commentRow.body },
+        { reference: 'commentId', value: commentRow.id }
+      ]
+    };
+  });
 
   return {
-    id: commentRow.id,
-    author_id: commentRow.author_id,
+    id: commentRows.length > 0 ? commentRows[0].comment_list_id : 0,
+    author_id: 'system',
     payload: payload,
     headers: null,
     is_visible: true,
-    live_date: new Date(commentRow.created_at),
+    live_date: new Date(),
     resolved_template_id: 0,
-    created_at: new Date(commentRow.created_at),
-    updated_at: new Date(commentRow.updated_at),
+    created_at: new Date(minCreatedAt),
+    updated_at: new Date(maxUpdatedAt || Date.now()),
     users: [],
     groups: []
   };
+}
+
+export async function getCommentAuthor(commentId: number) {
+  const row = await queryFirstRow("SELECT author_id FROM Comments WHERE id = $1", [commentId]);
+  return row ? row.author_id : null;
 }
 
 export const pgCommentSource: IContentSource = {
@@ -73,7 +93,7 @@ export const pgCommentSource: IContentSource = {
     const row = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [id], "Comment not found");
     if (row && !('error' in row)) {
       const defaultComp = await getDefaultCommentComponent();
-      return compileCommentToContent(row, defaultComp);
+      return compileCommentsToContent([row], defaultComp);
     }
     return row;
   },
@@ -81,14 +101,14 @@ export const pgCommentSource: IContentSource = {
   async query(query: string, params: any[]) {
     const result = await pool.query(query, params);
     const defaultComp = await getDefaultCommentComponent();
-    return result.rows.map(row => compileCommentToContent(row, defaultComp));
+    return [compileCommentsToContent(result.rows, defaultComp)];
   },
 
   async getLatestOverlook(criteria: any, user?: any) {
     let query = "SELECT * FROM Comments";
     const params: any[] = [];
-    if (criteria && criteria.comment_list_id) {
-      params.push(criteria.comment_list_id);
+    if (criteria && criteria.list_id) {
+      params.push(criteria.list_id);
       query += " WHERE comment_list_id = $1 ORDER BY created_at ASC";
     } else {
       query += " ORDER BY created_at DESC";
@@ -140,7 +160,7 @@ export const pgCommentSource: IContentSource = {
       [comment_list_id, parent_comment_id || null, target_placement || null, authorId, body]
     );
     const defaultComp = await getDefaultCommentComponent();
-    return compileCommentToContent(row, defaultComp);
+    return compileCommentsToContent([row], defaultComp);
   },
 
   async update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
@@ -151,7 +171,7 @@ export const pgCommentSource: IContentSource = {
     );
     if (row && !('error' in row)) {
       const defaultComp = await getDefaultCommentComponent();
-      return compileCommentToContent(row, defaultComp);
+      return compileCommentsToContent([row], defaultComp);
     }
     return row;
   },

@@ -41,7 +41,7 @@ export class UserGroup {
     return await source.getMembers(this.id);
   }
 
-  async addMember(user: any, username: string, source: IUserGroupSource = pgUserGroupSource) {
+  async addMember(user: any, username: string | string[], source: IUserGroupSource = pgUserGroupSource) {
     if (!user || !user.is_admin) {
       return { error: "Forbidden: Only admins can manage group members", status: 403 };
     }

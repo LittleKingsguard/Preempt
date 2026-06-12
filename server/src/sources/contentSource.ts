@@ -44,7 +44,7 @@ export async function dbGetContentById(id: number, user?: any) {
   return row;
 }
 
-export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any) {
+export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any) {
   let query = `
     SELECT c.* 
     FROM Content c
@@ -110,7 +110,7 @@ export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; au
   return rows;
 }
 
-export async function dbGetLatestContentGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any, placeholder?: any) {
+export async function dbGetLatestContentGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any, placeholder?: any) {
   const rows = await dbGetLatestContentAll(criteria);
   const now = new Date();
   for (const row of rows) {
@@ -130,7 +130,7 @@ export async function dbGetLatestContentGuard(criteria: { tags?: string[]; autho
   return rows;
 }
 
-export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}, user?: any) {
+export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any) {
   const rows = await dbGetLatestContentAll(criteria);
   const now = new Date();
   for (const row of rows) {
@@ -149,7 +149,7 @@ export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; aut
   return rows;
 }
 
-async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; comment_list_id?: number } = {}) {
+async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}) {
   let query = `
     SELECT c.* 
     FROM Content c

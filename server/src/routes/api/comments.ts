@@ -1,7 +1,6 @@
 import { Router } from 'express';
-import { pgCommentSource } from '../../sources/commentSource.js';
+import { pgCommentSource, getCommentAuthor } from '../../sources/commentSource.js';
 import { Content } from '../../models/content.js';
-import { queryFirstRow } from '../../utils/db.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
 const router = Router();
@@ -36,7 +35,7 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
   const comments = await pgCommentSource.getLatestOverlook({ 
-    comment_list_id: commentListId,
+    list_id: commentListId,
     limit,
     offset
   });
@@ -91,14 +90,14 @@ router.delete('/:commentListId/:commentId', authenticateToken, async (req: any, 
   if (!context) return res.status(404).json({ error: "Comment list not found" });
 
   // Load the comment to check ownership
-  const commentRes = await pgCommentSource.getById(commentId);
-  if (!commentRes || 'error' in commentRes) {
+  const authorId = await getCommentAuthor(commentId);
+  if (!authorId) {
     return res.status(404).json({ error: "Comment not found" });
   }
 
   // To delete: must be comment author OR have Admin / Owner permissions on the content
   let canDelete = false;
-  if (req.user.is_admin || commentRes.author_id === req.user.username) {
+  if (req.user.is_admin || authorId === req.user.username) {
     canDelete = true;
   } else if (context.subject_type === 'Content') {
     const contentRes = await Content.getById(undefined, context.subject_id, req.user);

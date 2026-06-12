@@ -32,33 +32,33 @@ export async function dbUpdateHandler(id: number, name: string, body: string) {
   );
 }
 
-export async function dbUpdateTemplateHandlers(client: any, templateId: number, handlerNames: string[]) {
+export async function dbUpdateTemplateHandlers(templateId: number, handlerNames: string[]) {
   if (!handlerNames || handlerNames.length === 0) {
-    await client.query("DELETE FROM TemplateHandlers WHERE template_id = $1", [templateId]);
+    await pool.query("DELETE FROM TemplateHandlers WHERE template_id = $1", [templateId]);
     return;
   }
 
-  const result = await client.query("SELECT id FROM Handlers WHERE name = ANY($1::text[])", [handlerNames]);
+  const result = await pool.query("SELECT id FROM Handlers WHERE name = ANY($1::text[])", [handlerNames]);
   const handlerIds = result.rows.map((r: any) => r.id);
 
-  await client.query("DELETE FROM TemplateHandlers WHERE template_id = $1", [templateId]);
+  await pool.query("DELETE FROM TemplateHandlers WHERE template_id = $1", [templateId]);
   if (handlerIds.length > 0) {
-    await client.query("INSERT INTO TemplateHandlers (template_id, handler_id) SELECT $1, unnest($2::int[])", [templateId, handlerIds]);
+    await pool.query("INSERT INTO TemplateHandlers (template_id, handler_id) SELECT $1, unnest($2::int[])", [templateId, handlerIds]);
   }
 }
 
-export async function dbUpdateContentHandlers(client: any, contentId: number, handlerNames: string[]) {
+export async function dbUpdateContentHandlers(contentId: number, handlerNames: string[]) {
   if (!handlerNames || handlerNames.length === 0) {
-    await client.query("DELETE FROM ContentHandlers WHERE content_id = $1", [contentId]);
+    await pool.query("DELETE FROM ContentHandlers WHERE content_id = $1", [contentId]);
     return;
   }
 
-  const result = await client.query("SELECT id FROM Handlers WHERE name = ANY($1::text[])", [handlerNames]);
+  const result = await pool.query("SELECT id FROM Handlers WHERE name = ANY($1::text[])", [handlerNames]);
   const handlerIds = result.rows.map((r: any) => r.id);
 
-  await client.query("DELETE FROM ContentHandlers WHERE content_id = $1", [contentId]);
+  await pool.query("DELETE FROM ContentHandlers WHERE content_id = $1", [contentId]);
   if (handlerIds.length > 0) {
-    await client.query("INSERT INTO ContentHandlers (content_id, handler_id) SELECT $1, unnest($2::int[])", [contentId, handlerIds]);
+    await pool.query("INSERT INTO ContentHandlers (content_id, handler_id) SELECT $1, unnest($2::int[])", [contentId, handlerIds]);
   }
 }
 
