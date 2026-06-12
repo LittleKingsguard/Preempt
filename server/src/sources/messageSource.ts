@@ -75,18 +75,6 @@ function compileMessagesToContent(messageRows: any[], defaultMessageComp: any): 
   };
 }
 
-export async function getMessageListGroup(listId: number) {
-  const row = await queryFirstRow("SELECT group_id FROM MessageLists WHERE id = $1", [listId]);
-  return row ? row.group_id : null;
-}
-
-export async function createMessageList(groupId: number, name?: string) {
-  return await queryFirstRow(
-    "INSERT INTO MessageLists (name, group_id) VALUES ($1, $2) RETURNING *",
-    [name || null, groupId]
-  );
-}
-
 export async function getMessageAuthor(messageId: number) {
   const row = await queryFirstRow("SELECT author_id FROM Messages WHERE id = $1", [messageId]);
   return row ? row.author_id : null;

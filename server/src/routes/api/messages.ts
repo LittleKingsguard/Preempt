@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { pgMessageSource, getMessageListGroup, createMessageList, getMessageAuthor } from '../../sources/messageSource.js';
+import { pgMessageSource, getMessageAuthor } from '../../sources/messageSource.js';
+import { pgMessageListSource, getMessageListGroup, createMessageList } from '../../sources/messageListSource.js';
 import { pgUserGroupSource } from '../../sources/userGroupSource.js';
 import { authenticateToken } from '../../middleware/auth.js';
 
 const router = Router();
 
 import { UserGroup } from '../../models/userGroup.js';
+import { Content } from '../../models/content.js';
 
 async function isUserInGroup(groupId: number, username: string) {
   const group = await UserGroup.getById(groupId);
@@ -54,6 +56,21 @@ router.post('/', authenticateToken, async (req: any, res) => {
   const listRow = await createMessageList(group_id, listName);
 
   res.json({ messageList: listRow });
+});
+
+// Get accessible message lists
+router.get('/', authenticateToken, async (req: any, res) => {
+  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+  const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+
+  try {
+    const lists = await Content.getLatest(pgMessageListSource, { list_id: req.user.username, limit, offset } as any, req.user);
+    res.json(lists);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch message lists", details: error.message });
+  }
 });
 
 // Get messages for a list
