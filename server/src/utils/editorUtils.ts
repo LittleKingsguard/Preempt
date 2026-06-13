@@ -50,40 +50,5 @@ export async function injectEditorDependencies(targetPayload: any, templatePaylo
     }
   }
 
-  if (!hasEditorTag) {
-    const basePayload = templatePayload || targetPayload;
-    if (!basePayload.content) basePayload.content = [];
-    if (!Array.isArray(basePayload.content)) {
-      basePayload.content = [basePayload.content];
-    }
-    basePayload.content.push({
-      type: "div",
-      component: [
-        { reference: "PreemptEditor", target: "type" },
-        { reference: "editorMode", target: "props.mode", value: editorMode }
-      ]
-    });
-
-    const editorComponent = await queryFirstRow(`SELECT payload FROM Components WHERE name = 'PreemptEditor'`);
-    if (editorComponent) {
-      if (!targetPayload.component) targetPayload.component = [];
-      targetPayload.component.push({
-        reference: "PreemptEditor",
-        value: editorComponent.payload
-      });
-    }
-
-    const editorHandlersRes = await pool.query(`
-      SELECT h.name, h.body FROM Handlers h
-      JOIN ComponentHandlers ch ON h.id = ch.handler_id
-      JOIN Components c ON ch.component_id = c.id
-      WHERE c.name = 'PreemptEditor'
-    `);
-    editorHandlersRes.rows.forEach((h: any) => {
-      targetPayload.component.push({
-        reference: h.name,
-        value: h.body
-      });
-    });
-  }
+  // Editor tag checks and injections are handled directly in content.ts now
 }

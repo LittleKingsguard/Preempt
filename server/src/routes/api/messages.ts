@@ -89,10 +89,11 @@ router.get('/:messageListId', authenticateToken, async (req: any, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
-  const messages = await pgMessageSource.getLatestOverlook({ 
+  const messages = await pgMessageSource.get({ 
     list_id: messageListId,
     limit,
-    offset
+    offset,
+    hide_pattern: 'Overlook'
   });
   
   res.json(messages);

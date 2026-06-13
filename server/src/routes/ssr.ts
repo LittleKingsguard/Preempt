@@ -1,6 +1,7 @@
 import express from "express";
 import { Content } from "../models/content.js";
 import { pgContentSource } from "../sources/contentSource.js";
+import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
 import { Setting } from "../models/settings.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
@@ -24,7 +25,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 
   try {
-    const contentRes = await Content.getWithTemplate(pgContentSource, contentId, null, null, editorMode, req.user);
+    const contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, contentId, null, null, editorMode, req.user);
     if (!contentRes || 'error' in contentRes) {
       return res.status((contentRes as any)?.status || 404).send((contentRes as any)?.error || "Content not found");
     }
@@ -101,7 +102,7 @@ router.get("/", authenticateToken, async (req: any, res) => {
     let defaultIndexId = (setting && setting.id) ? setting.id : null;
 
     if (req.user && req.user.home_page) {
-      const contentRes = await Content.getWithTemplate(pgContentSource, req.user.home_page, null, null, null, req.user);
+      const contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, req.user.home_page, null, null, null, req.user);
       if (contentRes && !('error' in contentRes)) {
         defaultIndexId = req.user.home_page;
       } else {

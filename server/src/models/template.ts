@@ -5,10 +5,10 @@ import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgTagSource } from "../sources/tagSource.js";
-import type { ITemplateData, ITemplateSource } from "./interfaces.js";
+import type { IContentData, IContentSource } from "./interfaces.js";
 
 export class Template {
-  source: ITemplateSource;
+  source: IContentSource;
   id: number;
   payload: any;
   author_id: string;
@@ -20,7 +20,7 @@ export class Template {
   created_at: Date;
   updated_at: Date;
 
-  constructor(data: ITemplateData, source: ITemplateSource = pgTemplateSource) {
+  constructor(data: IContentData, source: IContentSource = pgTemplateSource) {
     this.source = source;
     this.id = data.id;
     this.payload = data.payload;
@@ -34,7 +34,7 @@ export class Template {
     this.updated_at = data.updated_at || new Date();
   }
 
-  static async getById(source: ITemplateSource = pgTemplateSource, id: number, editorMode: string | null = null, user: any = null) {
+  static async getById(source: IContentSource = pgTemplateSource, id: number, editorMode: string | null = null, user: any = null) {
     const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
     const row = await fetchTemplateRecord(templateIdToFetch);
     if ('error' in row) return row;
@@ -55,13 +55,13 @@ export class Template {
     return { template };
   }
 
-  static async create(source: ITemplateSource = pgTemplateSource, authorId: string, payload: any, tags: string[], groupId: number | null = null) {
+  static async create(source: IContentSource = pgTemplateSource, authorId: string, payload: any, tags: string[], groupId: number | null = null) {
     const virtualNode = new Node(payload);
     if (!virtualNode.validate(true)) {
       return { error: "Validation Error", status: 400 };
     }
 
-    const row = await source.create(authorId, payload, groupId, tags);
+    const row = await source.create(authorId, payload, null, true, null, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     const template = new Template(row, source);
@@ -82,7 +82,7 @@ export class Template {
       return { error: "Forbidden: Not the author", status: 403 };
     }
 
-    const row = await this.source.update(this.id, payload, groupId, tags);
+    const row = await this.source.update(this.id, this.author_id, payload, null, true, null, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     Object.assign(this, row);
@@ -93,13 +93,13 @@ export class Template {
     return { template: this };
   }
 
-  static async stage(source: ITemplateSource = pgTemplateSource, user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
+  static async stage(source: IContentSource = pgTemplateSource, user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
     const virtualNode = new Node(payload);
     if (!virtualNode.validate(true)) {
       return { error: "Validation Error", status: 400 };
     }
 
-    const row = await source.stage(user.username, payload, originalId, batchId, groupId, tags);
+    const row = await source.stage(user.username, payload, null, originalId, batchId, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     const template = new Template(row, source);

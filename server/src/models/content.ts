@@ -1,8 +1,9 @@
-import { buildContentQuery, applyEditorTemplateOverride, checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
+import { checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Tag } from "./tag.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgContentSource } from "../sources/contentSource.js";
+import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgTagSource } from "../sources/tagSource.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
 import { Setting } from "./settings.js";
@@ -10,6 +11,7 @@ import type { IContentData, IContentSource, IContentUserData, IContentUserGroupD
 
 export class Content {
   static guardPlaceholderCache: any = null;
+  static defaultEditorCache: any = null;
   source: IContentSource;
   id: number;
   author_id: string;
@@ -22,6 +24,9 @@ export class Content {
   live_date: Date | null;
   approved_roles: string[];
   resolved_template_id: number;
+  change_batch_id?: number | null;
+  tags?: string[];
+  template_group_id?: number | null;
   created_at: Date;
   updated_at: Date;
   users?: IContentUserData[];
@@ -40,6 +45,9 @@ export class Content {
     this.live_date = data.live_date || null;
     this.approved_roles = data.approved_roles || [];
     this.resolved_template_id = data.resolved_template_id;
+    this.change_batch_id = data.change_batch_id || null;
+    this.tags = data.tags || [];
+    this.template_group_id = data.template_group_id || null;
     this.created_at = data.created_at || new Date();
     this.updated_at = data.updated_at || new Date();
     this.users = data.users || [];
@@ -68,8 +76,8 @@ export class Content {
   }
 
   static async getById(source: IContentSource = pgContentSource, id: number, user?: any) {
-    const row = await source.getById(id, user);
-    if ('error' in row) return row;
+    const row = await source.get({ id }, user);
+    if (!row || 'error' in row) return row || { error: "Content not found", status: 404 };
     return new Content(row, source);
   }
 
@@ -77,17 +85,31 @@ export class Content {
     return await source.getHeaders(id);
   }
 
-  static async getWithTemplate(source: IContentSource = pgContentSource, contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
-    const { query, params } = buildContentQuery(contentId, templateId, tagsParam, editorMode);
-    const row = await source.query(query, params);
-    if ('error' in row) return row;
+  static async getWithTemplate(source: IContentSource = pgContentSource, templateSource: IContentSource = pgTemplateSource, contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
+    const contentRow = await source.get({ id: contentId }, user);
+    if (!contentRow || 'error' in contentRow) return contentRow || { error: "Content not found", status: 404 };
 
-    const content = new Content(row, source);
+    const content = new Content(contentRow, source);
 
-    if (editorMode) {
-      await applyEditorTemplateOverride(row);
-      content.template_payload = row.template_payload;
-    } else if (!(await checkContentSecurity(content.resolved_template_id, editorMode))) {
+    let templateRow;
+    if (templateId) {
+      templateRow = await templateSource.get({ id: templateId }, user);
+    } else {
+      const tagsArray = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(t => t) : [];
+      if (editorMode) tagsArray.push("editor");
+
+      const templates = await templateSource.get({ list_id: contentRow.template_group_id, tags: tagsArray }, user);
+      templateRow = templates && templates.length > 0 ? templates[0] : null;
+    }
+
+    if (!templateRow || 'error' in templateRow) {
+      return { error: "Template not found", status: 404 };
+    }
+
+    content.template_payload = templateRow.payload;
+    content.resolved_template_id = templateRow.id;
+
+    if (!editorMode && !(await checkContentSecurity(content.resolved_template_id, editorMode))) {
       return { error: "Security check failed", status: 403 };
     }
 
@@ -121,6 +143,37 @@ export class Content {
 
     if (editorMode) {
       const hasEditorTag = await checkHasEditorTag(content.resolved_template_id);
+      
+      if (!hasEditorTag) {
+        if (!Content.defaultEditorCache) {
+          Content.defaultEditorCache = await Setting.get(pgSettingSource, "defaultEditor");
+        }
+        const defaultEditor = Content.defaultEditorCache;
+        if (defaultEditor) {
+          const basePayload = content.template_payload || content.payload;
+          if (!basePayload.content) basePayload.content = [];
+          if (!Array.isArray(basePayload.content)) {
+            basePayload.content = [basePayload.content];
+          }
+          basePayload.content.push({
+            type: "div",
+            component: [
+              { reference: "PreemptEditor", target: "type" },
+              { reference: "editorMode", target: "props.mode", value: editorMode }
+            ]
+          });
+
+          if (!content.payload.component) content.payload.component = [];
+          
+          if (defaultEditor.component) {
+            content.payload.component.push(defaultEditor.component);
+          }
+          if (defaultEditor.handlers) {
+            content.payload.component.push(...defaultEditor.handlers);
+          }
+        }
+      }
+
       await injectEditorDependencies(content.payload, content.template_payload, editorMode, hasEditorTag);
     }
 
@@ -130,31 +183,22 @@ export class Content {
   static async getLatest(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}, user?: any) {
     const behavior = await Setting.get(undefined, "contentReturnBehavior") || "Overlook";
     
-    let rows;
+    let placeholder;
     if (behavior === "Guard") {
       if (!Content.guardPlaceholderCache) {
          Content.guardPlaceholderCache = await Setting.get(undefined, "guardPlaceholder");
       }
-      rows = await source.getLatestGuard(criteria, user, Content.guardPlaceholderCache);
-    } else if (behavior === "Paywall") {
-      rows = await source.getLatestPaywall(criteria, user);
-    } else {
-      rows = await source.getLatestOverlook(criteria, user);
+      placeholder = Content.guardPlaceholderCache;
     }
-
-    const contents = rows.map(r => new Content(r, source));
+    
+    const rows = await source.get({ ...criteria, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user, placeholder);
+    const contents = rows.map((r: any) => new Content(r, source));
     return contents;
   }
   static async getCount(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string } = {}, user?: any) {
     const behavior = await Setting.get(undefined, "contentReturnBehavior") || "Overlook";
     
-    if (behavior === "Guard") {
-      return await source.getCountGuard(criteria, user);
-    } else if (behavior === "Paywall") {
-      return await source.getCountPaywall(criteria, user);
-    } else {
-      return await source.getCountOverlook(criteria, user);
-    }
+    return await source.get({ ...criteria, count_only: true, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user);
   }
 
 

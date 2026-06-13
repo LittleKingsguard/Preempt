@@ -1,8 +1,10 @@
 import { pool } from "../db.js";
+import { queryFirstRow } from "../utils/db.js";
 import { pgTagSource } from "./tagSource.js";
-import type { ITemplateSource } from "../models/interfaces.js";
+import type { IContentSource } from "../models/interfaces.js";
 
-export async function dbCreateTemplate(authorId: string, payload: any, groupId: number | null, tags: string[]) {
+export async function dbCreateTemplate(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+  const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -32,13 +34,14 @@ export async function dbGetTemplateAuthorId(templateId: number) {
   return result.rows[0].author_id;
 }
 
-export async function dbUpdateTemplate(templateId: number, payload: any, groupId: number | null, tags: string[]) {
+export async function dbUpdateTemplate(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+  const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await client.query(
       "UPDATE Templates SET payload = $1, group_id = COALESCE($2, group_id), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
-      [payload, groupId, templateId]
+      [payload, groupId, id]
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -60,7 +63,8 @@ export async function dbUpdateTemplate(templateId: number, payload: any, groupId
   }
 }
 
-export async function dbStageTemplate(authorId: string, payload: any, originalId: number | null, batchId: number, groupId: number | null, tags: string[]) {
+export async function dbStageTemplate(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+  const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -118,13 +122,48 @@ export async function dbStageTemplate(authorId: string, payload: any, originalId
   }
 }
 
-export const pgTemplateSource: ITemplateSource = {
-  getById: (id: number) => { throw new Error("Not implemented yet"); },
-  getForGroup: (id: number) => { throw new Error("Not implemented yet"); },
-  getAll: () => { throw new Error("Not implemented yet"); },
+export async function dbGetTemplate(criteria: { count_only?: boolean; id?: number; list_id?: number; tags?: string[] } = {}, user?: any, placeholder?: any) {
+  if (criteria.id !== undefined) {
+    const row = await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [criteria.id], "Template not found");
+    return row;
+  }
+
+  if (criteria.list_id !== undefined) {
+    let query = `
+      SELECT t.*,
+        (
+          SELECT count(*)
+          FROM TemplateTags tt
+          JOIN Tags tag ON tt.tag_id = tag.id
+          WHERE tt.template_id = t.id AND tag.name = ANY($2::text[])
+        ) as match_count,
+        (t.id = tg.default_template_id) as is_default
+      FROM Templates t
+      JOIN TemplateGroups tg ON tg.id = t.group_id
+      WHERE t.group_id = $1
+      ORDER BY match_count DESC, is_default DESC, t.id ASC
+      LIMIT 1
+    `;
+    const params = [criteria.list_id, criteria.tags || []];
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+
+  throw new Error("Invalid criteria for dbGetTemplate: must provide id or list_id");
+}
+
+export const pgTemplateSource: IContentSource = {
+  get: dbGetTemplate,
+  getHeaders: async () => { throw new Error("Not implemented yet"); },
+  query: async () => { throw new Error("Not implemented yet"); },
   create: dbCreateTemplate,
-  getAuthorId: dbGetTemplateAuthorId as any,
   update: dbUpdateTemplate,
   stage: dbStageTemplate,
-  delete: (id: number) => { throw new Error("Not implemented"); }
+  delete: async (id: number) => { throw new Error("Not implemented"); },
+  addUser: async () => { throw new Error("Not implemented"); },
+  removeUser: async () => { throw new Error("Not implemented"); },
+  getUsers: async () => { throw new Error("Not implemented"); },
+  addGroup: async () => { throw new Error("Not implemented"); },
+  removeGroup: async () => { throw new Error("Not implemented"); },
+  getGroups: async () => { throw new Error("Not implemented"); }
 };

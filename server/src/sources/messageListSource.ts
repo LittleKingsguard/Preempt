@@ -102,28 +102,24 @@ export const pgMessageListSource: IContentSource = {
     return null;
   },
 
-  async getById(id: number, user?: any) {
-    const query = `
-      SELECT ml.id, ml.name, ml.group_id,
-        (SELECT row_to_json(m) FROM Messages m WHERE m.message_list_id = ml.id ORDER BY m.created_at DESC LIMIT 1) as recent_message
-      FROM MessageLists ml
-      WHERE ml.id = $1
-    `;
-    const row = await queryFirstRow(query, [id], "Message list not found");
-    if (row && !('error' in row)) {
-      const defaultComp = await getDefaultMessageListComponent();
-      return compileMessageListsToContent([row], defaultComp);
+  async get(criteria: any, user?: any, placeholder?: any) {
+    if (criteria.count_only) return { count: 0 };
+
+    if (criteria.id !== undefined) {
+      const query = `
+        SELECT ml.id, ml.name, ml.group_id,
+          (SELECT row_to_json(m) FROM Messages m WHERE m.message_list_id = ml.id ORDER BY m.created_at DESC LIMIT 1) as recent_message
+        FROM MessageLists ml
+        WHERE ml.id = $1
+      `;
+      const row = await queryFirstRow(query, [criteria.id], "Message list not found");
+      if (row && !('error' in row)) {
+        const defaultComp = await getDefaultMessageListComponent();
+        return compileMessageListsToContent([row], defaultComp);
+      }
+      return row;
     }
-    return row;
-  },
 
-  async query(query: string, params: any[]) {
-    const result = await pool.query(query, params);
-    const defaultComp = await getDefaultMessageListComponent();
-    return [compileMessageListsToContent(result.rows, defaultComp)];
-  },
-
-  async getLatestOverlook(criteria: any, user?: any) {
     let username = user ? user.username : null;
     let limit = 50;
     let offset = 0;
@@ -150,12 +146,13 @@ export const pgMessageListSource: IContentSource = {
     return [compileMessageListsToContent(result.rows, defaultComp)];
   },
 
-  async getLatestGuard(criteria: any, user?: any, placeholder?: any) { return this.getLatestOverlook(criteria, user); },
-  async getLatestPaywall(criteria: any, user?: any) { return this.getLatestOverlook(criteria, user); },
+  async query(query: string, params: any[]) {
+    const result = await pool.query(query, params);
+    const defaultComp = await getDefaultMessageListComponent();
+    return [compileMessageListsToContent(result.rows, defaultComp)];
+  },
+
   async getHeaders(id: number) { return null; },
-  async getCountOverlook(criteria: any, user?: any) { return { count: 0 }; },
-  async getCountGuard(criteria: any, user?: any) { return { count: 0 }; },
-  async getCountPaywall(criteria: any, user?: any) { return { count: 0 }; },
   async create() { return { error: "Not supported", status: 400 }; },
   async update() { return { error: "Not supported", status: 400 }; },
   async delete(id: number) { return { error: "Not supported", status: 400 }; },

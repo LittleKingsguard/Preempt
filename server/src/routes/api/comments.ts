@@ -34,10 +34,11 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
-  const comments = await pgCommentSource.getLatestOverlook({ 
+  const comments = await pgCommentSource.get({ 
     list_id: commentListId,
     limit,
-    offset
+    offset,
+    hide_pattern: 'Overlook'
   });
   res.json(comments);
 });

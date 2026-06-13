@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Content } from "../../models/content.js";
 import { pgContentSource } from "../../sources/contentSource.js";
+import { pgTemplateSource } from "../../sources/templateSource.js";
 
 const router = express.Router();
 
@@ -16,11 +17,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
     let contentRes = null;
     
     if (clientTemplateId) {
-      contentRes = await Content.getWithTemplate(pgContentSource, contentId, clientTemplateId, null, null, user);
+      contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, contentId, clientTemplateId, null, null, user);
     }
     
     if (!contentRes || 'error' in contentRes) {
-      contentRes = await Content.getWithTemplate(pgContentSource, contentId, templateId, tagsParam, null, user);
+      contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, contentId, templateId, tagsParam, null, user);
     }
 
     if (!contentRes || 'error' in contentRes) {

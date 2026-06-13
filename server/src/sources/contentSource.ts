@@ -34,23 +34,35 @@ export async function dbGetContentQuery(query: string, params: any[]) {
   return row;
 }
 
-export async function dbGetContentById(id: number, user?: any) {
-  const row = await queryFirstRow("SELECT * FROM Content WHERE id = $1", [id], "Content not found");
-  if (row && !('error' in row)) {
-    row.users = await dbGetContentUsers(row.id);
-    row.groups = await dbGetContentGroups(row.id);
-    row.metadata = await attachContentMetadata(row);
+export async function dbGetContent(criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] } = {}, user?: any, placeholder?: any) {
+  let selectClause = 'c.*';
+  if (criteria.columns && criteria.columns.length > 0) {
+    selectClause = criteria.columns
+      .filter(col => col !== 'tags')
+      .map(col => col.includes('.') ? col : `c.${col}`)
+      .join(', ');
+    if (selectClause === '') selectClause = 'c.id';
   }
-  return row;
-}
 
-export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any) {
+  if (!criteria.count_only) {
+    selectClause += ', (SELECT group_id FROM ContentTemplateGroups WHERE content_id = c.id LIMIT 1) as template_group_id';
+  }
+
+  if (!criteria.count_only && (!criteria.columns || criteria.columns.includes('tags'))) {
+    selectClause += ', ARRAY(SELECT t.name FROM ContentTags ct JOIN Tags t ON ct.tag_id = t.id WHERE ct.content_id = c.id) as tags';
+  }
+
   let query = `
-    SELECT c.* 
+    SELECT ${criteria.count_only ? 'COUNT(*) as count' : selectClause}
     FROM Content c
   `;
   const params: any[] = [];
   const conditions: string[] = [];
+
+  if (criteria.id !== undefined) {
+    params.push(criteria.id);
+    conditions.push(`c.id = $${params.length}`);
+  }
 
   if (criteria.tags && criteria.tags.length > 0) {
     for (const tag of criteria.tags) {
@@ -68,20 +80,23 @@ export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; au
     conditions.push(`c.author_id = $${params.length}`);
   }
 
-  if (!user || !user.is_admin) {
-    if (user && user.username) {
-      params.push(user.username);
-      conditions.push(`(
-        (c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP))
-        OR EXISTS (SELECT 1 FROM ContentUsers cu WHERE cu.content_id = c.id AND cu.username = $${params.length})
-        OR EXISTS (
-          SELECT 1 FROM ContentUserGroups cug 
-          JOIN UserGroupMembers ugm ON cug.group_id = ugm.group_id 
-          WHERE cug.content_id = c.id AND ugm.username = $${params.length}
-        )
-      )`);
-    } else {
-      conditions.push(`c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP)`);
+  if (criteria.hide_pattern === 'Overlook') {
+    if (!user || !user.is_admin) {
+      if (user && user.username) {
+        params.push(user.username);
+        conditions.push(`(
+          (c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP))
+          OR c.author_id = $${params.length}
+          OR EXISTS (SELECT 1 FROM ContentUsers cu WHERE cu.content_id = c.id AND cu.username = $${params.length})
+          OR EXISTS (
+            SELECT 1 FROM ContentUserGroups cug 
+            JOIN UserGroupMembers ugm ON cug.group_id = ugm.group_id 
+            WHERE cug.content_id = c.id AND ugm.username = $${params.length}
+          )
+        )`);
+      } else {
+        conditions.push(`c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP)`);
+      }
     }
   }
 
@@ -89,199 +104,79 @@ export async function dbGetLatestContentOverlook(criteria: { tags?: string[]; au
     query += ` WHERE ` + conditions.join(' AND ');
   }
 
-  query += ` ORDER BY c.created_at DESC`;
+  if (!criteria.count_only) {
+    query += ` ORDER BY c.created_at DESC`;
+    if (criteria.limit !== undefined) {
+      params.push(criteria.limit);
+      query += ` LIMIT $${params.length}`;
+    } else if (criteria.id === undefined) {
+      params.push(10);
+      query += ` LIMIT $${params.length}`;
+    }
+    
+    if (criteria.offset !== undefined) {
+      params.push(criteria.offset);
+      query += ` OFFSET $${params.length}`;
+    }
+  }
 
-  const limit = criteria.limit || 10;
-  params.push(limit);
-  query += ` LIMIT $${params.length}`;
+  if (criteria.count_only) {
+    const row = await queryFirstRow(query, params);
+    return parseInt(row.count, 10);
+  }
 
-  const offset = criteria.offset || 0;
-  params.push(offset);
-  query += ` OFFSET $${params.length}`;
+  if (criteria.id !== undefined) {
+    const row = await queryFirstRow(query, params, "Content not found");
+    if (row && !('error' in row)) {
+      row.users = await dbGetContentUsers(row.id);
+      row.groups = await dbGetContentGroups(row.id);
+      row.metadata = await attachContentMetadata(row);
+      
+      const now = new Date();
+      const isAdmin = user?.is_admin === true;
+      const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
+      const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
+      const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
+      const hasViewAccess = isAdmin || userRole === 'Owner' || userRole === 'Contributor' || userRole === 'Commenter' || userRole === 'Viewer' || groupRole === 'Owner' || groupRole === 'Contributor' || groupRole === 'Commenter' || groupRole === 'Viewer' || row.author_id === user?.username;
+      const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
+
+      if (!isPublic && !hasViewAccess) {
+        if (criteria.hide_pattern === 'Guard') {
+          row.payload = placeholder || { type: "div", content: "Content restricted" };
+        } else if (criteria.hide_pattern === 'Paywall') {
+          row.payload = row.promo || { message: "Paywall Promo Material" };
+        }
+      }
+    }
+    return row;
+  }
 
   const result = await pool.query(query, params);
   const rows = result.rows;
 
+  const now = new Date();
   for (const row of rows) {
     row.users = await dbGetContentUsers(row.id);
     row.groups = await dbGetContentGroups(row.id);
     row.metadata = await attachContentMetadata(row);
-  }
-  return rows;
-}
 
-export async function dbGetLatestContentGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any, placeholder?: any) {
-  const rows = await dbGetLatestContentAll(criteria);
-  const now = new Date();
-  for (const row of rows) {
     const isAdmin = user?.is_admin === true;
     const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
     const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
     const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
     
-    // Evaluate highest privilege if we wanted, but for view access any truthy role suffices
-    const hasViewAccess = isAdmin || userRole || groupRole;
+    const hasViewAccess = isAdmin || userRole === 'Owner' || userRole === 'Contributor' || userRole === 'Commenter' || userRole === 'Viewer' || groupRole === 'Owner' || groupRole === 'Contributor' || groupRole === 'Commenter' || groupRole === 'Viewer' || row.author_id === user?.username;
     const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
     
     if (!isPublic && !hasViewAccess) {
-      row.payload = placeholder || { type: "div", content: "Content restricted" };
+      if (criteria.hide_pattern === 'Guard') {
+        row.payload = placeholder || { type: "div", content: "Content restricted" };
+      } else if (criteria.hide_pattern === 'Paywall') {
+        row.payload = row.promo || { message: "Paywall Promo Material" };
+      }
     }
   }
   return rows;
-}
-
-export async function dbGetLatestContentPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}, user?: any) {
-  const rows = await dbGetLatestContentAll(criteria);
-  const now = new Date();
-  for (const row of rows) {
-    const isAdmin = user?.is_admin === true;
-    const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
-    const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
-    const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
-
-    const hasViewAccess = isAdmin || userRole || groupRole;
-    const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
-    
-    if (!isPublic && !hasViewAccess) {
-      row.payload = row.promo || { message: "Paywall Promo Material" };
-    }
-  }
-  return rows;
-}
-
-async function dbGetLatestContentAll(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number } = {}) {
-  let query = `
-    SELECT c.* 
-    FROM Content c
-  `;
-  const params: any[] = [];
-  const conditions: string[] = [];
-
-  if (criteria.tags && criteria.tags.length > 0) {
-    for (const tag of criteria.tags) {
-      params.push(tag);
-      conditions.push(`EXISTS (
-        SELECT 1 FROM ContentTags ct
-        JOIN Tags t ON ct.tag_id = t.id
-        WHERE ct.content_id = c.id AND t.name = $${params.length}
-      )`);
-    }
-  }
-
-  if (criteria.author) {
-    params.push(criteria.author);
-    conditions.push(`c.author_id = $${params.length}`);
-  }
-
-  if (conditions.length > 0) {
-    query += ` WHERE ` + conditions.join(' AND ');
-  }
-
-  query += ` ORDER BY c.created_at DESC`;
-
-  const limit = criteria.limit || 10;
-  params.push(limit);
-  query += ` LIMIT $${params.length}`;
-
-  const offset = criteria.offset || 0;
-  params.push(offset);
-  query += ` OFFSET $${params.length}`;
-
-  const result = await pool.query(query, params);
-  const rows = result.rows;
-
-  for (const row of rows) {
-    row.users = await dbGetContentUsers(row.id);
-    row.groups = await dbGetContentGroups(row.id);
-    row.metadata = await attachContentMetadata(row);
-  }
-  return rows;
-}
-
-
-export async function dbGetContentCountOverlook(criteria: { tags?: string[]; author?: string } = {}, user?: any) {
-  let query = `
-    SELECT COUNT(*) as count 
-    FROM Content c
-  `;
-  const params: any[] = [];
-  const conditions: string[] = [];
-
-  if (criteria.tags && criteria.tags.length > 0) {
-    for (const tag of criteria.tags) {
-      params.push(tag);
-      conditions.push(`EXISTS (
-        SELECT 1 FROM ContentTags ct
-        JOIN Tags t ON ct.tag_id = t.id
-        WHERE ct.content_id = c.id AND t.name = $${params.length}
-      )`);
-    }
-  }
-
-  if (criteria.author) {
-    params.push(criteria.author);
-    conditions.push(`c.author_id = $${params.length}`);
-  }
-
-  if (!user || !user.is_admin) {
-    if (user && user.username) {
-      params.push(user.username);
-      conditions.push(`(
-        (c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP))
-        OR c.author_id = $${params.length}
-        OR EXISTS (SELECT 1 FROM ContentUsers cu WHERE cu.content_id = c.id AND cu.username = $${params.length})
-      )`);
-    } else {
-      conditions.push(`c.is_visible = true AND (c.live_date IS NULL OR c.live_date <= CURRENT_TIMESTAMP)`);
-    }
-  }
-
-  if (conditions.length > 0) {
-    query += ` WHERE ` + conditions.join(' AND ');
-  }
-
-  const row = await queryFirstRow(query, params);
-  return parseInt(row.count, 10);
-}
-
-export async function dbGetContentCountGuard(criteria: { tags?: string[]; author?: string } = {}, user?: any) {
-  return await dbGetContentCountAll(criteria);
-}
-
-export async function dbGetContentCountPaywall(criteria: { tags?: string[]; author?: string } = {}, user?: any) {
-  return await dbGetContentCountAll(criteria);
-}
-
-async function dbGetContentCountAll(criteria: { tags?: string[]; author?: string } = {}) {
-  let query = `
-    SELECT COUNT(*) as count 
-    FROM Content c
-  `;
-  const params: any[] = [];
-  const conditions: string[] = [];
-
-  if (criteria.tags && criteria.tags.length > 0) {
-    for (const tag of criteria.tags) {
-      params.push(tag);
-      conditions.push(`EXISTS (
-        SELECT 1 FROM ContentTags ct
-        JOIN Tags t ON ct.tag_id = t.id
-        WHERE ct.content_id = c.id AND t.name = $${params.length}
-      )`);
-    }
-  }
-
-  if (criteria.author) {
-    params.push(criteria.author);
-    conditions.push(`c.author_id = $${params.length}`);
-  }
-
-  if (conditions.length > 0) {
-    query += ` WHERE ` + conditions.join(' AND ');
-  }
-
-  const row = await queryFirstRow(query, params);
-  return parseInt(row.count, 10);
 }
 
 export async function dbGetContentAuthor(contentId: number) {
@@ -445,15 +340,9 @@ export async function dbGetContentGroups(contentId: number) {
 }
 
 export const pgContentSource: IContentSource = {
-  getById: dbGetContentById,
-  getHeaders: dbGetContentHeaders,
+  get: dbGetContent,
   query: dbGetContentQuery,
-  getLatestOverlook: dbGetLatestContentOverlook,
-  getLatestGuard: dbGetLatestContentGuard,
-  getLatestPaywall: dbGetLatestContentPaywall,
-  getCountOverlook: dbGetContentCountOverlook,
-  getCountGuard: dbGetContentCountGuard,
-  getCountPaywall: dbGetContentCountPaywall,
+  getHeaders: dbGetContentHeaders,
   stage: dbStageContent,
   create: dbCreateContent,
   update: dbUpdateContent,

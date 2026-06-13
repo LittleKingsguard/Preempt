@@ -89,22 +89,21 @@ export const pgCommentSource: IContentSource = {
     return list;
   },
 
-  async getById(id: number, user?: any) {
-    const row = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [id], "Comment not found");
-    if (row && !('error' in row)) {
-      const defaultComp = await getDefaultCommentComponent();
-      return compileCommentsToContent([row], defaultComp);
+  async get(criteria: any, user?: any, placeholder?: any) {
+    if (criteria.count_only) {
+      const row = await queryFirstRow("SELECT COUNT(*) as count FROM Comments", []);
+      return { count: row ? parseInt(row.count) : 0 };
     }
-    return row;
-  },
 
-  async query(query: string, params: any[]) {
-    const result = await pool.query(query, params);
-    const defaultComp = await getDefaultCommentComponent();
-    return [compileCommentsToContent(result.rows, defaultComp)];
-  },
+    if (criteria.id !== undefined) {
+      const row = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [criteria.id], "Comment not found");
+      if (row && !('error' in row)) {
+        const defaultComp = await getDefaultCommentComponent();
+        return compileCommentsToContent([row], defaultComp);
+      }
+      return row;
+    }
 
-  async getLatestOverlook(criteria: any, user?: any) {
     let query = "SELECT * FROM Comments";
     const params: any[] = [];
     if (criteria && criteria.list_id) {
@@ -125,29 +124,14 @@ export const pgCommentSource: IContentSource = {
     return this.query(query, params);
   },
 
-  async getLatestGuard(criteria: any, user?: any, placeholder?: any) {
-    return this.getLatestOverlook(criteria, user);
-  },
-
-  async getLatestPaywall(criteria: any, user?: any) {
-    return this.getLatestOverlook(criteria, user);
+  async query(query: string, params: any[]) {
+    const result = await pool.query(query, params);
+    const defaultComp = await getDefaultCommentComponent();
+    return [compileCommentsToContent(result.rows, defaultComp)];
   },
 
   async getHeaders(id: number) {
     return null;
-  },
-
-  async getCountOverlook(criteria: any, user?: any) {
-    const row = await queryFirstRow("SELECT COUNT(*) as count FROM Comments", []);
-    return { count: row ? parseInt(row.count) : 0 };
-  },
-
-  async getCountGuard(criteria: any, user?: any) {
-    return this.getCountOverlook(criteria, user);
-  },
-
-  async getCountPaywall(criteria: any, user?: any) {
-    return this.getCountOverlook(criteria, user);
   },
 
   async create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {

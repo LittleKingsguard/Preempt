@@ -64,6 +64,12 @@ export interface IContentData {
   live_date: Date | null;
   approved_roles?: string[];
   resolved_template_id: number;
+  change_batch_id?: number | null;
+  group_id?: number | null;
+  original_id?: number | null;
+  is_approved?: boolean;
+  tags?: string[];
+  template_group_id?: number | null;
   created_at?: Date;
   updated_at?: Date;
   users?: IContentUserData[];
@@ -71,15 +77,9 @@ export interface IContentData {
 }
 
 export interface IContentSource {
-  getById(id: number, user?: any): Promise<any | { error: string; status: number }>;
+  get(criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] }, user?: any, placeholder?: any): Promise<any>;
   getHeaders(id: number): Promise<any>;
   query(query: string, params: any[]): Promise<any | { error: string; status: number }>;
-  getLatestOverlook(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number }, user?: any): Promise<any[]>;
-  getLatestGuard(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number }, user?: any, placeholder?: any): Promise<any[]>;
-  getLatestPaywall(criteria: { tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number }, user?: any): Promise<any[]>;
-  getCountOverlook(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
-  getCountGuard(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
-  getCountPaywall(criteria: { tags?: string[]; author?: string }, user?: any): Promise<any>;
   stage(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
   create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
   update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any | { error: string; status: number }>;
@@ -118,29 +118,6 @@ export interface IHandlerSource {
   approve(id: number, isApproved: boolean): Promise<any | { error: string; status: number }>;
 }
 
-export interface ITemplateData {
-  id: number;
-  group_id: number;
-  payload: any;
-  author_id: string;
-  change_batch_id?: number | null;
-  original_id?: number | null;
-  is_approved?: boolean;
-  approved_roles?: string[];
-  created_at?: Date;
-  updated_at?: Date;
-}
-
-export interface ITemplateSource {
-  getById(id: number): Promise<any | { error: string; status: number }>;
-  getForGroup(groupId: number): Promise<any[]>;
-  getAll(): Promise<any[]>;
-  getAuthorId(templateId: number): Promise<string | { error: string; status: number }>;
-  create(authorId: string, payload: any, groupId: number | null, tags: string[]): Promise<any>;
-  update(id: number, payload: any, groupId: number | null, tags: string[]): Promise<any | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
-  stage(authorId: string, payload: any, originalId: number | null, batchId: number, groupId: number | null, tags: string[]): Promise<any>;
-}
 
 export interface IUserData {
   username: string;
