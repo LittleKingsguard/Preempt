@@ -3,6 +3,14 @@ import { queryFirstRow } from "../utils/db.js";
 import { pgTagSource } from "./tagSource.js";
 import type { IContentSource } from "../models/interfaces.js";
 
+interface CacheEntry {
+  timestamp: number;
+  value: any;
+}
+
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL = 60000; // 1 minute
+
 export async function dbCreateTemplate(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
@@ -19,6 +27,7 @@ export async function dbCreateTemplate(authorId: string, payload: any, headers: 
     }
 
     await client.query('COMMIT');
+    cache.clear();
     return row;
   } catch (e) {
     await client.query('ROLLBACK');
@@ -54,6 +63,7 @@ export async function dbUpdateTemplate(id: number, authorId: string, payload: an
     }
 
     await client.query('COMMIT');
+    cache.clear();
     return row;
   } catch (e) {
     await client.query('ROLLBACK');
@@ -113,6 +123,7 @@ export async function dbStageTemplate(authorId: string, payload: any, headers: s
     }
 
     await client.query('COMMIT');
+    cache.clear();
     return row;
   } catch (e) {
     await client.query('ROLLBACK');
@@ -123,12 +134,17 @@ export async function dbStageTemplate(authorId: string, payload: any, headers: s
 }
 
 export async function dbGetTemplate(criteria: { count_only?: boolean; id?: number; list_id?: number; tags?: string[] } = {}, user?: any, placeholder?: any) {
-  if (criteria.id !== undefined) {
-    const row = await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [criteria.id], "Template not found");
-    return row;
+  const cacheKey = JSON.stringify(criteria);
+  const cached = cache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    return cached.value;
   }
 
-  if (criteria.list_id !== undefined) {
+  let resultValue;
+  if (criteria.id !== undefined) {
+    const row = await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [criteria.id], "Template not found");
+    resultValue = row;
+  } else if (criteria.list_id !== undefined) {
     let query = `
       SELECT t.*,
         (
@@ -146,10 +162,13 @@ export async function dbGetTemplate(criteria: { count_only?: boolean; id?: numbe
     `;
     const params = [criteria.list_id, criteria.tags || []];
     const result = await pool.query(query, params);
-    return result.rows;
+    resultValue = result.rows;
+  } else {
+    throw new Error("Invalid criteria for dbGetTemplate: must provide id or list_id");
   }
 
-  throw new Error("Invalid criteria for dbGetTemplate: must provide id or list_id");
+  cache.set(cacheKey, { timestamp: Date.now(), value: resultValue });
+  return resultValue;
 }
 
 export const pgTemplateSource: IContentSource = {
