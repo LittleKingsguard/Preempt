@@ -9,7 +9,7 @@ export interface IComponentData {
 }
 
 export interface IComponentSource {
-  getAll(): Promise<any[]>;
+  getAll(criteria?: { templateId?: number; contentId?: number }): Promise<any[]>;
   getById(id: number): Promise<any | { error: string; status: number }>;
   create(name: string, payload: any, authorId: string): Promise<any>;
   update(id: number, name: string, payload: any): Promise<any | { error: string; status: number }>;
@@ -107,7 +107,7 @@ export interface IHandlerData {
 }
 
 export interface IHandlerSource {
-  getAll(): Promise<any[]>;
+  getAll(criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }): Promise<any[]>;
   getById(id: number): Promise<any | { error: string; status: number }>;
   create(name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
   update(id: number, name: string, body: string): Promise<any | { error: string; status: number }>;

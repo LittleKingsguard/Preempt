@@ -4,8 +4,10 @@ import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtil
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgTemplateSource } from "../sources/templateSource.js";
+import { pgHandlerSource } from "../sources/handlerSource.js";
+import { pgComponentSource } from "../sources/componentSource.js";
 import { pgTagSource } from "../sources/tagSource.js";
-import type { IContentData, IContentSource } from "./interfaces.js";
+import type { IContentData, IContentSource, IHandlerSource, IComponentSource } from "./interfaces.js";
 
 export class Template {
   source: IContentSource;
@@ -34,7 +36,7 @@ export class Template {
     this.updated_at = data.updated_at || new Date();
   }
 
-  static async getById(source: IContentSource = pgTemplateSource, id: number, editorMode: string | null = null, user: any = null) {
+  static async getById(source: IContentSource = pgTemplateSource, id: number, editorMode: string | null = null, user: any = null, handlerSource: IHandlerSource = pgHandlerSource, componentSource: IComponentSource = pgComponentSource) {
     const templateIdToFetch = await resolveEditorTemplateId(id, editorMode);
     const row = await fetchTemplateRecord(templateIdToFetch);
     if ('error' in row) return row;
@@ -44,8 +46,8 @@ export class Template {
     const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
     if (authErr) return authErr;
 
-    await populateTemplateHandlers(template.payload, template.id, user);
-    await populateTemplateComponents(template.payload, template.id, user);
+    await populateTemplateHandlers(template.payload, template.id, user, handlerSource, componentSource);
+    await populateTemplateComponents(template.payload, template.id, user, componentSource);
 
     if (editorMode) {
       const hasEditorTag = await checkHasEditorTag(template.id);

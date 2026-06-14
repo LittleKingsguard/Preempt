@@ -6,8 +6,10 @@ import { pgContentSource } from "../sources/contentSource.js";
 import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgTagSource } from "../sources/tagSource.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
+import { pgHandlerSource } from "../sources/handlerSource.js";
+import { pgComponentSource } from "../sources/componentSource.js";
 import { Setting } from "./settings.js";
-import type { IContentData, IContentSource, IContentUserData, IContentUserGroupData } from "./interfaces.js";
+import type { IContentData, IContentSource, IContentUserData, IContentUserGroupData, IHandlerSource, IComponentSource } from "./interfaces.js";
 
 export class Content {
   static guardPlaceholderCache: any = null;
@@ -85,7 +87,17 @@ export class Content {
     return await source.getHeaders(id);
   }
 
-  static async getWithTemplate(source: IContentSource = pgContentSource, templateSource: IContentSource = pgTemplateSource, contentId: number, templateId: number | null, tagsParam: string | null, editorMode: string | null = null, user: any = null) {
+  static async getWithTemplate(
+    source: IContentSource = pgContentSource,
+    templateSource: IContentSource = pgTemplateSource,
+    contentId: number,
+    templateId: number | null,
+    tagsParam: string | null,
+    editorMode: string | null = null,
+    user: any = null,
+    handlerSource: IHandlerSource = pgHandlerSource,
+    componentSource: IComponentSource = pgComponentSource
+  ) {
     const contentRow = await source.get({ id: contentId }, user);
     if (!contentRow || 'error' in contentRow) return contentRow || { error: "Content not found", status: 404 };
 
@@ -138,8 +150,8 @@ export class Content {
     const authErr = validateUserRoles(user, content.approved_roles || [], content.author_id);
     if (authErr) return authErr;
 
-    await populateContentHandlers(content.payload, content.id, content.resolved_template_id, user);
-    await populateContentComponents(content.payload, content.id, content.resolved_template_id, user);
+    await populateContentHandlers(content.payload, content.id, content.resolved_template_id, user, handlerSource, componentSource);
+    await populateContentComponents(content.payload, content.id, content.resolved_template_id, user, componentSource);
 
     if (editorMode) {
       const hasEditorTag = await checkHasEditorTag(content.resolved_template_id);

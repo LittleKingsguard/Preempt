@@ -9,13 +9,35 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
-export async function dbGetHandlers() {
-  const cacheKey = 'getAll';
+export async function dbGetHandlers(criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }) {
+  const cacheKey = criteria ? `getAll:${JSON.stringify(criteria)}` : 'getAll';
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.value;
   }
-  const result = await pool.query("SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers");
+
+  let query = "SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers";
+  const params: any[] = [];
+  const orConditions: string[] = [];
+
+  if (criteria?.templateId !== undefined) {
+    params.push(criteria.templateId);
+    orConditions.push(`EXISTS (SELECT 1 FROM TemplateHandlers th WHERE th.handler_id = Handlers.id AND th.template_id = $${params.length})`);
+  }
+  if (criteria?.contentId !== undefined) {
+    params.push(criteria.contentId);
+    orConditions.push(`EXISTS (SELECT 1 FROM ContentHandlers ch WHERE ch.handler_id = Handlers.id AND ch.content_id = $${params.length})`);
+  }
+  if (criteria?.componentIds !== undefined && criteria.componentIds.length > 0) {
+    params.push(criteria.componentIds);
+    orConditions.push(`EXISTS (SELECT 1 FROM ComponentHandlers cmh WHERE cmh.handler_id = Handlers.id AND cmh.component_id = ANY($${params.length}::int[]))`);
+  }
+
+  if (orConditions.length > 0) {
+    query += " WHERE (" + orConditions.join(" OR ") + ")";
+  }
+
+  const result = await pool.query(query, params);
   cache.set(cacheKey, { timestamp: Date.now(), value: result.rows });
   return result.rows;
 }

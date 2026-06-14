@@ -9,13 +9,32 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
-export async function dbGetComponents() {
-  const cacheKey = 'getAll';
+export async function dbGetComponents(criteria?: { templateId?: number; contentId?: number }) {
+  const cacheKey = criteria ? `getAll:${JSON.stringify(criteria)}` : 'getAll';
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.value;
   }
-  const result = await pool.query("SELECT id, name, payload, author_id, approved_roles, created_at, updated_at FROM Components");
+
+  let query = "SELECT c.id, c.name, c.payload, c.author_id, c.approved_roles, c.created_at, c.updated_at FROM Components c";
+  const params: any[] = [];
+  const conditions: string[] = [];
+
+  if (criteria?.templateId !== undefined) {
+    query += " JOIN TemplateComponents tc ON c.id = tc.component_id";
+    params.push(criteria.templateId);
+    conditions.push(`tc.template_id = $${params.length}`);
+  } else if (criteria?.contentId !== undefined) {
+    query += " JOIN ContentComponents cc ON c.id = cc.component_id";
+    params.push(criteria.contentId);
+    conditions.push(`cc.content_id = $${params.length}`);
+  }
+
+  if (conditions.length > 0) {
+    query += " WHERE " + conditions.join(" AND ");
+  }
+
+  const result = await pool.query(query, params);
   cache.set(cacheKey, { timestamp: Date.now(), value: result.rows });
   return result.rows;
 }

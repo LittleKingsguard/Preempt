@@ -1,7 +1,7 @@
 import { pool } from "../db.js";
 import { queryFirstRow } from "./db.js";
 import { validateUserRoles } from "../middleware/auth.js";
-
+import type { IHandlerSource, IComponentSource } from "../models/interfaces.js";
 export async function resolveEditorTemplateId(baseId: number, editorMode: string | null): Promise<number> {
   if (!editorMode) return baseId;
   const editorTagCheck = await queryFirstRow(`
@@ -20,24 +20,28 @@ export async function fetchTemplateRecord(templateId: number): Promise<any> {
   return await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [templateId], "Template not found");
 }
 
-export async function fetchTemplateHandlers(templateId: number) {
-  const handlerResult = await pool.query(`
-    SELECT h.name, h.body, h.approved_roles, h.author_id 
-    FROM Handlers h
-    JOIN TemplateHandlers th ON h.id = th.handler_id
-    WHERE th.template_id = $1
-    UNION
-    SELECT h.name, h.body, h.approved_roles, h.author_id
-    FROM Handlers h
-    JOIN ComponentHandlers ch ON h.id = ch.handler_id
-    JOIN TemplateComponents tc ON ch.component_id = tc.component_id
-    WHERE tc.template_id = $1
-  `, [templateId]);
-  return handlerResult.rows;
+export async function fetchTemplateHandlers(templateId: number, handlerSource: IHandlerSource, componentSource: IComponentSource) {
+  const components = (await componentSource.getAll({ templateId })) || [];
+  const componentIds = components.map((c: any) => c.id);
+
+  const criteria: any = { templateId };
+  if (componentIds.length > 0) {
+    criteria.componentIds = componentIds;
+  }
+
+  const allHandlers = (await handlerSource.getAll(criteria)) || [];
+
+  const handlerMap = new Map();
+  for (const h of allHandlers) {
+    if (!handlerMap.has(h.name)) {
+      handlerMap.set(h.name, h);
+    }
+  }
+  return Array.from(handlerMap.values());
 }
 
-export async function populateTemplateHandlers(payload: any, templateId: number, user: any): Promise<void> {
-  const handlerRows = await fetchTemplateHandlers(templateId);
+export async function populateTemplateHandlers(payload: any, templateId: number, user: any, handlerSource: IHandlerSource, componentSource: IComponentSource): Promise<void> {
+  const handlerRows = await fetchTemplateHandlers(templateId, handlerSource, componentSource);
 
   if (handlerRows.length > 0) {
     if (!payload.component) payload.component = [];
@@ -52,18 +56,12 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
   }
 }
 
-export async function fetchTemplateComponents(templateId: number) {
-  const componentResult = await pool.query(`
-    SELECT c.name, c.payload, c.approved_roles, c.author_id 
-    FROM Components c
-    JOIN TemplateComponents tc ON c.id = tc.component_id
-    WHERE tc.template_id = $1
-  `, [templateId]);
-  return componentResult.rows;
+export async function fetchTemplateComponents(templateId: number, componentSource: IComponentSource) {
+  return (await componentSource.getAll({ templateId })) || [];
 }
 
-export async function populateTemplateComponents(payload: any, templateId: number, user: any): Promise<void> {
-  const componentRows = await fetchTemplateComponents(templateId);
+export async function populateTemplateComponents(payload: any, templateId: number, user: any, componentSource: IComponentSource): Promise<void> {
+  const componentRows = await fetchTemplateComponents(templateId, componentSource);
 
   if (componentRows.length > 0) {
     if (!payload.component) payload.component = [];
