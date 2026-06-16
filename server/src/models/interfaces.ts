@@ -1,3 +1,4 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
 export interface IComponentData {
   id: number;
   name: string;
@@ -9,14 +10,14 @@ export interface IComponentData {
 }
 
 export interface IComponentSource {
-  getAll(criteria?: { templateId?: number; contentId?: number }): Promise<any[]>;
-  getById(id: number): Promise<any | { error: string; status: number }>;
-  create(name: string, payload: any, authorId: string): Promise<any>;
-  update(id: number, name: string, payload: any): Promise<any | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
-  updateTemplateComponents(client: any, templateId: number, componentNames: string[]): Promise<void>;
-  updateContentComponents(client: any, contentId: number, componentNames: string[]): Promise<void>;
-  stage(name: string, payload: any, authorId: string, originalId: number | null, batchId: number): Promise<any>;
+  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number }): Promise<any[]>;
+  getById(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  create(event: IPreemptEvent, name: string, payload: any, authorId: string): Promise<any>;
+  update(event: IPreemptEvent, id: number, name: string, payload: any): Promise<any | { error: string; status: number }>;
+  delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  updateTemplateComponents(event: IPreemptEvent, client: any, templateId: number, componentNames: string[]): Promise<void>;
+  updateContentComponents(event: IPreemptEvent, client: any, contentId: number, componentNames: string[]): Promise<void>;
+  stage(event: IPreemptEvent, name: string, payload: any, authorId: string, originalId: number | null, batchId: number): Promise<any>;
 }
 
 export interface IContentUserData {
@@ -42,14 +43,14 @@ export interface IUserGroupMemberData {
 }
 
 export interface IUserGroupSource {
-  getAll(): Promise<IUserGroupData[]>;
-  getById(id: number): Promise<IUserGroupData | { error: string; status: number }>;
-  create(name: string): Promise<IUserGroupData | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
-  getMembers(groupId: number): Promise<IUserGroupMemberData[]>;
-  addMember(groupId: number, username: string | string[]): Promise<void>;
-  removeMember(groupId: number, username: string): Promise<void>;
-  getUserGroups(username: string): Promise<IUserGroupData[]>;
+  getAll(event: IPreemptEvent): Promise<IUserGroupData[]>;
+  getById(event: IPreemptEvent, id: number): Promise<IUserGroupData | { error: string; status: number }>;
+  create(event: IPreemptEvent, name: string): Promise<IUserGroupData | { error: string; status: number }>;
+  delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  getMembers(event: IPreemptEvent, groupId: number): Promise<IUserGroupMemberData[]>;
+  addMember(event: IPreemptEvent, groupId: number, username: string | string[]): Promise<void>;
+  removeMember(event: IPreemptEvent, groupId: number, username: string): Promise<void>;
+  getUserGroups(event: IPreemptEvent, username: string): Promise<IUserGroupData[]>;
 }
 
 export interface IContentData {
@@ -77,22 +78,22 @@ export interface IContentData {
 }
 
 export interface IContentSource {
-  get(criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] }, user?: any, placeholder?: any): Promise<any>;
-  getHeaders(id: number): Promise<any>;
-  query(query: string, params: any[]): Promise<any | { error: string; status: number }>;
-  stage(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
-  create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
-  update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
+  get(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] }, user?: any, placeholder?: any): Promise<any>;
+  getHeaders(event: IPreemptEvent, id: number): Promise<any>;
+  query(event: IPreemptEvent, query: string, params: any[]): Promise<any | { error: string; status: number }>;
+  stage(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
+  create(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
+  update(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any | { error: string; status: number }>;
+  delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
 
-  addUser(contentId: number, username: string, role: string): Promise<any>;
-  removeUser(contentId: number, username: string): Promise<void>;
-  getUsers(contentId: number): Promise<IContentUserData[]>;
+  addUser(event: IPreemptEvent, contentId: number, username: string, role: string): Promise<any>;
+  removeUser(event: IPreemptEvent, contentId: number, username: string): Promise<void>;
+  getUsers(event: IPreemptEvent, contentId: number): Promise<IContentUserData[]>;
 
-  addGroup(contentId: number, groupId: number, role: string): Promise<any>;
-  removeGroup(contentId: number, groupId: number): Promise<void>;
-  getGroups(contentId: number): Promise<IContentUserGroupData[]>;
-  getSubjectContext?(commentListId: number): Promise<any>;
+  addGroup(event: IPreemptEvent, contentId: number, groupId: number, role: string): Promise<any>;
+  removeGroup(event: IPreemptEvent, contentId: number, groupId: number): Promise<void>;
+  getGroups(event: IPreemptEvent, contentId: number): Promise<IContentUserGroupData[]>;
+  getSubjectContext?(event: IPreemptEvent, commentListId: number): Promise<any>;
 }
 
 export interface IHandlerData {
@@ -107,15 +108,15 @@ export interface IHandlerData {
 }
 
 export interface IHandlerSource {
-  getAll(criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }): Promise<any[]>;
-  getById(id: number): Promise<any | { error: string; status: number }>;
-  create(name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
-  update(id: number, name: string, body: string): Promise<any | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
-  updateTemplateHandlers(templateId: number, handlerNames: string[]): Promise<void>;
-  updateContentHandlers(contentId: number, handlerNames: string[]): Promise<void>;
-  stage(name: string, body: string, authorId: string, originalId: number | null, batchId: number): Promise<any>;
-  approve(id: number, isApproved: boolean): Promise<any | { error: string; status: number }>;
+  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }): Promise<any[]>;
+  getById(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  create(event: IPreemptEvent, name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
+  update(event: IPreemptEvent, id: number, name: string, body: string): Promise<any | { error: string; status: number }>;
+  delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  updateTemplateHandlers(event: IPreemptEvent, templateId: number, handlerNames: string[]): Promise<void>;
+  updateContentHandlers(event: IPreemptEvent, contentId: number, handlerNames: string[]): Promise<void>;
+  stage(event: IPreemptEvent, name: string, body: string, authorId: string, originalId: number | null, batchId: number): Promise<any>;
+  approve(event: IPreemptEvent, id: number, isApproved: boolean): Promise<any | { error: string; status: number }>;
 }
 
 
@@ -133,21 +134,21 @@ export interface IUserData {
 }
 
 export interface IUserSource {
-  authenticate(username: string, passwordPlain: string): Promise<any | null>;
-  create(username: string, email: string, passwordPlain: string): Promise<any>;
-  getByEmail(email: string): Promise<any | { error: string; status: number }>;
-  getByUsername(username: string): Promise<any | { error: string; status: number }>;
-  updatePassword(username: string, newPasswordPlain: string): Promise<void>;
-  verifyEmail(username: string): Promise<void>;
-  updateRoles(username: string, roles: { is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
-  updateHomePage(username: string, homePage: number | null): Promise<void>;
-  getAll(): Promise<any[]>;
+  authenticate(event: IPreemptEvent, username: string, passwordPlain: string): Promise<any | null>;
+  create(event: IPreemptEvent, username: string, email: string, passwordPlain: string): Promise<any>;
+  getByEmail(event: IPreemptEvent, email: string): Promise<any | { error: string; status: number }>;
+  getByUsername(event: IPreemptEvent, username: string): Promise<any | { error: string; status: number }>;
+  updatePassword(event: IPreemptEvent, username: string, newPasswordPlain: string): Promise<void>;
+  verifyEmail(event: IPreemptEvent, username: string): Promise<void>;
+  updateRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
+  updateHomePage(event: IPreemptEvent, username: string, homePage: number | null): Promise<void>;
+  getAll(event: IPreemptEvent): Promise<any[]>;
 }
 
 export interface IAuthTokenSource {
-  create(username: string, type: string, tokenValue: string, expiresInMinutes: number): Promise<void>;
-  verify(username: string, type: string, tokenValue: string): Promise<any>;
-  delete(username: string, type: string): Promise<void>;
+  create(event: IPreemptEvent, username: string, type: string, tokenValue: string, expiresInMinutes: number): Promise<void>;
+  verify(event: IPreemptEvent, username: string, type: string, tokenValue: string): Promise<any>;
+  delete(event: IPreemptEvent, username: string, type: string): Promise<void>;
 }
 
 export interface IChangeBatchData {
@@ -160,12 +161,12 @@ export interface IChangeBatchData {
 }
 
 export interface IChangeBatchSource {
-  create(authorId: string, description: string): Promise<any>;
-  getPending(): Promise<any[]>;
-  getById(id: number): Promise<any | { error: string; status: number }>;
-  delete(id: number): Promise<any | { error: string; status: number }>;
-  markMerged(batchId: number): Promise<any | { error: string; status: number }>;
-  approve(batchId: number): Promise<any>;
+  create(event: IPreemptEvent, authorId: string, description: string): Promise<any>;
+  getPending(event: IPreemptEvent): Promise<any[]>;
+  getById(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  markMerged(event: IPreemptEvent, batchId: number): Promise<any | { error: string; status: number }>;
+  approve(event: IPreemptEvent, batchId: number): Promise<any>;
 }
 
 export interface ITagData {
@@ -173,9 +174,9 @@ export interface ITagData {
 }
 
 export interface ITagSource {
-  fetchAll(): Promise<string[]>;
-  updateTemplateTags(client: any, templateId: number, tags: string[]): Promise<void>;
-  updateContentTags(client: any, contentId: number, tags: string[]): Promise<void>;
+  fetchAll(event: IPreemptEvent): Promise<string[]>;
+  updateTemplateTags(event: IPreemptEvent, client: any, templateId: number, tags: string[]): Promise<void>;
+  updateContentTags(event: IPreemptEvent, client: any, contentId: number, tags: string[]): Promise<void>;
 }
 
 export interface ISettingData {
@@ -184,6 +185,6 @@ export interface ISettingData {
 }
 
 export interface ISettingSource {
-  get(key: string): Promise<any>;
-  set(key: string, valueStr: string): Promise<void>;
+  get(event: IPreemptEvent, key: string): Promise<any>;
+  set(event: IPreemptEvent, key: string, valueStr: string): Promise<void>;
 }

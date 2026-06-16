@@ -1,5 +1,7 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { pool } from '../db.js';
-import { queryFirstRow } from '../utils/db.js';
+import { queryFirstRow, logEvent, fireAndForgetEvent } from '../utils/db.js';
 import type { IContentSource, IContentData } from '../models/interfaces.js';
 import { pgSettingSource } from './settingsSource.js';
 
@@ -10,7 +12,7 @@ const CACHE_TTL_MS = 60000; // 1 minute
 async function getDefaultMessageListComponent() {
   const now = Date.now();
   if (!cachedDefaultMessageList || now - cachedDefaultMessageListTimestamp > CACHE_TTL_MS) {
-    cachedDefaultMessageList = await pgSettingSource.get('default-message-list');
+    cachedDefaultMessageList = await pgSettingSource.get(new PreemptEvent('settings.get', { id: 'system', type: 'process' }), 'default-message-list');
     cachedDefaultMessageListTimestamp = now;
     
     if (!cachedDefaultMessageList) {
@@ -85,25 +87,42 @@ function compileMessageListsToContent(listRows: any[], defaultComp: any): IConte
   };
 }
 
-export async function getMessageListGroup(listId: number) {
+export async function getMessageListGroup(event: IPreemptEvent, listId: number) {
   const row = await queryFirstRow("SELECT group_id FROM MessageLists WHERE id = $1", [listId]);
+  fireAndForgetEvent(event);
   return row ? row.group_id : null;
 }
 
-export async function createMessageList(groupId: number, name?: string) {
-  return await queryFirstRow(
-    "INSERT INTO MessageLists (name, group_id) VALUES ($1, $2) RETURNING *",
-    [name || null, groupId]
-  );
+export async function createMessageList(event: IPreemptEvent, groupId: number, name?: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO MessageLists (name, group_id) VALUES ($1, $2) RETURNING *",
+      [name || null, groupId]
+    );
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export const pgMessageListSource: IContentSource = {
-  async getSubjectContext(listId: number) {
+  async getSubjectContext(event: IPreemptEvent, listId: number) {
+    fireAndForgetEvent(event);
     return null;
   },
 
-  async get(criteria: any, user?: any, placeholder?: any) {
-    if (criteria.count_only) return { count: 0 };
+  async get(event: IPreemptEvent, criteria: any, user?: any, placeholder?: any) {
+    if (criteria.count_only) {
+      fireAndForgetEvent(event);
+      return { count: 0 };
+    }
 
     if (criteria.id !== undefined) {
       const query = `
@@ -113,6 +132,7 @@ export const pgMessageListSource: IContentSource = {
         WHERE ml.id = $1
       `;
       const row = await queryFirstRow(query, [criteria.id], "Message list not found");
+      fireAndForgetEvent(event);
       if (row && !('error' in row)) {
         const defaultComp = await getDefaultMessageListComponent();
         return compileMessageListsToContent([row], defaultComp);
@@ -130,7 +150,10 @@ export const pgMessageListSource: IContentSource = {
       if (criteria.offset) offset = criteria.offset;
     }
 
-    if (!username) return [];
+    if (!username) {
+      fireAndForgetEvent(event);
+      return [];
+    }
 
     const query = `
       SELECT ml.id, ml.name, ml.group_id,
@@ -143,24 +166,26 @@ export const pgMessageListSource: IContentSource = {
     `;
     const result = await pool.query(query, [username, limit, offset]);
     const defaultComp = await getDefaultMessageListComponent();
+    fireAndForgetEvent(event);
     return [compileMessageListsToContent(result.rows, defaultComp)];
   },
 
-  async query(query: string, params: any[]) {
+  async query(event: IPreemptEvent, query: string, params: any[]) {
     const result = await pool.query(query, params);
     const defaultComp = await getDefaultMessageListComponent();
+    fireAndForgetEvent(event);
     return [compileMessageListsToContent(result.rows, defaultComp)];
   },
 
-  async getHeaders(id: number) { return null; },
-  async create() { return { error: "Not supported", status: 400 }; },
-  async update() { return { error: "Not supported", status: 400 }; },
-  async delete(id: number) { return { error: "Not supported", status: 400 }; },
-  async stage() { return { error: "Not supported", status: 400 }; },
-  async addUser() { return { error: "Not supported", status: 400 }; },
-  async removeUser() {},
-  async getUsers() { return []; },
-  async addGroup() { return { error: "Not supported", status: 400 }; },
-  async removeGroup() {},
-  async getGroups() { return []; }
+  async getHeaders(event: IPreemptEvent, id: number) { fireAndForgetEvent(event); return null; },
+  async create(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async update(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async delete(event: IPreemptEvent, id: number) { return { error: "Not supported", status: 400 }; },
+  async stage(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async addUser(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeUser(event: IPreemptEvent) {},
+  async getUsers(event: IPreemptEvent) { return []; },
+  async addGroup(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeGroup(event: IPreemptEvent) {},
+  async getGroups(event: IPreemptEvent) { return []; }
 };

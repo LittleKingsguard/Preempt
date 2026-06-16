@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import type { IUserGroupSource, IUserGroupData } from "./interfaces.js";
 import { pgUserGroupSource } from "../sources/userGroupSource.js";
 
@@ -11,12 +12,12 @@ export class UserGroup {
   }
 
   static async getAll(source: IUserGroupSource = pgUserGroupSource) {
-    const data = await source.getAll();
+    const data = await source.getAll(new PreemptEvent<any>('userGroup.getAll', { id: 'system', type: 'process' }));
     return data.map(d => new UserGroup(d));
   }
 
   static async getById(id: number, source: IUserGroupSource = pgUserGroupSource) {
-    const data = await source.getById(id);
+    const data = await source.getById(new PreemptEvent<any>('userGroup.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
     if ('error' in data) return data;
     return new UserGroup(data);
   }
@@ -25,7 +26,7 @@ export class UserGroup {
     if (!user || !user.is_admin) {
       return { error: "Forbidden: Only admins can create groups", status: 403 };
     }
-    const data = await source.create(name);
+    const data = await source.create(new PreemptEvent<any>('userGroup.create', { id: 'system', type: 'process' }, [], { before: null, after: { name } }), name);
     if ('error' in data) return data;
     return new UserGroup(data);
   }
@@ -34,18 +35,18 @@ export class UserGroup {
     if (!user || !user.is_admin) {
       return { error: "Forbidden: Only admins can delete groups", status: 403 };
     }
-    return await source.delete(this.id);
+    return await source.delete(new PreemptEvent<any>('userGroup.delete', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
   }
 
   async getMembers(source: IUserGroupSource = pgUserGroupSource) {
-    return await source.getMembers(this.id);
+    return await source.getMembers(new PreemptEvent<any>('userGroup.getMembers', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
   }
 
   async addMember(user: any, username: string | string[], source: IUserGroupSource = pgUserGroupSource) {
     if (!user || !user.is_admin) {
       return { error: "Forbidden: Only admins can manage group members", status: 403 };
     }
-    await source.addMember(this.id, username);
+    await source.addMember(new PreemptEvent<any>('userGroup.addMember', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username } }), this.id, username);
     return { success: true };
   }
 
@@ -53,7 +54,7 @@ export class UserGroup {
     if (!user || !user.is_admin) {
       return { error: "Forbidden: Only admins can manage group members", status: 403 };
     }
-    await source.removeMember(this.id, username);
+    await source.removeMember(new PreemptEvent<any>('userGroup.removeMember', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username } }), this.id, username);
     return { success: true };
   }
 }

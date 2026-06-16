@@ -1,5 +1,6 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
 import { pgTagSource } from "./tagSource.js";
 import type { IContentSource } from "../models/interfaces.js";
 
@@ -11,7 +12,7 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
-export async function dbGetContentHeaders(id: number) {
+export async function dbGetContentHeaders(event: IPreemptEvent, id: number) {
   const cacheKey = `getHeaders:${id}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -20,6 +21,7 @@ export async function dbGetContentHeaders(id: number) {
   const row = await queryFirstRow("SELECT headers FROM Content WHERE id = $1", [id]);
   const result = row ? row.headers : null;
   cache.set(cacheKey, { timestamp: Date.now(), value: result });
+  fireAndForgetEvent(event);
   return result;
 }
 
@@ -39,7 +41,7 @@ async function attachContentMetadata(row: any) {
   return row.metadata;
 }
 
-export async function dbGetContentQuery(query: string, params: any[]) {
+export async function dbGetContentQuery(event: IPreemptEvent, query: string, params: any[]) {
   const cacheKey = `query:${JSON.stringify({query, params})}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -48,16 +50,17 @@ export async function dbGetContentQuery(query: string, params: any[]) {
   
   const row = await queryFirstRow(query, params, "Content not found");
   if (row && !('error' in row)) {
-    row.users = await dbGetContentUsers(row.id);
-    row.groups = await dbGetContentGroups(row.id);
+    row.users = await dbGetContentUsers(event, row.id);
+    row.groups = await dbGetContentGroups(event, row.id);
     row.metadata = await attachContentMetadata(row);
   }
   
   cache.set(cacheKey, { timestamp: Date.now(), value: row });
+  fireAndForgetEvent(event);
   return row ? JSON.parse(JSON.stringify(row)) : row;
 }
 
-export async function dbGetContent(criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] } = {}, user?: any, placeholder?: any) {
+export async function dbGetContent(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] } = {}, user?: any, placeholder?: any) {
   const cacheKey = `get:${JSON.stringify(criteria)}`;
   const cached = cache.get(cacheKey);
 
@@ -136,8 +139,8 @@ export async function dbGetContent(criteria: { count_only?: boolean; id?: number
     } else if (criteria.id !== undefined) {
       const row = await queryFirstRow(query, params, "Content not found");
       if (row && !('error' in row)) {
-        row.users = await dbGetContentUsers(row.id);
-        row.groups = await dbGetContentGroups(row.id);
+        row.users = await dbGetContentUsers(event, row.id);
+        row.groups = await dbGetContentGroups(event, row.id);
         row.metadata = await attachContentMetadata(row);
       }
       result = row;
@@ -145,8 +148,8 @@ export async function dbGetContent(criteria: { count_only?: boolean; id?: number
       const dbResult = await pool.query(query, params);
       const rows = dbResult.rows;
       for (const row of rows) {
-        row.users = await dbGetContentUsers(row.id);
-        row.groups = await dbGetContentGroups(row.id);
+        row.users = await dbGetContentUsers(event, row.id);
+        row.groups = await dbGetContentGroups(event, row.id);
         row.metadata = await attachContentMetadata(row);
       }
       result = rows;
@@ -161,6 +164,7 @@ export async function dbGetContent(criteria: { count_only?: boolean; id?: number
 
   // POST-CACHE USER AND BEHAVIOR-SPECIFIC FLOWS
   if (criteria.count_only) {
+    fireAndForgetEvent(event);
     return result;
   }
 
@@ -182,10 +186,12 @@ export async function dbGetContent(criteria: { count_only?: boolean; id?: number
         } else if (criteria.hide_pattern === 'Paywall') {
           row.payload = row.promo || { message: "Paywall Promo Material" };
         } else if (criteria.hide_pattern === 'Overlook') {
+          fireAndForgetEvent(event);
           return { error: "Content not found", status: 404 };
         }
       }
     }
+    fireAndForgetEvent(event);
     return row;
   }
 
@@ -208,10 +214,11 @@ export async function dbGetContent(criteria: { count_only?: boolean; id?: number
     }
     finalRows.push(row);
   }
+  fireAndForgetEvent(event);
   return finalRows;
 }
 
-export async function dbGetContentAuthor(contentId: number) {
+export async function dbGetContentAuthor(event: IPreemptEvent, contentId: number) {
   const cacheKey = `author:${contentId}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -219,10 +226,11 @@ export async function dbGetContentAuthor(contentId: number) {
   }
   const result = await queryFirstRow("SELECT author_id FROM Content WHERE id = $1", [contentId], "Content not found");
   cache.set(cacheKey, { timestamp: Date.now(), value: result });
+  fireAndForgetEvent(event);
   return result;
 }
 
-export async function dbStageContent(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any) {
+export async function dbStageContent(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -253,12 +261,13 @@ export async function dbStageContent(authorId: string, payload: any, headers: st
     }
 
     if (tags && Array.isArray(tags) && (isStagedRow || tags.length > 0)) {
-      await pgTagSource.updateContentTags(client, row.id, tags);
+      await pgTagSource.updateContentTags(event, client, row.id, tags);
     }
     if (groupIds && Array.isArray(groupIds) && (isStagedRow || groupIds.length > 0)) {
-      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -270,7 +279,7 @@ export async function dbStageContent(authorId: string, payload: any, headers: st
   }
 }
 
-export async function dbCreateContent(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
+export async function dbCreateContent(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -286,12 +295,13 @@ export async function dbCreateContent(authorId: string, payload: any, headers: s
     );
 
     if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateContentTags(client, row.id, tags);
+      await pgTagSource.updateContentTags(event, client, row.id, tags);
     }
     if (groupIds && Array.isArray(groupIds)) {
-      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -303,7 +313,7 @@ export async function dbCreateContent(authorId: string, payload: any, headers: s
   }
 }
 
-export async function dbUpdateContent(contentId: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
+export async function dbUpdateContent(event: IPreemptEvent, contentId: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -318,12 +328,13 @@ export async function dbUpdateContent(contentId: number, authorId: string, paylo
     const row = result.rows[0];
 
     if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateContentTags(client, row.id, tags);
+      await pgTagSource.updateContentTags(event, client, row.id, tags);
     }
     if (groupIds && Array.isArray(groupIds)) {
-      await dbUpdateContentTemplateGroups(client, row.id, groupIds);
+      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -335,36 +346,74 @@ export async function dbUpdateContent(contentId: number, authorId: string, paylo
   }
 }
 
-export async function dbUpdateContentTemplateGroups(client: any, contentId: number, groupIds: number[]) {
+export async function dbUpdateContentTemplateGroups(event: IPreemptEvent, client: any, contentId: number, groupIds: number[]) {
   await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [contentId]);
 
   if (groupIds && groupIds.length > 0) {
     await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, unnest($2::int[])", [contentId, groupIds]);
   }
   cache.clear();
+  await logEvent(client, event);
 }
 
-export async function dbDeleteContent(contentId: number) {
-  const result = await queryFirstRow("DELETE FROM Content WHERE id = $1 RETURNING id", [contentId], "Content not found");
-  cache.clear();
-  return result;
+export async function dbDeleteContent(event: IPreemptEvent, contentId: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query("DELETE FROM Content WHERE id = $1 RETURNING id", [contentId]);
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { error: "Content not found", status: 404 };
+    }
+    cache.clear();
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbAddContentUser(contentId: number, username: string, role: string) {
-  const result = await pool.query(
-    "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING role",
-    [contentId, username, role]
-  );
-  cache.clear();
-  return result.rows[0].role;
+export async function dbAddContentUser(event: IPreemptEvent, contentId: number, username: string, role: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING role",
+      [contentId, username, role]
+    );
+    cache.clear();
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0].role;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbRemoveContentUser(contentId: number, username: string) {
-  await pool.query("DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2", [contentId, username]);
-  cache.clear();
+export async function dbRemoveContentUser(event: IPreemptEvent, contentId: number, username: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2", [contentId, username]);
+    cache.clear();
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbGetContentUsers(contentId: number) {
+export async function dbGetContentUsers(event: IPreemptEvent, contentId: number) {
   const cacheKey = `users:${contentId}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -372,24 +421,47 @@ export async function dbGetContentUsers(contentId: number) {
   }
   const result = await pool.query("SELECT username, role FROM ContentUsers WHERE content_id = $1", [contentId]);
   cache.set(cacheKey, { timestamp: Date.now(), value: result.rows });
+  fireAndForgetEvent(event);
   return result.rows;
 }
 
-export async function dbAddContentGroup(contentId: number, groupId: number, role: string) {
-  const result = await pool.query(
-    "INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING role",
-    [contentId, groupId, role]
-  );
-  cache.clear();
-  return result.rows[0].role;
+export async function dbAddContentGroup(event: IPreemptEvent, contentId: number, groupId: number, role: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING role",
+      [contentId, groupId, role]
+    );
+    cache.clear();
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0].role;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbRemoveContentGroup(contentId: number, groupId: number) {
-  await pool.query("DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2", [contentId, groupId]);
-  cache.clear();
+export async function dbRemoveContentGroup(event: IPreemptEvent, contentId: number, groupId: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2", [contentId, groupId]);
+    cache.clear();
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbGetContentGroups(contentId: number) {
+export async function dbGetContentGroups(event: IPreemptEvent, contentId: number) {
   const cacheKey = `groups:${contentId}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -397,6 +469,7 @@ export async function dbGetContentGroups(contentId: number) {
   }
   const result = await pool.query("SELECT group_id, role FROM ContentUserGroups WHERE content_id = $1", [contentId]);
   cache.set(cacheKey, { timestamp: Date.now(), value: result.rows });
+  fireAndForgetEvent(event);
   return result.rows;
 }
 

@@ -1,13 +1,17 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
+import { logEvent, fireAndForgetEvent } from "../utils/db.js";
 import { pool } from "../db.js";
 
-export async function dbFetchAllTags(): Promise<string[]> {
+export async function dbFetchAllTags(event: IPreemptEvent): Promise<string[]> {
   const result = await pool.query("SELECT name FROM Tags");
+  fireAndForgetEvent(event);
   return result.rows.map((r: any) => r.name);
 }
 
-export async function dbUpdateTemplateTags(client: any, templateId: number, tags: string[]) {
+export async function dbUpdateTemplateTags(event: IPreemptEvent, client: any, templateId: number, tags: string[]) {
   if (!tags || tags.length === 0) {
     await client.query("DELETE FROM TemplateTags WHERE template_id = $1", [templateId]);
+    await logEvent(client, event);
     return;
   }
   
@@ -20,11 +24,13 @@ export async function dbUpdateTemplateTags(client: any, templateId: number, tags
   if (tagIds.length > 0) {
     await client.query("INSERT INTO TemplateTags (template_id, tag_id) SELECT $1, unnest($2::int[])", [templateId, tagIds]);
   }
+  await logEvent(client, event);
 }
 
-export async function dbUpdateContentTags(client: any, contentId: number, tags: string[]) {
+export async function dbUpdateContentTags(event: IPreemptEvent, client: any, contentId: number, tags: string[]) {
   if (!tags || tags.length === 0) {
     await client.query("DELETE FROM ContentTags WHERE content_id = $1", [contentId]);
+    await logEvent(client, event);
     return;
   }
   
@@ -37,6 +43,7 @@ export async function dbUpdateContentTags(client: any, contentId: number, tags: 
   if (tagIds.length > 0) {
     await client.query("INSERT INTO ContentTags (content_id, tag_id) SELECT $1, unnest($2::int[])", [contentId, tagIds]);
   }
+  await logEvent(client, event);
 }
 
 

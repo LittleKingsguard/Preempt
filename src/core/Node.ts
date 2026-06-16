@@ -1,5 +1,6 @@
 import type { NodeData, NodeQuery } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
+import { Supervisor } from "./Supervisor.js";
 
 export class Node {
   private static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
@@ -175,7 +176,7 @@ export class Node {
             if (d.css.cssDef) {
               this.data.css.cssDef = [...(this.data.css.cssDef || []), ...d.css.cssDef];
               for (const def of d.css.cssDef) {
-                this.styleNodes.push(new StyleNode(def, this));
+                this.styleNodes.push(new StyleNode(def, this, true));
               }
             }
           }
@@ -297,7 +298,7 @@ export class Node {
         const trimmedValue = String(value).trim();
         let jsCode = trimmedValue;
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-          jsCode = `(${trimmedValue})(event, { node: null })`;
+          jsCode = `(${trimmedValue})(event, { node: null, metadata: null, rootNode: null })`;
         }
         const escapedValue = jsCode.replace(/"/g, '&quot;');
         attributes += ` ${eventName}="${escapedValue}"`;
@@ -375,10 +376,10 @@ export class Node {
           const trimmedValue = String(value).trim();
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             const fn = new Function('return ' + trimmedValue)();
-            handlerFunc = ((event: Event) => fn(event, { node: this })) as EventListener;
+            handlerFunc = ((event: Event) => fn(event, { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() })) as EventListener;
           } else {
             const fn = new Function('event', 'context', trimmedValue);
-            handlerFunc = ((event: Event) => fn(event, { node: this })) as EventListener;
+            handlerFunc = ((event: Event) => fn(event, { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() })) as EventListener;
           }
           const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
           el.addEventListener(eventName, handlerFunc);
@@ -464,10 +465,70 @@ export class Node {
     }
   }
 
-  public modify(newData: Partial<NodeData>): void {
+  public modify(newData: Partial<NodeData>, renderOnChange: boolean = false): void {
     this.hasChangedSinceRender = true;
+
+    let componentChanged = false;
+    let placementChanged = false;
+
+    if (renderOnChange) {
+      if (newData.component !== undefined && JSON.stringify(this.data.component) !== JSON.stringify(newData.component)) {
+        componentChanged = true;
+      }
+      if (newData.placement !== undefined && JSON.stringify(this.data.placement) !== JSON.stringify(newData.placement)) {
+        placementChanged = true;
+      }
+
+      if (placementChanged) {
+        const placementIndex = Node.placementArray.indexOf(this);
+        if (placementIndex > -1) {
+          Node.placementArray.splice(placementIndex, 1);
+        }
+        const sourceIndex = Node.sourcePlacements.indexOf(this);
+        if (sourceIndex > -1) {
+          Node.sourcePlacements.splice(sourceIndex, 1);
+        }
+      }
+
+      if (componentChanged) {
+        const childrenToRemove = this.children.filter(child => child.isComponentInjected);
+        for (const child of childrenToRemove) {
+          child.delete();
+        }
+        
+        const stylesToRemove = this.styleNodes.filter(sn => sn.isComponentInjected);
+        for (const sn of stylesToRemove) {
+          sn.delete();
+          const idx = this.styleNodes.indexOf(sn);
+          if (idx > -1) {
+            this.styleNodes.splice(idx, 1);
+          }
+        }
+      }
+    }
+
     this.data = { ...this.data, ...newData };
     this.validate();
+
+    if (renderOnChange) {
+      if (placementChanged) {
+        Node.appendPlacement(this);
+        if (this.data.placement?.targetPlacement) {
+          for (const targetName of this.data.placement.targetPlacement) {
+            const matchedTarget = Node.placementArray.find(n => n.data.placement?.placementName === targetName);
+            if (matchedTarget) {
+              this.placeInto(matchedTarget);
+              break;
+            }
+          }
+        }
+      }
+
+      if (componentChanged) {
+        this.applyComponentsTree();
+      }
+    }
+
     if (this.element || this.isValid) {
       const oldElement = this.element;
       this.render();
@@ -599,10 +660,10 @@ export class Node {
         const trimmedValue = String(this.data.handlers[phase]).trim();
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
           const fn = new Function('return ' + trimmedValue)();
-          fn({ ...context, node: this });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() });
         } else {
           const fn = new Function('context', trimmedValue);
-          fn({ ...context, node: this });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() });
         }
       } catch (err) {
         console.error(`Failed to execute ${phase} handler on node:`, err);

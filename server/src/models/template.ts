@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { Tag } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
@@ -63,7 +64,7 @@ export class Template {
       return { error: "Validation Error", status: 400 };
     }
 
-    const row = await source.create(authorId, payload, null, true, null, tags, groupId ? [groupId] : []);
+    const row = await source.create(new PreemptEvent<any>('template.create', { id: 'system', type: 'process' }, [], { before: null, after: { authorId, payload, tags, groupId } }), authorId, payload, null, true, null, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     const template = new Template(row, source);
@@ -84,7 +85,7 @@ export class Template {
       return { error: "Forbidden: Not the author", status: 403 };
     }
 
-    const row = await this.source.update(this.id, this.author_id, payload, null, true, null, tags, groupId ? [groupId] : []);
+    const row = await this.source.update(new PreemptEvent<any>('template.update', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { payload, tags, groupId } }), this.id, this.author_id, payload, null, true, null, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     Object.assign(this, row);
@@ -101,7 +102,7 @@ export class Template {
       return { error: "Validation Error", status: 400 };
     }
 
-    const row = await source.stage(user.username, payload, null, originalId, batchId, tags, groupId ? [groupId] : []);
+    const row = await source.stage(new PreemptEvent<any>('template.stage', { id: 'system', type: 'process' }, [], { before: null, after: { payload, originalId, batchId, tags, groupId } }), user.username, payload, null, originalId, batchId, tags, groupId ? [groupId] : []);
     if ('error' in row) return row;
     
     const template = new Template(row, source);

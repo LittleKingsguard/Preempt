@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { pgHandlerSource } from "../sources/handlerSource.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
 import { Setting } from "./settings.js";
@@ -28,14 +29,14 @@ export class Handler {
   }
 
   static async getAll(source: IHandlerSource = pgHandlerSource, user: any) {
-    const rows = await source.getAll();
+    const rows = await source.getAll(new PreemptEvent<any>('handler.getAll', { id: 'system', type: 'process' }));
     return rows
       .filter(h => !validateUserRoles(user, h.approved_roles || [], h.author_id))
       .map(h => new Handler(h, source));
   }
 
   static async getById(source: IHandlerSource = pgHandlerSource, id: number) {
-    const row = await source.getById(id);
+    const row = await source.getById(new PreemptEvent<any>('handler.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
     if ('error' in row) return row;
     return new Handler(row, source);
   }
@@ -53,7 +54,7 @@ export class Handler {
 
     const isApproved = Boolean(user.is_admin || (hasTrustedDevs && user.is_trusted_dev));
 
-    const row = await source.create(data.name, data.body, user.username, isApproved);
+    const row = await source.create(new PreemptEvent<any>('handler.create', { id: 'system', type: 'process' }, [], { before: null, after: { data } }), data.name, data.body, user.username, isApproved);
     if (row && 'error' in row) return row;
     return { handler: new Handler(row, source) };
   }
@@ -70,7 +71,7 @@ export class Handler {
     }
 
     try {
-      const row = await this.source.update(this.id, data.name, data.body);
+      const row = await this.source.update(new PreemptEvent<any>('handler.update', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { data } }), this.id, data.name, data.body);
       if ('error' in row) return row;
       Object.assign(this, row);
       return { handler: this };
@@ -83,15 +84,15 @@ export class Handler {
   }
 
   static async updateTemplateHandlers(source: IHandlerSource = pgHandlerSource, templateId: number, handlerNames: string[]) {
-    await source.updateTemplateHandlers(templateId, handlerNames);
+    await source.updateTemplateHandlers(new PreemptEvent<any>('handler.updateTemplateHandlers', { id: 'system', type: 'process' }, [], { before: null, after: { templateId, handlerNames } }), templateId, handlerNames);
   }
 
   static async updateContentHandlers(source: IHandlerSource = pgHandlerSource, contentId: number, handlerNames: string[]) {
-    await source.updateContentHandlers(contentId, handlerNames);
+    await source.updateContentHandlers(new PreemptEvent<any>('handler.updateContentHandlers', { id: 'system', type: 'process' }, [], { before: null, after: { contentId, handlerNames } }), contentId, handlerNames);
   }
 
   static async stage(source: IHandlerSource = pgHandlerSource, user: any, name: string, body: string, originalId: number | null, batchId: number) {
-    const row = await source.stage(name, body, user.username, originalId, batchId);
+    const row = await source.stage(new PreemptEvent<any>('handler.stage', { id: 'system', type: 'process' }, [], { before: null, after: { name, body, originalId, batchId } }), name, body, user.username, originalId, batchId);
     return { handler: new Handler(row, source) };
   }
 
@@ -105,7 +106,7 @@ export class Handler {
     if (user.is_shadowed) return { success: true };
 
     try {
-      const row = await this.source.delete(this.id);
+      const row = await this.source.delete(new PreemptEvent<any>('handler.delete', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
       if ('error' in row) return row;
       return { handler: new Handler(row, this.source) };
     } catch (err: any) {
@@ -121,7 +122,7 @@ export class Handler {
     }
 
     try {
-      const row = await this.source.approve(this.id, is_approved);
+      const row = await this.source.approve(new PreemptEvent<any>('handler.approve', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { is_approved } }), this.id, is_approved);
       if ('error' in row) return row;
       Object.assign(this, row);
       return { handler: this };

@@ -1,46 +1,83 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
 
-export async function dbAuthenticateUser(username: string, passwordPlain: string) {
-  return await queryFirstRow(
+export async function dbAuthenticateUser(event: IPreemptEvent, username: string, passwordPlain: string) {
+  const row = await queryFirstRow(
     "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page FROM Users WHERE username = $1 AND password_hash = crypt($2, password_hash)",
     [username, passwordPlain]
   );
+  fireAndForgetEvent(event);
+  return row;
 }
 
-export async function dbCreateUser(username: string, email: string, passwordPlain: string) {
+export async function dbCreateUser(event: IPreemptEvent, username: string, email: string, passwordPlain: string) {
+  const client = await pool.connect();
   try {
-    return await queryFirstRow(
+    await client.query('BEGIN');
+    const result = await client.query(
       "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page",
       [username, email, passwordPlain]
     );
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0];
   } catch (err: any) {
+    await client.query('ROLLBACK');
     if (err.code === '23505') {
       return { error: "Username or email already exists", status: 409 };
     }
     throw err;
+  } finally {
+    client.release();
   }
 }
 
-export async function dbGetUserByEmail(email: string) {
-  return await queryFirstRow("SELECT username, email, is_admin FROM Users WHERE email = $1", [email], "User not found");
+export async function dbGetUserByEmail(event: IPreemptEvent, email: string) {
+  const row = await queryFirstRow("SELECT username, email, is_admin FROM Users WHERE email = $1", [email], "User not found");
+  fireAndForgetEvent(event);
+  return row;
 }
 
-export async function dbGetUserByUsername(username: string) {
-  return await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page FROM Users WHERE username = $1", [username], "User not found");
+export async function dbGetUserByUsername(event: IPreemptEvent, username: string) {
+  const row = await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page FROM Users WHERE username = $1", [username], "User not found");
+  fireAndForgetEvent(event);
+  return row;
 }
 
-export async function dbUpdatePassword(username: string, newPasswordPlain: string) {
-  await pool.query("UPDATE Users SET password_hash = crypt($1, gen_salt('bf')) WHERE username = $2", [newPasswordPlain, username]);
+export async function dbUpdatePassword(event: IPreemptEvent, username: string, newPasswordPlain: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("UPDATE Users SET password_hash = crypt($1, gen_salt('bf')) WHERE username = $2", [newPasswordPlain, username]);
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 
 
-export async function dbVerifyUserEmail(username: string) {
-  await pool.query("UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1", [username]);
+export async function dbVerifyUserEmail(event: IPreemptEvent, username: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1", [username]);
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbUpdateUserRoles(username: string, roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
+export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
   const updates: string[] = [];
   const values: any[] = [];
   let index = 1;
@@ -61,12 +98,17 @@ export async function dbUpdateUserRoles(username: string, roles: { is_contributo
   if (updates.length === 0) return;
 
   values.push(username);
+  const client = await pool.connect();
   try {
-    await pool.query(
+    await client.query('BEGIN');
+    await client.query(
       `UPDATE Users SET ${updates.join(', ')} WHERE username = $${index}`,
       values
     );
+    await logEvent(client, event);
+    await client.query('COMMIT');
   } catch (err: any) {
+    await client.query('ROLLBACK');
     if (err.code === '23514' && err.constraint === 'check_bot_roles') {
       return { error: "A bot cannot have admin or contributor roles", status: 400 };
     }
@@ -74,20 +116,34 @@ export async function dbUpdateUserRoles(username: string, roles: { is_contributo
       return { error: "User must verify their email before receiving admin or contributor roles", status: 400 };
     }
     throw err;
+  } finally {
+    client.release();
   }
 }
 
-export async function dbUpdateUserHomePage(username: string, homePage: number | null) {
-  await pool.query(
-    "UPDATE Users SET home_page = $1 WHERE username = $2",
-    [homePage, username]
-  );
+export async function dbUpdateUserHomePage(event: IPreemptEvent, username: string, homePage: number | null) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      "UPDATE Users SET home_page = $1 WHERE username = $2",
+      [homePage, username]
+    );
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbGetUsers() {
+export async function dbGetUsers(event: IPreemptEvent) {
   const result = await pool.query(
     "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page FROM Users"
   );
+  fireAndForgetEvent(event);
   return result.rows;
 }
 

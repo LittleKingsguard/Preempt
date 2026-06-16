@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
 import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Tag } from "./tag.js";
@@ -78,13 +79,13 @@ export class Content {
   }
 
   static async getById(source: IContentSource = pgContentSource, id: number, user?: any) {
-    const row = await source.get({ id }, user);
+    const row = await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), { id }, user);
     if (!row || 'error' in row) return row || { error: "Content not found", status: 404 };
     return new Content(row, source);
   }
 
   static async getHeaders(source: IContentSource = pgContentSource, id: number) {
-    return await source.getHeaders(id);
+    return await source.getHeaders(new PreemptEvent<any>('content.getHeaders', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
   }
 
   static async getWithTemplate(
@@ -98,19 +99,19 @@ export class Content {
     handlerSource: IHandlerSource = pgHandlerSource,
     componentSource: IComponentSource = pgComponentSource
   ) {
-    const contentRow = await source.get({ id: contentId }, user);
+    const contentRow = await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { templateSource, contentId, templateId, tagsParam, editorMode, handlerSource, componentSource } }), { id: contentId }, user);
     if (!contentRow || 'error' in contentRow) return contentRow || { error: "Content not found", status: 404 };
 
     const content = new Content(contentRow, source);
 
     let templateRow;
     if (templateId) {
-      templateRow = await templateSource.get({ id: templateId }, user);
+      templateRow = await templateSource.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { templateSource, contentId, templateId, tagsParam, editorMode, handlerSource, componentSource } }), { id: templateId }, user);
     } else {
       const tagsArray = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(t => t) : [];
       if (editorMode) tagsArray.push("editor");
 
-      const templates = await templateSource.get({ list_id: contentRow.template_group_id, tags: tagsArray }, user);
+      const templates = await templateSource.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { templateSource, contentId, templateId, tagsParam, editorMode, handlerSource, componentSource } }), { list_id: contentRow.template_group_id, tags: tagsArray }, user);
       templateRow = templates && templates.length > 0 ? templates[0] : null;
     }
 
@@ -203,19 +204,19 @@ export class Content {
       placeholder = Content.guardPlaceholderCache;
     }
     
-    const rows = await source.get({ ...criteria, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user, placeholder);
+    const rows = await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { criteria } }), { ...criteria, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user, placeholder);
     const contents = rows.map((r: any) => new Content(r, source));
     return contents;
   }
   static async getCount(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string } = {}, user?: any) {
     const behavior = await Setting.get(undefined, "contentReturnBehavior") || "Overlook";
     
-    return await source.get({ ...criteria, count_only: true, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user);
+    return await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { criteria } }), { ...criteria, count_only: true, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user);
   }
 
 
   static async stage(source: IContentSource = pgContentSource, user: any, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[] = [], groupIds: number[] = [], promo?: any) {
-    const row = await source.stage(user.username, payload, headers, originalId, batchId, tags, groupIds, promo);
+    const row = await source.stage(new PreemptEvent<any>('content.stage', { id: 'system', type: 'process' }, [], { before: null, after: { payload, headers, originalId, batchId, tags, groupIds, promo } }), user.username, payload, headers, originalId, batchId, tags, groupIds, promo);
     if ('error' in row) return row;
     const content = new Content(row, source);
     if (tags && tags.length > 0) {
@@ -229,7 +230,7 @@ export class Content {
       return { error: "Forbidden: Only admins and contributors can create content directly", status: 403 };
     }
 
-    const row = await source.create(user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
+    const row = await source.create(new PreemptEvent<any>('content.create', { id: 'system', type: 'process' }, [], { before: null, after: { payload, headers, tags, groupIds, isVisible, liveDate, promo } }), user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
     if ('error' in row) return row;
     const content = new Content(row, source);
     content.users = [{ content_id: content.id, username: user.username, role: 'Owner' }];
@@ -252,7 +253,7 @@ export class Content {
       return { error: "Forbidden: You do not have permission to update this content", status: 403 };
     }
 
-    const row = await this.source.update(this.id, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
+    const row = await this.source.update(new PreemptEvent<any>('content.update', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { payload, headers, tags, groupIds, isVisible, liveDate, promo } }), this.id, user.username, payload, headers, isVisible, liveDate ? new Date(liveDate) : new Date(), tags, groupIds, promo);
     if ('error' in row) return row;
     Object.assign(this, row);
 
@@ -275,7 +276,7 @@ export class Content {
     }
     
     try {
-      const row = await this.source.delete(this.id);
+      const row = await this.source.delete(new PreemptEvent<any>('content.delete', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
       if ('error' in row) return row;
       return { success: true };
     } catch (err: any) {
@@ -291,7 +292,7 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const result = await this.source.addUser(this.id, targetUsername, role);
+    const result = await this.source.addUser(new PreemptEvent<any>('content.addUser', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { targetUsername, role } }), this.id, targetUsername, role);
     return { success: true, role: result };
   }
 
@@ -303,7 +304,7 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    await this.source.removeUser(this.id, targetUsername);
+    await this.source.removeUser(new PreemptEvent<any>('content.removeUser', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { targetUsername } }), this.id, targetUsername);
     return { success: true };
   }
 
@@ -315,7 +316,7 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    const result = await this.source.addGroup(this.id, targetGroupId, role);
+    const result = await this.source.addGroup(new PreemptEvent<any>('content.addGroup', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { targetGroupId, role } }), this.id, targetGroupId, role);
     return { success: true, role: result };
   }
 
@@ -327,7 +328,7 @@ export class Content {
     if (!isAdmin && userRole !== 'Owner' && groupRole !== 'Owner') {
       return { error: "Forbidden: Only Owners can manage roles", status: 403 };
     }
-    await this.source.removeGroup(this.id, targetGroupId);
+    await this.source.removeGroup(new PreemptEvent<any>('content.removeGroup', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { targetGroupId } }), this.id, targetGroupId);
     return { success: true };
   }
 }

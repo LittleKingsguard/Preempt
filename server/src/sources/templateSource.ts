@@ -1,5 +1,6 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
 import { pgTagSource } from "./tagSource.js";
 import type { IContentSource } from "../models/interfaces.js";
 
@@ -11,7 +12,7 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
-export async function dbCreateTemplate(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+export async function dbCreateTemplate(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
@@ -23,9 +24,10 @@ export async function dbCreateTemplate(authorId: string, payload: any, headers: 
     const row = result.rows[0];
 
     if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateTemplateTags(client, row.id, tags);
+      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -37,13 +39,17 @@ export async function dbCreateTemplate(authorId: string, payload: any, headers: 
   }
 }
 
-export async function dbGetTemplateAuthorId(templateId: number) {
+export async function dbGetTemplateAuthorId(event: IPreemptEvent, templateId: number) {
   const result = await pool.query("SELECT author_id FROM Templates WHERE id = $1", [templateId]);
-  if (result.rows.length === 0) return { error: "Template not found", status: 404 };
+  if (result.rows.length === 0) {
+    fireAndForgetEvent(event);
+    return { error: "Template not found", status: 404 };
+  }
+  fireAndForgetEvent(event);
   return result.rows[0].author_id;
 }
 
-export async function dbUpdateTemplate(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+export async function dbUpdateTemplate(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
@@ -59,9 +65,10 @@ export async function dbUpdateTemplate(id: number, authorId: string, payload: an
     const row = result.rows[0];
 
     if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateTemplateTags(client, row.id, tags);
+      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -73,7 +80,7 @@ export async function dbUpdateTemplate(id: number, authorId: string, payload: an
   }
 }
 
-export async function dbStageTemplate(authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
+export async function dbStageTemplate(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const client = await pool.connect();
   try {
@@ -119,9 +126,10 @@ export async function dbStageTemplate(authorId: string, payload: any, headers: s
     }
 
     if (tags && Array.isArray(tags) && (isStagedRow || tags.length > 0)) {
-      await pgTagSource.updateTemplateTags(client, row.id, tags);
+      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
     }
 
+    await logEvent(client, event);
     await client.query('COMMIT');
     cache.clear();
     return row;
@@ -133,7 +141,7 @@ export async function dbStageTemplate(authorId: string, payload: any, headers: s
   }
 }
 
-export async function dbGetTemplate(criteria: { count_only?: boolean; id?: number; list_id?: number; tags?: string[] } = {}, user?: any, placeholder?: any) {
+export async function dbGetTemplate(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; list_id?: number; tags?: string[] } = {}, user?: any, placeholder?: any) {
   const cacheKey = JSON.stringify(criteria);
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -168,21 +176,22 @@ export async function dbGetTemplate(criteria: { count_only?: boolean; id?: numbe
   }
 
   cache.set(cacheKey, { timestamp: Date.now(), value: resultValue });
+  fireAndForgetEvent(event);
   return resultValue;
 }
 
 export const pgTemplateSource: IContentSource = {
   get: dbGetTemplate,
-  getHeaders: async () => { throw new Error("Not implemented yet"); },
-  query: async () => { throw new Error("Not implemented yet"); },
+  getHeaders: async (event: IPreemptEvent) => { throw new Error("Not implemented yet"); },
+  query: async (event: IPreemptEvent) => { throw new Error("Not implemented yet"); },
   create: dbCreateTemplate,
   update: dbUpdateTemplate,
   stage: dbStageTemplate,
-  delete: async (id: number) => { throw new Error("Not implemented"); },
-  addUser: async () => { throw new Error("Not implemented"); },
-  removeUser: async () => { throw new Error("Not implemented"); },
-  getUsers: async () => { throw new Error("Not implemented"); },
-  addGroup: async () => { throw new Error("Not implemented"); },
-  removeGroup: async () => { throw new Error("Not implemented"); },
-  getGroups: async () => { throw new Error("Not implemented"); }
+  delete: async (event: IPreemptEvent, id: number) => { throw new Error("Not implemented"); },
+  addUser: async (event: IPreemptEvent) => { throw new Error("Not implemented"); },
+  removeUser: async (event: IPreemptEvent) => { throw new Error("Not implemented"); },
+  getUsers: async (event: IPreemptEvent) => { throw new Error("Not implemented"); },
+  addGroup: async (event: IPreemptEvent) => { throw new Error("Not implemented"); },
+  removeGroup: async (event: IPreemptEvent) => { throw new Error("Not implemented"); },
+  getGroups: async (event: IPreemptEvent) => { throw new Error("Not implemented"); }
 };

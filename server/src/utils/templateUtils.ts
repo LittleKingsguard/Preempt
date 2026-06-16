@@ -1,3 +1,4 @@
+import { PreemptEvent } from '../../../src/types/Event.js';
 import { pool } from "../db.js";
 import { queryFirstRow } from "./db.js";
 import { validateUserRoles } from "../middleware/auth.js";
@@ -21,7 +22,7 @@ export async function fetchTemplateRecord(templateId: number): Promise<any> {
 }
 
 export async function fetchTemplateHandlers(templateId: number, handlerSource: IHandlerSource, componentSource: IComponentSource) {
-  const components = (await componentSource.getAll({ templateId })) || [];
+  const components = (await componentSource.getAll(new PreemptEvent('templateUtils.getComponents', { id: 'system', type: 'process' }), { templateId })) || [];
   const componentIds = components.map((c: any) => c.id);
 
   const criteria: any = { templateId };
@@ -29,7 +30,7 @@ export async function fetchTemplateHandlers(templateId: number, handlerSource: I
     criteria.componentIds = componentIds;
   }
 
-  const allHandlers = (await handlerSource.getAll(criteria)) || [];
+  const allHandlers = (await handlerSource.getAll(new PreemptEvent('templateUtils.getHandlers', { id: 'system', type: 'process' }), criteria)) || [];
 
   const handlerMap = new Map();
   for (const h of allHandlers) {
@@ -57,7 +58,7 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
 }
 
 export async function fetchTemplateComponents(templateId: number, componentSource: IComponentSource) {
-  return (await componentSource.getAll({ templateId })) || [];
+  return (await componentSource.getAll(new PreemptEvent('templateUtils.getComponents', { id: 'system', type: 'process' }), { templateId })) || [];
 }
 
 export async function populateTemplateComponents(payload: any, templateId: number, user: any, componentSource: IComponentSource): Promise<void> {

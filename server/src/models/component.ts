@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import * as componentSource from "../sources/componentSource.js";
 import { pgComponentSource } from "../sources/componentSource.js";
 import { validateUserRoles } from "../middleware/auth.js";
@@ -25,14 +26,14 @@ export class Component {
   }
 
   static async getAll(source: IComponentSource = pgComponentSource, user: any) {
-    const rows = await source.getAll();
+    const rows = await source.getAll(new PreemptEvent<any>('component.getAll', { id: 'system', type: 'process' }));
     return rows
       .filter(c => !validateUserRoles(user, c.approved_roles || [], c.author_id))
       .map(c => new Component(c, source));
   }
 
   static async getById(source: IComponentSource = pgComponentSource, id: number) {
-    const row = await source.getById(id);
+    const row = await source.getById(new PreemptEvent<any>('component.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
     if ('error' in row) return row;
     return new Component(row, source);
   }
@@ -50,7 +51,7 @@ export class Component {
       return { error: "Name and payload are required", status: 400 };
     }
 
-    const row = await source.create(data.name, data.payload, user.username);
+    const row = await source.create(new PreemptEvent<any>('component.create', { id: 'system', type: 'process' }, [], { before: null, after: { data } }), data.name, data.payload, user.username);
     if (row && 'error' in row) return row;
     return { component: new Component(row, source) };
   }
@@ -70,7 +71,7 @@ export class Component {
     }
 
     try {
-      const row = await this.source.update(this.id, data.name, data.payload);
+      const row = await this.source.update(new PreemptEvent<any>('component.update', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { data } }), this.id, data.name, data.payload);
       if ('error' in row) return row;
       Object.assign(this, row);
       return { component: this };
@@ -88,21 +89,21 @@ export class Component {
 
     if (user.is_shadowed) return { success: true };
 
-    const row = await this.source.delete(this.id);
+    const row = await this.source.delete(new PreemptEvent<any>('component.delete', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
     if ('error' in row) return row;
     return { success: true };
   }
 
   static async updateTemplateComponents(source: IComponentSource = pgComponentSource, client: any, templateId: number, componentNames: string[]) {
-    await source.updateTemplateComponents(client, templateId, componentNames);
+    await source.updateTemplateComponents(new PreemptEvent<any>('component.updateTemplateComponents', { id: 'system', type: 'process' }, [], { before: null, after: { client, templateId, componentNames } }), client, templateId, componentNames);
   }
 
   static async updateContentComponents(source: IComponentSource = pgComponentSource, client: any, contentId: number, componentNames: string[]) {
-    await source.updateContentComponents(client, contentId, componentNames);
+    await source.updateContentComponents(new PreemptEvent<any>('component.updateContentComponents', { id: 'system', type: 'process' }, [], { before: null, after: { client, contentId, componentNames } }), client, contentId, componentNames);
   }
 
   static async stage(source: IComponentSource = pgComponentSource, user: any, name: string, payload: any, originalId: number | null, batchId: number) {
-    const row = await source.stage(name, payload, user.username, originalId, batchId);
+    const row = await source.stage(new PreemptEvent<any>('component.stage', { id: 'system', type: 'process' }, [], { before: null, after: { name, payload, originalId, batchId } }), name, payload, user.username, originalId, batchId);
     return { component: new Component(row, source) };
   }
 }

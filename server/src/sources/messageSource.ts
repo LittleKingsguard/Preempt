@@ -1,5 +1,7 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { pool } from '../db.js';
-import { queryFirstRow } from '../utils/db.js';
+import { queryFirstRow, logEvent, fireAndForgetEvent } from '../utils/db.js';
 import type { IContentSource, IContentData } from '../models/interfaces.js';
 import { pgSettingSource } from './settingsSource.js';
 
@@ -10,7 +12,7 @@ const CACHE_TTL_MS = 60000; // 1 minute
 async function getDefaultMessageComponent() {
   const now = Date.now();
   if (!cachedDefaultMessage || now - cachedDefaultMessageTimestamp > CACHE_TTL_MS) {
-    cachedDefaultMessage = await pgSettingSource.get('default-message');
+    cachedDefaultMessage = await pgSettingSource.get(new PreemptEvent('settings.get', { id: 'system', type: 'process' }), 'default-message');
     cachedDefaultMessageTimestamp = now;
     
     if (!cachedDefaultMessage) {
@@ -75,20 +77,23 @@ function compileMessagesToContent(messageRows: any[], defaultMessageComp: any): 
   };
 }
 
-export async function getMessageAuthor(messageId: number) {
+export async function getMessageAuthor(event: IPreemptEvent, messageId: number) {
   const row = await queryFirstRow("SELECT author_id FROM Messages WHERE id = $1", [messageId]);
+  fireAndForgetEvent(event);
   return row ? row.author_id : null;
 }
 
 export const pgMessageSource: IContentSource = {
-  async get(criteria: any, user?: any, placeholder?: any) {
+  async get(event: IPreemptEvent, criteria: any, user?: any, placeholder?: any) {
     if (criteria.count_only) {
       const row = await queryFirstRow("SELECT COUNT(*) as count FROM Messages", []);
+      fireAndForgetEvent(event);
       return { count: row ? parseInt(row.count) : 0 };
     }
 
     if (criteria.id !== undefined) {
       const row = await queryFirstRow("SELECT * FROM Messages WHERE id = $1", [criteria.id], "Message not found");
+      fireAndForgetEvent(event);
       if (row && !('error' in row)) {
         const defaultComp = await getDefaultMessageComponent();
         return compileMessagesToContent([row], defaultComp);
@@ -113,57 +118,99 @@ export const pgMessageSource: IContentSource = {
     params.push(offset);
     query += ` OFFSET $${params.length}`;
 
-    return this.query(query, params);
+    const res = await this.query(event, query, params);
+    fireAndForgetEvent(event);
+    return res;
   },
 
-  async query(query: string, params: any[]) {
+  async query(event: IPreemptEvent, query: string, params: any[]) {
     const result = await pool.query(query, params);
     const defaultComp = await getDefaultMessageComponent();
+    fireAndForgetEvent(event);
     return [compileMessagesToContent(result.rows, defaultComp)];
   },
 
-  async getHeaders(id: number) {
+  async getHeaders(event: IPreemptEvent, id: number) {
+    fireAndForgetEvent(event);
     return null;
   },
 
-  async create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
+  async create(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
     const { message_list_id, body, reply_target_id } = payload;
     
-    const row = await queryFirstRow(
-      `INSERT INTO Messages (message_list_id, reply_target_id, author_id, body)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [message_list_id, reply_target_id || null, authorId, body]
-    );
-    const defaultComp = await getDefaultMessageComponent();
-    return compileMessagesToContent([row], defaultComp);
-  },
-
-  async update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
-    const row = await queryFirstRow(
-      `UPDATE Messages SET body = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
-      [payload.body, id],
-      "Message not found"
-    );
-    if (row && !('error' in row)) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO Messages (message_list_id, reply_target_id, author_id, body)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [message_list_id, reply_target_id || null, authorId, body]
+      );
+      const row = result.rows[0];
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      
       const defaultComp = await getDefaultMessageComponent();
       return compileMessagesToContent([row], defaultComp);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    return row;
   },
 
-  async delete(id: number) {
-    const result = await pool.query("DELETE FROM Messages WHERE id = $1 RETURNING *", [id]);
-    if (result.rowCount === 0) {
-      return { error: "Message not found", status: 404 };
+  async update(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE Messages SET body = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+        [payload.body, id]
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { error: "Message not found", status: 404 };
+      }
+      const row = result.rows[0];
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      
+      const defaultComp = await getDefaultMessageComponent();
+      return compileMessagesToContent([row], defaultComp);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    return result.rows[0];
   },
 
-  async stage() { return { error: "Not supported", status: 400 }; },
-  async addUser() { return { error: "Not supported", status: 400 }; },
-  async removeUser() {},
-  async getUsers() { return []; },
-  async addGroup() { return { error: "Not supported", status: 400 }; },
-  async removeGroup() {},
-  async getGroups() { return []; }
+  async delete(event: IPreemptEvent, id: number) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query("DELETE FROM Messages WHERE id = $1 RETURNING *", [id]);
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return { error: "Message not found", status: 404 };
+      }
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  async stage(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async addUser(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeUser(event: IPreemptEvent) {},
+  async getUsers(event: IPreemptEvent) { return []; },
+  async addGroup(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeGroup(event: IPreemptEvent) {},
+  async getGroups(event: IPreemptEvent) { return []; }
 };

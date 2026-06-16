@@ -1,37 +1,79 @@
+import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow } from "../utils/db.js";
+import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
 import { dbGetComponentById } from "./componentSource.js";
 import { dbGetHandlerById } from "./handlerSource.js";
 
-export async function dbCreateChangeBatch(authorId: string, description: string) {
-  return await queryFirstRow(
-    "INSERT INTO ChangeBatches (author_id, description) VALUES ($1, $2) RETURNING id, author_id, description, merged_at, created_at",
-    [authorId, description]
-  );
+export async function dbCreateChangeBatch(event: IPreemptEvent, authorId: string, description: string) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "INSERT INTO ChangeBatches (author_id, description) VALUES ($1, $2) RETURNING id, author_id, description, merged_at, created_at",
+      [authorId, description]
+    );
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbGetChangeBatchById(id: number) {
-  return await queryFirstRow("SELECT * FROM ChangeBatches WHERE id = $1", [id], "Change batch not found");
+export async function dbGetChangeBatchById(event: IPreemptEvent, id: number) {
+  const res = await queryFirstRow("SELECT * FROM ChangeBatches WHERE id = $1", [id], "Change batch not found");
+  fireAndForgetEvent(event);
+  return res;
 }
 
-export async function dbGetPendingChangeBatches() {
+export async function dbGetPendingChangeBatches(event: IPreemptEvent) {
   const result = await pool.query("SELECT * FROM ChangeBatches WHERE merged_at IS NULL ORDER BY created_at DESC");
+  fireAndForgetEvent(event);
   return result.rows;
 }
 
-export async function dbMarkChangeBatchMerged(id: number) {
-  return await queryFirstRow(
-    "UPDATE ChangeBatches SET merged_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *",
-    [id],
-    "Change batch not found"
-  );
+export async function dbMarkChangeBatchMerged(event: IPreemptEvent, id: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      "UPDATE ChangeBatches SET merged_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *",
+      [id]
+    );
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { error: "Change batch not found", status: 404 };
+    }
+    await logEvent(client, event);
+    await client.query('COMMIT');
+    return result.rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbDeleteChangeBatch(id: number) {
-  await pool.query("DELETE FROM ChangeBatches WHERE id = $1", [id]);
+export async function dbDeleteChangeBatch(event: IPreemptEvent, id: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("DELETE FROM ChangeBatches WHERE id = $1", [id]);
+    await logEvent(client, event);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export async function dbApproveChangeBatch(batchId: number) {
+export async function dbApproveChangeBatch(event: IPreemptEvent, batchId: number) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -42,7 +84,7 @@ export async function dbApproveChangeBatch(batchId: number) {
       if (!comp.original_id) {
         await client.query("UPDATE Components SET is_approved = true WHERE id = $1", [comp.id]);
       } else {
-        const orig = await dbGetComponentById(comp.original_id);
+        const orig = await dbGetComponentById(event, comp.original_id, client);
         if (orig) {
           await client.query(
             "INSERT INTO Components (name, payload, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false)",
@@ -59,7 +101,7 @@ export async function dbApproveChangeBatch(batchId: number) {
       if (!h.original_id) {
         await client.query("UPDATE Handlers SET is_approved = true WHERE id = $1", [h.id]);
       } else {
-        const orig = await dbGetHandlerById(h.original_id);
+        const orig = await dbGetHandlerById(event, h.original_id, client);
         if (orig) {
           await client.query(
             "INSERT INTO Handlers (name, body, author_id, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false)",
@@ -129,12 +171,17 @@ export async function dbApproveChangeBatch(batchId: number) {
       }
     }
 
-    const mergedBatch = await queryFirstRow(
+    const mergedBatchRes = await client.query(
       "UPDATE ChangeBatches SET merged_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *",
-      [batchId],
-      "Change batch not found"
+      [batchId]
     );
+    if (mergedBatchRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return { error: "Change batch not found", status: 404 };
+    }
+    const mergedBatch = mergedBatchRes.rows[0];
     
+    await logEvent(client, event);
     await client.query('COMMIT');
     return mergedBatch;
   } catch (err) {

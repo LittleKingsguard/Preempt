@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
 import type { ISettingSource } from "./interfaces.js";
 
@@ -22,7 +23,7 @@ export class Setting {
       return cached.value;
     }
 
-    const row = await source.get(key);
+    const row = await source.get(new PreemptEvent<any>('settings.get', { id: 'system', type: 'process' }, [], { before: null, after: { key } }), key);
     const value = row ? row.value : null;
     
     cache.set(key, { value, timestamp: now });
@@ -36,7 +37,7 @@ export class Setting {
     } catch (err: any) {
       return { error: "Cannot serialize circular reference", status: 400 };
     }
-    await source.set(key, stringified);
+    await source.set(new PreemptEvent<any>('settings.set', { id: 'system', type: 'process' }, [], { before: null, after: { key, value } }), key, stringified);
     
     cache.set(key, { value, timestamp: Date.now() });
   }

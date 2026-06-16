@@ -1,3 +1,4 @@
+import { PreemptEvent } from '../../../src/types/Event.js';
 import { pool } from "../db.js";
 import { fetchTemplateHandlers, fetchTemplateComponents } from "./templateUtils.js";
 import { queryFirstRow } from "./db.js";
@@ -16,7 +17,7 @@ export async function checkContentSecurity(resolvedTemplateId: number, editorMod
 }
 
 export async function fetchContentHandlers(contentId: number, handlerSource: IHandlerSource, componentSource: IComponentSource) {
-  const components = (await componentSource.getAll({ contentId })) || [];
+  const components = (await componentSource.getAll(new PreemptEvent('contentUtils.getComponents', { id: 'system', type: 'process' }), { contentId })) || [];
   const componentIds = components.map((c: any) => c.id);
 
   const criteria: any = { contentId };
@@ -24,7 +25,7 @@ export async function fetchContentHandlers(contentId: number, handlerSource: IHa
     criteria.componentIds = componentIds;
   }
 
-  const allHandlers = (await handlerSource.getAll(criteria)) || [];
+  const allHandlers = (await handlerSource.getAll(new PreemptEvent('contentUtils.getHandlers', { id: 'system', type: 'process' }), criteria)) || [];
 
   const handlerMap = new Map();
   for (const h of allHandlers) {
@@ -60,7 +61,7 @@ export async function populateContentHandlers(contentPayload: any, contentId: nu
 }
 
 export async function fetchContentComponents(contentId: number, componentSource: IComponentSource) {
-  return (await componentSource.getAll({ contentId })) || [];
+  return (await componentSource.getAll(new PreemptEvent('contentUtils.getComponents', { id: 'system', type: 'process' }), { contentId })) || [];
 }
 
 export async function populateContentComponents(contentPayload: any, contentId: number, templateId: number, user: any, componentSource: IComponentSource): Promise<void> {

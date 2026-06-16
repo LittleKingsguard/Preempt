@@ -1,5 +1,6 @@
+import { PreemptEvent, type IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from '../db.js';
-import { queryFirstRow } from '../utils/db.js';
+import { queryFirstRow, logEvent, fireAndForgetEvent } from '../utils/db.js';
 import type { IContentSource, IContentData, IContentUserData, IContentUserGroupData } from '../models/interfaces.js';
 import { pgSettingSource } from './settingsSource.js';
 
@@ -7,10 +8,10 @@ let cachedDefaultComment: any = null;
 let cachedDefaultCommentTimestamp: number = 0;
 const CACHE_TTL_MS = 60000; // 1 minute
 
-async function getDefaultCommentComponent() {
+async function getDefaultCommentComponent(event: IPreemptEvent) {
   const now = Date.now();
   if (!cachedDefaultComment || now - cachedDefaultCommentTimestamp > CACHE_TTL_MS) {
-    cachedDefaultComment = await pgSettingSource.get('default-comment');
+    cachedDefaultComment = await pgSettingSource.get(new PreemptEvent('comment.getSetting', { id: 'system', type: 'process' }), 'default-comment');
     cachedDefaultCommentTimestamp = now;
     
     if (!cachedDefaultComment) {
@@ -77,28 +78,32 @@ function compileCommentsToContent(commentRows: any[], defaultCommentComp: any): 
   };
 }
 
-export async function getCommentAuthor(commentId: number) {
+export async function getCommentAuthor(event: IPreemptEvent, commentId: number) {
   const row = await queryFirstRow("SELECT author_id FROM Comments WHERE id = $1", [commentId]);
+  fireAndForgetEvent(event);
   return row ? row.author_id : null;
 }
 
 export const pgCommentSource: IContentSource = {
-  async getSubjectContext(commentListId: number) {
+  async getSubjectContext(event: IPreemptEvent, commentListId: number) {
     const list = await queryFirstRow("SELECT subject_type, subject_id FROM CommentLists WHERE id = $1", [commentListId]);
     if (!list || 'error' in list) return null;
+    fireAndForgetEvent(event);
     return list;
   },
 
-  async get(criteria: any, user?: any, placeholder?: any) {
+  async get(event: IPreemptEvent, criteria: any, user?: any, placeholder?: any) {
     if (criteria.count_only) {
       const row = await queryFirstRow("SELECT COUNT(*) as count FROM Comments", []);
+      fireAndForgetEvent(event);
       return { count: row ? parseInt(row.count) : 0 };
     }
 
     if (criteria.id !== undefined) {
       const row = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [criteria.id], "Comment not found");
+      fireAndForgetEvent(event);
       if (row && !('error' in row)) {
-        const defaultComp = await getDefaultCommentComponent();
+        const defaultComp = await getDefaultCommentComponent(event);
         return compileCommentsToContent([row], defaultComp);
       }
       return row;
@@ -121,58 +126,101 @@ export const pgCommentSource: IContentSource = {
     params.push(offset);
     query += ` OFFSET $${params.length}`;
 
-    return this.query(query, params);
+    const res = await this.query(event, query, params);
+    fireAndForgetEvent(event);
+    return res;
   },
 
-  async query(query: string, params: any[]) {
+  async query(event: IPreemptEvent, query: string, params: any[]) {
     const result = await pool.query(query, params);
-    const defaultComp = await getDefaultCommentComponent();
+    const defaultComp = await getDefaultCommentComponent(event);
+    fireAndForgetEvent(event);
     return [compileCommentsToContent(result.rows, defaultComp)];
   },
 
-  async getHeaders(id: number) {
+  async getHeaders(event: IPreemptEvent, id: number) {
+    fireAndForgetEvent(event);
     return null;
   },
 
-  async create(authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
+  async create(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
     // Expected payload to contain { comment_list_id, body, parent_comment_id, target_placement }
     const { comment_list_id, body, parent_comment_id, target_placement } = payload;
     
-    const row = await queryFirstRow(
-      `INSERT INTO Comments (comment_list_id, parent_comment_id, target_placement, author_id, body) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [comment_list_id, parent_comment_id || null, target_placement || null, authorId, body]
-    );
-    const defaultComp = await getDefaultCommentComponent();
-    return compileCommentsToContent([row], defaultComp);
-  },
-
-  async update(id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
-    const row = await queryFirstRow(
-      `UPDATE Comments SET body = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
-      [payload.body, id],
-      "Comment not found"
-    );
-    if (row && !('error' in row)) {
-      const defaultComp = await getDefaultCommentComponent();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO Comments (comment_list_id, parent_comment_id, target_placement, author_id, body) 
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [comment_list_id, parent_comment_id || null, target_placement || null, authorId, body]
+      );
+      const row = result.rows[0];
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      
+      const defaultComp = await getDefaultCommentComponent(event);
       return compileCommentsToContent([row], defaultComp);
+    } catch (err) {
+      console.log('Error inside pgCommentSource.create:', err);
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    return row;
   },
 
-  async delete(id: number) {
-    const result = await pool.query("DELETE FROM Comments WHERE id = $1 RETURNING *", [id]);
-    if (result.rowCount === 0) {
-      return { error: "Comment not found", status: 404 };
+  async update(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE Comments SET body = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+        [payload.body, id]
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { error: "Comment not found", status: 404 };
+      }
+      const row = result.rows[0];
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      
+      const defaultComp = await getDefaultCommentComponent(event);
+      return compileCommentsToContent([row], defaultComp);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-    return result.rows[0];
   },
 
-  async stage() { return { error: "Not supported", status: 400 }; },
-  async addUser() { return { error: "Not supported", status: 400 }; },
-  async removeUser() {},
-  async getUsers() { return []; },
-  async addGroup() { return { error: "Not supported", status: 400 }; },
-  async removeGroup() {},
-  async getGroups() { return []; }
+  async delete(event: IPreemptEvent, id: number) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query("DELETE FROM Comments WHERE id = $1 RETURNING *", [id]);
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return { error: "Comment not found", status: 404 };
+      }
+      await logEvent(client, event);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  async stage(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async addUser(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeUser(event: IPreemptEvent) {},
+  async getUsers(event: IPreemptEvent) { return []; },
+  async addGroup(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },
+  async removeGroup(event: IPreemptEvent) {},
+  async getGroups(event: IPreemptEvent) { return []; }
 };

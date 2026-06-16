@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { PreemptEvent } from '../../../../src/types/Event.js';
 import { pgMessageSource, getMessageAuthor } from '../../sources/messageSource.js';
 import { pgMessageListSource, getMessageListGroup, createMessageList } from '../../sources/messageListSource.js';
 import { pgUserGroupSource } from '../../sources/userGroupSource.js';
@@ -30,13 +31,13 @@ router.post('/create_chat', authenticateToken, async (req: any, res) => {
   members.add(req.user.username);
 
   const finalGroupName = groupName || `Chat-${Date.now()}`;
-  const groupRes = await pgUserGroupSource.create(finalGroupName);
+  const groupRes = await pgUserGroupSource.create(new PreemptEvent('userGroup.create', { id: req.user?.username || 'system', type: 'process' }), finalGroupName);
   if ('error' in groupRes) return res.status(groupRes.status || 500).json(groupRes);
 
   const groupId = groupRes.id;
-  await pgUserGroupSource.addMember(groupId, Array.from(members));
+  await pgUserGroupSource.addMember(new PreemptEvent('userGroup.addMember', { id: req.user?.username || 'system', type: 'process' }), groupId, Array.from(members));
 
-  const listRow = await createMessageList(groupId, listName);
+  const listRow = await createMessageList(new PreemptEvent('messageList.create', { id: req.user?.username || 'system', type: 'process' }), groupId, listName);
 
   res.json({ messageList: listRow, group: groupRes });
 });
@@ -53,7 +54,7 @@ router.post('/', authenticateToken, async (req: any, res) => {
     return res.status(403).json({ error: "Forbidden: You are not in this group" });
   }
 
-  const listRow = await createMessageList(group_id, listName);
+  const listRow = await createMessageList(new PreemptEvent('messageList.create', { id: req.user?.username || 'system', type: 'process' }), group_id, listName);
 
   res.json({ messageList: listRow });
 });
@@ -78,7 +79,7 @@ router.get('/:messageListId', authenticateToken, async (req: any, res) => {
   if (!req.user) return res.status(401).json({ error: "Unauthorized" });
 
   const messageListId = parseInt(req.params.messageListId);
-  const groupId = await getMessageListGroup(messageListId);
+  const groupId = await getMessageListGroup(new PreemptEvent('messageList.getGroup', { id: req.user?.username || 'system', type: 'process' }), messageListId);
   if (!groupId) return res.status(404).json({ error: "Message list not found" });
 
   const inGroup = await isUserInGroup(groupId, req.user.username);
@@ -89,7 +90,7 @@ router.get('/:messageListId', authenticateToken, async (req: any, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
-  const messages = await pgMessageSource.get({ 
+  const messages = await pgMessageSource.get(new PreemptEvent('message.get', { id: req.user?.username || 'system', type: 'process' }), { 
     list_id: messageListId,
     limit,
     offset,
@@ -108,7 +109,7 @@ router.post('/:messageListId', authenticateToken, async (req: any, res) => {
 
   if (!body) return res.status(400).json({ error: "Body is required" });
 
-  const groupId = await getMessageListGroup(messageListId);
+  const groupId = await getMessageListGroup(new PreemptEvent('messageList.getGroup', { id: req.user?.username || 'system', type: 'process' }), messageListId);
   if (!groupId) return res.status(404).json({ error: "Message list not found" });
 
   const inGroup = await isUserInGroup(groupId, req.user.username);
@@ -117,6 +118,7 @@ router.post('/:messageListId', authenticateToken, async (req: any, res) => {
   }
 
   const result = await pgMessageSource.create(
+    new PreemptEvent('message.create', { id: req.user?.username || 'system', type: 'process' }),
     req.user.username,
     { message_list_id: messageListId, body, reply_target_id },
     null, true, null, [], []
@@ -132,7 +134,7 @@ router.delete('/:messageListId/:messageId', authenticateToken, async (req: any, 
   const messageListId = parseInt(req.params.messageListId);
   const messageId = parseInt(req.params.messageId);
 
-  const groupId = await getMessageListGroup(messageListId);
+  const groupId = await getMessageListGroup(new PreemptEvent('messageList.getGroup', { id: req.user?.username || 'system', type: 'process' }), messageListId);
   if (!groupId) return res.status(404).json({ error: "Message list not found" });
 
   const inGroup = await isUserInGroup(groupId, req.user.username);
@@ -140,7 +142,7 @@ router.delete('/:messageListId/:messageId', authenticateToken, async (req: any, 
     return res.status(403).json({ error: "Forbidden: You are not in the group for this list" });
   }
 
-  const authorId = await getMessageAuthor(messageId);
+  const authorId = await getMessageAuthor(new PreemptEvent('message.getAuthor', { id: req.user?.username || 'system', type: 'process' }), messageId);
   if (!authorId) {
     return res.status(404).json({ error: "Message not found" });
   }
@@ -149,7 +151,7 @@ router.delete('/:messageListId/:messageId', authenticateToken, async (req: any, 
     return res.status(403).json({ error: "Forbidden: You can only delete your own messages" });
   }
 
-  const deleted = await pgMessageSource.delete(messageId);
+  const deleted = await pgMessageSource.delete(new PreemptEvent('message.delete', { id: req.user?.username || 'system', type: 'process' }), messageId);
   if (deleted && 'error' in deleted) {
     return res.status(deleted.status || 500).json(deleted);
   }

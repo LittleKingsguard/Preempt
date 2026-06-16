@@ -1,3 +1,4 @@
+import { PreemptEvent } from "../../../src/types/Event.js";
 import { pgTagSource } from "../sources/tagSource.js";
 import type { ITagSource } from "./interfaces.js";
 
@@ -15,7 +16,7 @@ export class Tag {
 
   static async refreshCache(source: ITagSource = pgTagSource) {
     try {
-      const tags = await source.fetchAll();
+      const tags = await source.fetchAll(new PreemptEvent<any>('tag.fetchAll', { id: 'system', type: 'process' }));
       this.tagCache = new Set(tags);
     } catch (err) {
       console.error("Failed to fetch tags for cache", err);

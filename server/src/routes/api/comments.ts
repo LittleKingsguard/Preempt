@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { PreemptEvent } from '../../../../src/types/Event.js';
 import { pgCommentSource, getCommentAuthor } from '../../sources/commentSource.js';
 import { Content } from '../../models/content.js';
 import { authenticateToken } from '../../middleware/auth.js';
@@ -9,7 +10,7 @@ const router = Router();
 // Get comments for a list
 router.get('/:commentListId', authenticateToken, async (req: any, res) => {
   const commentListId = parseInt(req.params.commentListId);
-  const context = await pgCommentSource.getSubjectContext!(commentListId);
+  const context = await pgCommentSource.getSubjectContext!(new PreemptEvent('comment.getContext', { id: req.user?.username || 'system', type: 'process' }), commentListId);
   if (!context) {
     return res.status(404).json({ error: "Comment list not found" });
   }
@@ -34,7 +35,7 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
-  const comments = await pgCommentSource.get({ 
+  const comments = await pgCommentSource.get(new PreemptEvent('comment.get', { id: req.user?.username || 'system', type: 'process' }), { 
     list_id: commentListId,
     limit,
     offset,
@@ -45,7 +46,8 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
 
 // Create a comment
 router.post('/:commentListId', authenticateToken, async (req: any, res) => {
-  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
 
   const commentListId = parseInt(req.params.commentListId);
   const { body, parent_comment_id, target_placement } = req.body;
@@ -55,7 +57,7 @@ router.post('/:commentListId', authenticateToken, async (req: any, res) => {
     return res.status(400).json({ error: "Provide exactly one of parent_comment_id or target_placement" });
   }
 
-  const context = await pgCommentSource.getSubjectContext!(commentListId);
+  const context = await pgCommentSource.getSubjectContext!(new PreemptEvent('comment.getContext', { id: req.user?.username || 'system', type: 'process' }), commentListId);
   if (!context) return res.status(404).json({ error: "Comment list not found" });
 
   if (context.subject_type === 'Content') {
@@ -69,6 +71,7 @@ router.post('/:commentListId', authenticateToken, async (req: any, res) => {
   }
 
   const result = await pgCommentSource.create(
+    new PreemptEvent('comment.create', { id: req.user?.username || 'system', type: 'process' }),
     req.user.username,
     { comment_list_id: commentListId, body, parent_comment_id, target_placement },
     null, true, null, [], []
@@ -78,6 +81,10 @@ router.post('/:commentListId', authenticateToken, async (req: any, res) => {
     return res.status(result.status || 500).json(result);
   }
   res.status(201).json(result);
+  } catch (err) {
+    console.error('Error in POST /:commentListId:', err);
+    res.status(500).json({ error: "Internal server error top level" });
+  }
 });
 
 // Delete a comment
@@ -87,11 +94,11 @@ router.delete('/:commentListId/:commentId', authenticateToken, async (req: any, 
   const commentListId = parseInt(req.params.commentListId);
   const commentId = parseInt(req.params.commentId);
 
-  const context = await pgCommentSource.getSubjectContext!(commentListId);
+  const context = await pgCommentSource.getSubjectContext!(new PreemptEvent('comment.getContext', { id: req.user?.username || 'system', type: 'process' }), commentListId);
   if (!context) return res.status(404).json({ error: "Comment list not found" });
 
   // Load the comment to check ownership
-  const authorId = await getCommentAuthor(commentId);
+  const authorId = await getCommentAuthor(new PreemptEvent('comment.getAuthor', { id: req.user?.username || 'system', type: 'process' }), commentId);
   if (!authorId) {
     return res.status(404).json({ error: "Comment not found" });
   }
@@ -117,7 +124,7 @@ router.delete('/:commentListId/:commentId', authenticateToken, async (req: any, 
     return res.status(403).json({ error: "Forbidden: You do not have permission to delete this comment" });
   }
 
-  const result = await pgCommentSource.delete(commentId);
+  const result = await pgCommentSource.delete(new PreemptEvent('comment.delete', { id: req.user?.username || 'system', type: 'process' }), commentId);
   if ('error' in result) return res.status(result.status || 500).json(result);
   
   res.json({ success: true });

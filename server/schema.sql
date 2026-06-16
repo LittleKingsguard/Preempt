@@ -231,3 +231,17 @@ CREATE TABLE Messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE Events (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(255) UNIQUE NOT NULL,
+    type VARCHAR(255) NOT NULL,
+    timestamp BIGINT NOT NULL,
+    source_id VARCHAR(255) NOT NULL,
+    source_type VARCHAR(50) NOT NULL,
+    interested_parties TEXT[] DEFAULT '{}',
+    state_change JSONB,
+    correlation_id VARCHAR(255),
+    version VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

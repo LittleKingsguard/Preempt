@@ -8,10 +8,12 @@ export class StyleNode {
   public parent: Node | null = null;
   public ruleIndex: number = -1;
   public sheet: CSSStyleSheet | null = null;
+  public isComponentInjected: boolean = false;
 
-  constructor(data: CssDef, parent: Node | null = null) {
+  constructor(data: CssDef, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
     this.parent = parent;
+    this.isComponentInjected = isComponentInjected;
     StyleNode.append(this);
   }
 
