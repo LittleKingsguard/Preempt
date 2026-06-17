@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { User } from "../models/user.js";
 import { JWT_SECRET, authenticateToken } from "../middleware/auth.js";
-import { sendPasswordResetEmail, send2FAEmail, sendVerificationEmail } from "../utils/email.js";
+
 import { pgUserSource } from "../sources/userSource.js";
 import { pgAuthTokenSource } from "../sources/authTokenSource.js";
 
@@ -16,11 +16,9 @@ async function generateAndSendCode(res: express.Response, username: string, emai
   switch (type) {
     case 'VERIFY':
       await User.createAuthToken(pgAuthTokenSource, username, 'VERIFY', code, 60);
-      await sendVerificationEmail(email, code);
       return res.json({ status: "verification_required", username });
     case '2FA':
       await User.createAuthToken(pgAuthTokenSource, username, '2FA', code, 15);
-      await send2FAEmail(email, code);
       return res.json({ status: "2fa_required", username });
     default:
       return res.status(400).json({ error: "Invalid token type requested" });
@@ -149,7 +147,6 @@ router.post("/forgot-password", async (req, res) => {
       const resetToken = crypto.randomBytes(32).toString('hex');
       await User.deleteAuthTokens(pgAuthTokenSource, user.username, 'RESET');
       await User.createAuthToken(pgAuthTokenSource, user.username, 'RESET', resetToken, 30);
-      await sendPasswordResetEmail(user.email, user.username, resetToken);
     }
     // Always return 200 to avoid email enumeration
     res.json({ message: "If an account with that email exists, a reset link has been sent." });

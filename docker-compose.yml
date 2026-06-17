@@ -13,6 +13,40 @@ services:
     volumes:
       - preempt_pgdata:/var/lib/postgresql/data
 
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: preempt_kafka
+    restart: always
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+
+  traefik:
+    image: traefik:v2.10
+    container_name: preempt_traefik
+    restart: always
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
   backend:
     image: node:20-alpine
     container_name: preempt_backend
@@ -20,6 +54,12 @@ services:
     working_dir: /app
     env_file:
       - ./server/.env
+    labels:
+      # TODO: Update these Traefik rules before production readiness
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
     ports:
       - "3001:3001"
     volumes:
@@ -29,6 +69,40 @@ services:
     command: sh -c "npm install && npx tsx watch src/index.ts"
     depends_on:
       - db
+      - kafka
+
+  # TODO: Break relay and email_worker into separate microservices before production readiness
+  relay:
+    image: node:20-alpine
+    container_name: preempt_relay
+    restart: always
+    working_dir: /app
+    env_file:
+      - ./server/.env
+    volumes:
+      - ./server:/app
+      - ./dist:/dist
+      - ./src:/src
+    command: sh -c "npm install && npx tsx watch src/workers/eventRelay.ts"
+    depends_on:
+      - db
+      - kafka
+
+  email_worker:
+    image: node:20-alpine
+    container_name: preempt_email_worker
+    restart: always
+    working_dir: /app
+    env_file:
+      - ./server/.env
+    volumes:
+      - ./server:/app
+      - ./dist:/dist
+      - ./src:/src
+    command: sh -c "npm install && npx tsx watch src/workers/emailWorker.ts"
+    depends_on:
+      - db
+      - kafka
 
 volumes:
   preempt_pgdata:

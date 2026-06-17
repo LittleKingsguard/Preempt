@@ -60,7 +60,7 @@ export class User {
   }
 
   static async createAuthToken(tokenSource: IAuthTokenSource = pgAuthTokenSource, username: string, type: string, tokenValue: string, expiresInMinutes: number) {
-    return await tokenSource.create(new PreemptEvent<any>('auth.create', { id: username, type: 'user' }, [], { before: null, after: { tokenValue } }), username, type, tokenValue, expiresInMinutes);
+    return await tokenSource.create(new PreemptEvent<any>('auth.create', { id: username, type: 'user' }, [], { before: null, after: { username, type, tokenValue } }), username, type, tokenValue, expiresInMinutes);
   }
 
   static async verifyAuthToken(tokenSource: IAuthTokenSource = pgAuthTokenSource, username: string, type: string, tokenValue: string) {
