@@ -34,9 +34,11 @@ services:
       - "9092:9092"
 
   traefik:
-    image: traefik:v2.10
+    image: traefik:v3.7
     container_name: preempt_traefik
     restart: always
+    environment:
+      - DOCKER_API_VERSION=1.41
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -103,6 +105,69 @@ services:
     depends_on:
       - db
       - kafka
+
+  keycloak:
+    build:
+      context: .
+      dockerfile: Dockerfile.keycloak
+    container_name: preempt_keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: preempt
+      KC_DB_PASSWORD: preemptpassword
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 80
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY: edge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CLIENT_ID: keycloak-producer
+      KAFKA_TOPIC: keycloak-events
+      KAFKA_ACKS: all
+    command: start-dev --import-realm
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=PathPrefix(`/auth`)"
+      - "traefik.http.routers.keycloak.entrypoints=web"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+    volumes:
+      - ./keycloak-config:/opt/keycloak/data/import
+    depends_on:
+      - db
+      - kafka
+
+  oauth_worker:
+    image: node:20-alpine
+    container_name: preempt_oauth_worker
+    restart: always
+    working_dir: /app
+    env_file:
+      - ./server/.env
+    environment:
+      OAUTH_PORT: 3002
+      OIDC_ISSUER: http://localhost/auth/realms/preempt
+      OIDC_CLIENT_ID: preempt-app
+      OIDC_CLIENT_SECRET: secret
+      OIDC_REDIRECT_URI: http://localhost/api/oauth/callback
+    extra_hosts:
+      - "localhost:host-gateway"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oauth.rule=PathPrefix(`/api/oauth`)"
+      - "traefik.http.routers.oauth.entrypoints=web"
+      - "traefik.http.services.oauth.loadbalancer.server.port=3002"
+    volumes:
+      - ./server:/app
+      - ./dist:/dist
+      - ./src:/src
+    command: sh -c "npx tsx watch src/workers/oauthWorker.ts"
+    depends_on:
+      - db
+      - keycloak
 
 volumes:
   preempt_pgdata:

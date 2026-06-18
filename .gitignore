@@ -49,3 +49,6 @@ server/scripts/
 # Generated scripts
 *.py
 *.sql
+
+# Keycloak
+keycloak-config/

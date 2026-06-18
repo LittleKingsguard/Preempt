@@ -131,6 +131,7 @@ export interface IUserData {
   has_verified: boolean;
   is_bot: boolean;
   home_page: number | null;
+  validated_hosts: string[];
 }
 
 export interface IUserSource {
@@ -142,6 +143,7 @@ export interface IUserSource {
   verifyEmail(event: IPreemptEvent, username: string): Promise<void>;
   updateRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
   updateHomePage(event: IPreemptEvent, username: string, homePage: number | null): Promise<void>;
+  addValidatedHost(event: IPreemptEvent, username: string, host: string): Promise<void>;
   getAll(event: IPreemptEvent): Promise<any[]>;
 }
 

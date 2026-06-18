@@ -15,6 +15,7 @@ export class User {
   has_verified: boolean;
   is_bot: boolean;
   home_page: number | null;
+  validated_hosts: string[];
 
   constructor(data: IUserData, source: IUserSource = pgUserSource) {
     this.source = source;
@@ -28,6 +29,7 @@ export class User {
     this.has_verified = data.has_verified || false;
     this.is_bot = data.is_bot || false;
     this.home_page = data.home_page || null;
+    this.validated_hosts = data.validated_hosts || [];
   }
 
   static async authenticate(source: IUserSource = pgUserSource, username: string, passwordPlain: string) {
@@ -81,6 +83,13 @@ export class User {
 
   async updateHomePage(homePage: number | null) {
     return await this.source.updateHomePage(new PreemptEvent<any>('user.updateHomePage', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username: this.username, homePage } }), this.username, homePage);
+  }
+
+  async addValidatedHost(host: string) {
+    await this.source.addValidatedHost(new PreemptEvent<any>('user.addValidatedHost', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username: this.username, host } }), this.username, host);
+    if (!this.validated_hosts.includes(host)) {
+      this.validated_hosts.push(host);
+    }
   }
 
   static async getAll(source: IUserSource = pgUserSource) {
