@@ -147,11 +147,16 @@ export const pgMessageSource: IContentSource = {
         [message_list_id, reply_target_id || null, authorId, body]
       );
       const row = result.rows[0];
+      const defaultComp = await getDefaultMessageComponent();
+      const compiled = compileMessagesToContent([row], defaultComp);
+
+      event.interestedParties = [`messageList:${message_list_id}`];
+      event.stateChange = { before: null, after: compiled };
+
       await logEvent(client, event);
       await client.query('COMMIT');
       
-      const defaultComp = await getDefaultMessageComponent();
-      return compileMessagesToContent([row], defaultComp);
+      return compiled;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -173,11 +178,16 @@ export const pgMessageSource: IContentSource = {
         return { error: "Message not found", status: 404 };
       }
       const row = result.rows[0];
+      const defaultComp = await getDefaultMessageComponent();
+      const compiled = compileMessagesToContent([row], defaultComp);
+
+      event.interestedParties = [`messageList:${row.message_list_id}`];
+      event.stateChange = { before: null, after: compiled };
+
       await logEvent(client, event);
       await client.query('COMMIT');
       
-      const defaultComp = await getDefaultMessageComponent();
-      return compileMessagesToContent([row], defaultComp);
+      return compiled;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -195,9 +205,14 @@ export const pgMessageSource: IContentSource = {
         await client.query('ROLLBACK');
         return { error: "Message not found", status: 404 };
       }
+      const row = result.rows[0];
+
+      event.interestedParties = [`messageList:${row.message_list_id}`];
+      event.stateChange = { before: row, after: null };
+
       await logEvent(client, event);
       await client.query('COMMIT');
-      return result.rows[0];
+      return row;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

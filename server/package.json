@@ -19,7 +19,8 @@
     "kafkajs": "^2.2.4",
     "nodemailer": "^8.0.10",
     "openid-client": "^6.8.4",
-    "pg": "^8.21.0"
+    "pg": "^8.21.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -34,6 +35,7 @@
     "supertest": "^7.2.2",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "@types/ws": "^8.5.10"
   }
 }

@@ -157,3 +157,31 @@ async (event, context) => {
     }
 }
 ```
+
+## Real-Time Subscriptions via WebSocket
+
+Because handler functions are evaluated as strings dynamically at runtime, they execute within the local scope where they are instantiated but also have full access to the global `window` object.
+
+You can establish a real-time WebSocket subscription directly from a handler by utilizing the globally exposed `WebSocketClient` instance. Because the `window` object only exists in the browser, you **must** wrap your logic in a check (e.g., `typeof window !== 'undefined'`) to prevent crashes during Server-Side Rendering (SSR). Alternatively, you can bind the logic to a client-only lifecycle hook like `beforeMonitor`.
+
+**Example:**
+```javascript
+"function(event, context) {
+    // Prevent execution during Server-Side Rendering (SSR)
+    if (typeof window === 'undefined') return;
+
+    const ws = window.Preempt.WebSocketClient.getInstance();
+    
+    // Establish a subscription to a specific topic (e.g. commentList ID)
+    ws.subscribe('commentList:1', (payload) => {
+        // The payload typically contains the fully compiled Node component 
+        // returned by the backend in real-time.
+        
+        console.log('Received real-time update payload:', payload);
+        
+        // You can programmatically attach the payload as a new child 
+        // to the current node context or re-process it through the Supervisor.
+        // e.g. window.Preempt.Supervisor.processComponent(payload, context.node);
+    });
+}"
+```

@@ -156,11 +156,16 @@ export const pgCommentSource: IContentSource = {
         [comment_list_id, parent_comment_id || null, target_placement || null, authorId, body]
       );
       const row = result.rows[0];
+      const defaultComp = await getDefaultCommentComponent(event);
+      const compiled = compileCommentsToContent([row], defaultComp);
+
+      event.interestedParties = [`commentList:${comment_list_id}`];
+      event.stateChange = { before: null, after: compiled };
+
       await logEvent(client, event);
       await client.query('COMMIT');
       
-      const defaultComp = await getDefaultCommentComponent(event);
-      return compileCommentsToContent([row], defaultComp);
+      return compiled;
     } catch (err) {
       console.log('Error inside pgCommentSource.create:', err);
       await client.query('ROLLBACK');
@@ -183,11 +188,16 @@ export const pgCommentSource: IContentSource = {
         return { error: "Comment not found", status: 404 };
       }
       const row = result.rows[0];
+      const defaultComp = await getDefaultCommentComponent(event);
+      const compiled = compileCommentsToContent([row], defaultComp);
+
+      event.interestedParties = [`commentList:${row.comment_list_id}`];
+      event.stateChange = { before: null, after: compiled };
+
       await logEvent(client, event);
       await client.query('COMMIT');
       
-      const defaultComp = await getDefaultCommentComponent(event);
-      return compileCommentsToContent([row], defaultComp);
+      return compiled;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
@@ -205,9 +215,14 @@ export const pgCommentSource: IContentSource = {
         await client.query('ROLLBACK');
         return { error: "Comment not found", status: 404 };
       }
+      const row = result.rows[0];
+
+      event.interestedParties = [`commentList:${row.comment_list_id}`];
+      event.stateChange = { before: row, after: null };
+
       await logEvent(client, event);
       await client.query('COMMIT');
-      return result.rows[0];
+      return row;
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

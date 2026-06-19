@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { Tag } from "./models/tag.js";
+import { initWebSocket } from "./workers/websocketManager.js";
 
 import authRoutes from "./routes/auth.js";
 import apiRoutes from "./routes/api.js";
@@ -27,6 +28,8 @@ app.use("/", ssrRoutes);
 app.use(express.static(path.join(process.cwd(), "../dist"), { index: false }));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+initWebSocket(server);

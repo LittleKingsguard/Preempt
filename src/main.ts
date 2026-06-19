@@ -1,7 +1,8 @@
 import { Supervisor } from './core/Supervisor'
+import { WebSocketClient } from './core/WebSocketClient'
 import type { PipelineConfig } from './types/Pipeline'
 
-(window as any).Preempt = { Supervisor };
+(window as any).Preempt = { Supervisor, WebSocketClient };
 const defaultConfig: PipelineConfig = {
   runInstantiation: true,
   runAssembly: true, 
@@ -29,7 +30,7 @@ async function init() {
       `;
       const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
       const tagsQuery = prefersDark ? '?tags=dark-mode' : '';
-      const res = await fetch(`http://localhost:3001/api/content/1${tagsQuery}`);
+      const res = await fetch(`/api/content/1${tagsQuery}`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       data = await res.json();
     }
