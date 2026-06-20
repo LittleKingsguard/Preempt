@@ -14,6 +14,7 @@ This architecture enables:
 3. **Content**: Page-specific data (like the text of an article or a specific user's dashboard widgets) that is dynamically injected into a Template during the pipeline's assembly phase.
 4. **Components**: Reusable fragments of JSON logic (such as a standardized styling preset, an event handler, or a full structural widget like a Login block) that can be merged into any Node on demand.
 5. **Handlers**: JavaScript functions attached to Nodes that execute in response to user events (e.g., `click`) or specific lifecycle stages of the rendering pipeline (e.g., `beforeRender`).
+6. **Event Streaming**: Preempt leverages an internal event bus (via the `Events` table and a Kafka `eventRelay`) to stream real-time structural payload updates to distributed clients via WebSockets, enabling high-performance, dynamic UI reactivity.
 
 ## The Supervisor Pipeline
 At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline to convert raw JSON data from the database into a fully reactive UI. 
@@ -35,8 +36,14 @@ Preempt is designed for highly dynamic platforms where administrators or non-tec
 It acts as a hybrid between a high-performance component framework and a deeply customizable Headless CMS.
 
 ## User State and Authentication
-Preempt handles user state through a JWT-based authentication system. When a user is authenticated, their session data (including roles, verification status, and preferences like `home_page`) is injected into the frontend during the Server-Side Rendering (SSR) phase.
+Preempt handles user state through a hybrid authentication ecosystem, blending robust local sessions with extensive OAuth/OIDC capabilities.
 
-1. **SSR Data Injection**: In the `ssr.ts` route, the `req.user` object is automatically appended to the root Content Node payload at `contentData.payload.userData` and `contentData.payload.metadata.user`. This allows frontend Handlers and Components to access the current user's state directly from the virtual DOM tree.
-2. **Dynamic Routing**: The root path (`/`) dynamically resolves the content to display. If a logged-in user has a `home_page` preference set in the `Users` table, Preempt will route them to that specific `Content(id)`. Otherwise, it falls back to the server's global `default_index_content_id` setting.
-3. **Updating User Preferences**: Users can update their preferences using the `/api/auth/update-home-page` endpoint (requires `POST` with `home_page` containing the target `Content(id)`). This instantly updates the database and issues a new JWT reflecting the updated state.
+1. **Multi-Strategy Core**: 
+   - **Local JWT Strategy**: Native user/password credentials generate cryptographically signed JWT tokens representing a user's session.
+   - **OIDC/OAuth2 Integration**: Preempt seamlessly integrates with compatible identity providers (such as Keycloak) via its dedicated `oauthWorker`. It links external identity claims to local users, mapping credentials and seamlessly migrating external sessions into its native authentication state.
+
+2. **SSR Data Injection**: In the `ssr.ts` route, the `req.user` object is automatically appended to the root Content Node payload at `contentData.payload.userData` and `contentData.payload.metadata.user`. This allows frontend Handlers and Components to access the current user's state directly from the virtual DOM tree.
+
+3. **Dynamic Routing**: The root path (`/`) dynamically resolves the content to display. If a logged-in user has a `home_page` preference set in the `Users` table, Preempt will route them to that specific `Content(id)`. Otherwise, it falls back to the server's global `default_index_content_id` setting.
+
+4. **Updating User Preferences**: Users can update their preferences using the `/api/auth/update-home-page` endpoint (requires `POST` with `home_page` containing the target `Content(id)`). This instantly updates the database and issues a new JWT reflecting the updated state.
