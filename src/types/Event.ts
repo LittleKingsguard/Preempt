@@ -21,6 +21,7 @@ export interface IPreemptEvent<T = any> {
     stateChange?: StateChange<T>; // Before/after data
     correlationId?: string;   // For tracing event chains
     version?: string;         // Version tracking for the event schema or state
+    topic?: string;           // The Kafka topic to route this event to
 }
 
 // Helper class for easy instantiation
@@ -33,6 +34,7 @@ export class PreemptEvent<T = any> implements IPreemptEvent<T> {
     public stateChange?: StateChange<T>;
     public correlationId?: string;
     public version?: string;
+    public topic?: string;
 
     constructor(
         type: string,
@@ -40,7 +42,8 @@ export class PreemptEvent<T = any> implements IPreemptEvent<T> {
         interestedParties: string[] = [],
         stateChange?: StateChange<T>,
         correlationId?: string,
-        version: string = "1.0"
+        version: string = "1.0",
+        topic: string = "preempt-events"
     ) {
         // Fallback for environments without crypto.randomUUID (older browsers, etc.)
         this.id = typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -53,5 +56,6 @@ export class PreemptEvent<T = any> implements IPreemptEvent<T> {
         if (stateChange !== undefined) this.stateChange = stateChange;
         if (correlationId !== undefined) this.correlationId = correlationId;
         this.version = version;
+        this.topic = topic;
     }
 }

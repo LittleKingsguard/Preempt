@@ -243,5 +243,6 @@ CREATE TABLE Events (
     state_change JSONB,
     correlation_id VARCHAR(255),
     version VARCHAR(50),
+    topic VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

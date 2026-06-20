@@ -40,7 +40,7 @@ async function pollEvents() {
     
     // Select batch of events, locking them
     const result = await client.query(`
-      SELECT event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version 
+      SELECT event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version, topic 
       FROM Events 
       ORDER BY timestamp ASC 
       LIMIT 100
@@ -52,16 +52,24 @@ async function pollEvents() {
       return;
     }
 
-    const messages = result.rows.map(row => ({
-      key: row.event_id,
-      value: JSON.stringify(row)
-    }));
+    const messagesByTopic: Record<string, any[]> = {};
+    for (const row of result.rows) {
+      const topic = row.topic || 'preempt-events';
+      if (!messagesByTopic[topic]) messagesByTopic[topic] = [];
+      messagesByTopic[topic].push({
+        key: row.event_id,
+        value: JSON.stringify(row)
+      });
+    }
 
     try {
-      await producer.send({
-        topic: 'preempt-events',
-        messages
+      const sendPromises = Object.entries(messagesByTopic).map(([topic, messages]) => {
+        return producer.send({
+          topic,
+          messages
+        });
       });
+      await Promise.all(sendPromises);
 
       // If successful, delete from DB
       const ids = result.rows.map(r => r.event_id);
