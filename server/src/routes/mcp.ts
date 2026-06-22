@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import { Router } from "express";
 import { mcpAuth, authenticateToken, requireAdmin } from "../middleware/auth.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
@@ -46,7 +47,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
   try {
     batch = await ChangeBatch.create(undefined, user.username, description);
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     return res.status(500).json({ error: "Failed to create change batch: " + err.message });
   }
 
@@ -124,7 +125,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
     }
     return res.json({ success: true, batchId: batch.id, savedTargets });
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     return res.status(500).json({ error: "Failed to stage one or more targets: " + err.message });
   }
 });
@@ -136,7 +137,7 @@ router.get("/admin/change-batches", authenticateToken, requireAdmin, async (req,
     const batches = await ChangeBatch.getPending(undefined);
     res.json({ batches });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Failed to fetch batches" });
   }
 });
@@ -151,7 +152,7 @@ router.post("/admin/change-batches/:id/reject", authenticateToken, requireAdmin,
     await batch.delete();
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Failed to reject batch" });
   }
 });
@@ -165,7 +166,7 @@ router.post("/admin/change-batches/:id/approve", authenticateToken, requireAdmin
     await batch.approve();
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Failed to approve batch" });
   }
 });

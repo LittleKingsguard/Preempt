@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Component } from "../../models/component.js";
@@ -10,7 +11,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const components = await Component.getAll(pgComponentSource, (req as any).user);
     res.json(components);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -28,7 +29,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     res.json(component);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -44,7 +45,7 @@ router.post("/", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -64,7 +65,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -83,7 +84,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     }
     res.json({ message: "Component deleted successfully" });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });

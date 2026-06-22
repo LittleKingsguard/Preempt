@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import { Router } from 'express';
 import { PreemptEvent } from '../../../../src/types/Event.js';
 import { pgCommentSource, getCommentAuthor } from '../../sources/commentSource.js';
@@ -82,7 +83,7 @@ router.post('/:commentListId', authenticateToken, async (req: any, res) => {
   }
   res.status(201).json(result);
   } catch (err) {
-    console.error('Error in POST /:commentListId:', err);
+    logger.error({ err: err }, 'Error in POST /:commentListId:');
     res.status(500).json({ error: "Internal server error top level" });
   }
 });

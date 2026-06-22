@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import express from "express";
 import { authenticateToken, requireAdmin } from "../../middleware/auth.js";
 import { User } from "../../models/user.js";
@@ -10,7 +11,7 @@ router.get("/users", authenticateToken, requireAdmin, async (req, res) => {
     const users = await User.getAll(undefined);
     res.json(users);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
@@ -32,7 +33,7 @@ router.put("/users/:username/roles", authenticateToken, requireAdmin, async (req
     }
     res.json({ success: true, message: "User roles updated successfully" });
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Failed to update user roles" });
   }
 });

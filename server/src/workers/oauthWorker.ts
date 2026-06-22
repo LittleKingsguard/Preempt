@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import * as client from "openid-client";
 import { User } from "../models/user.js";
 import { pgUserSource } from "../sources/userSource.js";
+import { logger } from "../utils/logger.js";
 
 dotenv.config();
 
@@ -15,7 +16,11 @@ const PORT = process.env.OAUTH_PORT || 3002;
 const OIDC_ISSUER = process.env.OIDC_ISSUER || "http://keycloak:8080/realms/preempt";
 const CLIENT_ID = process.env.OIDC_CLIENT_ID || "preempt-app";
 const CLIENT_SECRET = process.env.OIDC_CLIENT_SECRET || "secret";
-const REDIRECT_URI = process.env.OIDC_REDIRECT_URI || "http://localhost/api/oauth/callback";
+if (!process.env.OIDC_REDIRECT_URI) {
+  logger.error("OIDC_REDIRECT_URI environment variable is required");
+  process.exit(1);
+}
+const REDIRECT_URI = process.env.OIDC_REDIRECT_URI;
 const OIDC_SCOPES = process.env.OIDC_SCOPES || "openid email profile";
 
 let config: client.Configuration;
@@ -42,7 +47,7 @@ async function getOIDCConfig() {
     );
     return config;
   } catch (err) {
-    console.error("Failed to discover OIDC issuer", err);
+    logger.error({ err }, "Failed to discover OIDC issuer");
     throw err;
   }
 }
@@ -62,7 +67,7 @@ async function getKeycloakAdminToken() {
   });
   if (!response.ok) {
     const err = await response.text();
-    console.error("Failed to get Keycloak admin token", err);
+    logger.error({ err }, "Failed to get Keycloak admin token");
     throw new Error("Failed to get Keycloak admin token");
   }
   const data = await response.json();
@@ -92,7 +97,7 @@ app.get("/api/oauth/login", async (req, res) => {
 
     res.redirect(url.href);
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "Failed to initialize login");
     res.status(500).json({ error: "Failed to initialize login" });
   }
 });
@@ -162,7 +167,7 @@ app.get("/api/oauth/callback", async (req, res) => {
       }
     }
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "Callback failed");
     res.status(500).json({ error: "Callback failed" });
   }
 });
@@ -198,7 +203,7 @@ app.post("/api/oauth/link", async (req, res) => {
     res.clearCookie("oauth_link");
     return res.json({ message: "Account successfully linked" });
   } catch (err: any) {
-    console.error(err);
+    logger.error({ err }, "Link failed");
     res.status(500).json({ error: "Link failed" });
   }
 });
@@ -234,13 +239,13 @@ app.post("/api/oauth/register", async (req, res) => {
     if (!response.ok) {
       if (response.status === 409) return res.status(409).json({ error: "User already exists" });
       const err = await response.text();
-      console.error("Failed to create user in Keycloak", err);
+      logger.error({ err }, "Failed to create user in Keycloak");
       return res.status(500).json({ error: "Failed to register user" });
     }
 
     return res.json({ message: "Registration successful" });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "Registration failed");
     return res.status(500).json({ error: "Registration failed" });
   }
 });
@@ -281,17 +286,17 @@ app.post("/api/oauth/reset-password", async (req, res) => {
 
     if (!actionRes.ok) {
       const err = await actionRes.text();
-      console.error("Failed to trigger password reset email", err);
+      logger.error({ err }, "Failed to trigger password reset email");
       return res.status(500).json({ error: "Failed to send password reset email" });
     }
 
     return res.json({ message: "If that email exists, a password reset link has been sent." });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "Password reset failed");
     return res.status(500).json({ error: "Password reset failed" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`OAuth worker running on port ${PORT}`);
+  logger.info(`OAuth worker running on port ${PORT}`);
 });

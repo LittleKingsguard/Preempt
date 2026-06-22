@@ -11,7 +11,10 @@ const transporter = nodemailer.createTransport({
 });
 
 export const sendPasswordResetEmail = async (to: string, username: string, token: string) => {
-  const resetLink = `${process.env.PUBLIC_URL || 'http://localhost:3000'}/reset-password?token=${token}&username=${encodeURIComponent(username)}`;
+  if (!process.env.PUBLIC_URL) {
+    throw new Error('PUBLIC_URL environment variable is required');
+  }
+  const resetLink = `${process.env.PUBLIC_URL}/reset-password?token=${token}&username=${encodeURIComponent(username)}`;
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM,

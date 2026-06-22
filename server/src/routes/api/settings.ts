@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import express from "express";
 import { authenticateToken } from "../../middleware/auth.js";
 import { Setting } from "../../models/settings.js";
@@ -23,7 +24,7 @@ router.post("/default-index", authenticateToken, async (req, res) => {
     }
     res.json({ message: "Default index updated successfully" });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import express from "express";
 import { Content } from "../models/content.js";
 import { pgContentSource } from "../sources/contentSource.js";
@@ -91,7 +92,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 
     res.send(html);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).send("Internal server error");
   }
 }
@@ -113,10 +114,10 @@ router.get("/", authenticateToken, async (req: any, res) => {
     if (!defaultIndexId) {
       return res.status(404).send("No default index configured");
     }
-    console.log(req.user);
+    logger.info(req.user);
     await renderContent(defaultIndexId, null, req, res);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).send("Internal server error");
   }
 });
@@ -132,7 +133,7 @@ router.get("/reset-password", authenticateToken, async (req, res) => {
 
     await renderContent(defaultIndexId, null, req, res);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).send("Internal server error");
   }
 });

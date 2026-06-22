@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import express from "express";
 import jwt from "jsonwebtoken";
 
@@ -59,7 +60,7 @@ export const mcpAuth = async (req: express.Request, res: express.Response, next:
     (req as any).user = user;
     next();
   } catch (err) {
-    console.error("mcpAuth error:", err);
+    logger.error({ err: err }, "mcpAuth error:");
     res.status(500).json({ error: "Internal server error" });
   }
 };

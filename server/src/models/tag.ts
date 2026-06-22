@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { pgTagSource } from "../sources/tagSource.js";
 import type { ITagSource } from "./interfaces.js";
@@ -10,7 +11,7 @@ export class Tag {
     await this.refreshCache(source);
     // Periodically refresh cache
     setInterval(() => {
-      this.refreshCache(source).catch(err => console.error("Failed to refresh tag cache", err));
+      this.refreshCache(source).catch(err => logger.error({ err: err }, "Failed to refresh tag cache"));
     }, this.CACHE_TTL_MS);
   }
 
@@ -19,7 +20,7 @@ export class Tag {
       const tags = await source.fetchAll(new PreemptEvent<any>('tag.fetchAll', { id: 'system', type: 'process' }));
       this.tagCache = new Set(tags);
     } catch (err) {
-      console.error("Failed to fetch tags for cache", err);
+      logger.error({ err: err }, "Failed to fetch tags for cache");
     }
   }
 

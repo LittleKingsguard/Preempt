@@ -5,15 +5,21 @@ import { fileURLToPath } from 'url';
 import { sendVerificationEmail, send2FAEmail, sendPasswordResetEmail } from '../utils/email.js';
 import { pgUserSource } from '../sources/userSource.js';
 import { User } from '../models/user.js';
-
+import { logger } from '../utils/logger.js';
+import { pool } from '../db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
+if (!process.env.KAFKA_BROKERS) {
+  logger.error('KAFKA_BROKERS environment variable is required');
+  process.exit(1);
+}
+
 const kafka = new Kafka({
   clientId: 'preempt-email-worker',
-  brokers: [process.env.KAFKA_BROKERS || 'kafka:9092'],
+  brokers: [process.env.KAFKA_BROKERS],
   retry: {
     initialRetryTime: 100,
     retries: 8
@@ -22,17 +28,39 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: 'email-group' });
 const producer = kafka.producer();
+let isShuttingDown = false;
 
 async function startWorker() {
   try {
     await producer.connect();
     await consumer.connect();
-    console.log("Connected to Kafka as Consumer and Producer");
+    logger.info("Connected to Kafka as Consumer and Producer");
   } catch (err) {
-    console.error("Failed to connect to Kafka, retrying...", err);
+    if (isShuttingDown) return;
+    logger.error({ err }, "Failed to connect to Kafka, retrying...");
     setTimeout(startWorker, 5000);
     return;
   }
+
+  async function shutdown(signal: string) {
+    logger.info(`Received ${signal}. Shutting down Email Worker gracefully...`);
+    isShuttingDown = true;
+    try {
+      await consumer.disconnect();
+      logger.info('Kafka consumer disconnected');
+      await producer.disconnect();
+      logger.info('Kafka producer disconnected');
+      await pool.end();
+      logger.info('Database pool closed');
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err }, 'Error during shutdown');
+      process.exit(1);
+    }
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   try {
     await consumer.subscribe({ topic: 'preempt-events', fromBeginning: true });
@@ -57,7 +85,7 @@ async function startWorker() {
           const user = await User.getByUsername(pgUserSource, username);
           
           if (!user || !user.email) {
-            console.error(`User or email not found for username: ${username}`);
+            logger.error(`User or email not found for username: ${username}`);
             return;
           }
           
@@ -69,10 +97,10 @@ async function startWorker() {
             await sendPasswordResetEmail(user.email, username, tokenValue);
           }
           
-          console.log(`Successfully sent ${type} email to ${username}`);
+          logger.info(`Successfully sent ${type} email to ${username}`);
         }
       } catch (err: any) {
-        console.error("Error processing message, pushing to dead letter / error topic:", err);
+        logger.error({ err }, "Error processing message, pushing to dead letter / error topic");
         try {
           await producer.send({
             topic: 'preempt-events-errors',
@@ -86,15 +114,18 @@ async function startWorker() {
             ]
           });
         } catch (producerErr) {
-          console.error("Failed to push error event to Kafka", producerErr);
+          logger.error({ err: producerErr }, "Failed to push error event to Kafka");
         }
       }
       }
     });
   } catch (err) {
-    console.error("Fatal error during consumer run:", err);
+    if (isShuttingDown) return;
+    logger.error({ err }, "Fatal error during consumer run");
     setTimeout(startWorker, 5000);
   }
 }
 
-startWorker().catch(console.error);
+startWorker().catch(err => {
+  logger.error({ err }, 'Fatal error starting email worker');
+});

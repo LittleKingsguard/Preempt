@@ -2,10 +2,19 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Kafka } from 'kafkajs';
 import crypto from 'crypto';
 import http from 'http';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 interface SubscribeMessage {
   type: 'subscribe';
   topic: string;
+}
+
+function parseTokenFromCookie(cookieHeader?: string): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|; )token=([^;]*)/);
+  return match ? match[1] || null : null;
 }
 
 export function initWebSocket(server: http.Server) {
@@ -14,7 +23,22 @@ export function initWebSocket(server: http.Server) {
   // Map of client connections to their subscribed topics
   const clientSubscriptions = new Map<WebSocket, Set<string>>();
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req) => {
+    const token = parseTokenFromCookie(req.headers.cookie);
+    if (!token) {
+      logger.warn('WebSocket connection attempt without token');
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
+
+    try {
+      jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      logger.warn('WebSocket connection attempt with invalid token');
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
+
     clientSubscriptions.set(ws, new Set());
 
     ws.on('message', (message) => {
@@ -24,11 +48,11 @@ export function initWebSocket(server: http.Server) {
           const subs = clientSubscriptions.get(ws);
           if (subs) {
             subs.add(data.topic);
-            console.log(`WebSocket client subscribed to ${data.topic}`);
+            logger.debug(`WebSocket client subscribed to ${data.topic}`);
           }
         }
       } catch (err) {
-        console.error('WebSocket received invalid message:', err);
+        logger.error({ err }, 'WebSocket received invalid message');
       }
     });
 
@@ -37,10 +61,14 @@ export function initWebSocket(server: http.Server) {
     });
   });
 
+  if (!process.env.KAFKA_BROKERS) {
+    throw new Error('KAFKA_BROKERS environment variable is required for WebSocket Manager');
+  }
+
   // Setup Kafka Consumer to broadcast to WS clients
   const kafka = new Kafka({
     clientId: 'preempt-ws-broadcaster',
-    brokers: [process.env.KAFKA_BROKERS || 'kafka:9092'],
+    brokers: [process.env.KAFKA_BROKERS],
     retry: {
       initialRetryTime: 100,
       retries: 8
@@ -51,10 +79,12 @@ export function initWebSocket(server: http.Server) {
   const consumerGroupId = `ws-broadcaster-${crypto.randomUUID()}`;
   const consumer = kafka.consumer({ groupId: consumerGroupId });
 
+  let isShuttingDown = false;
+
   async function runConsumer() {
     try {
       await consumer.connect();
-      console.log(`WebSocket broadaster connected to Kafka with group ${consumerGroupId}`);
+      logger.info(`WebSocket broadaster connected to Kafka with group ${consumerGroupId}`);
       
       await consumer.subscribe({ topic: 'preempt-events', fromBeginning: false });
 
@@ -82,15 +112,32 @@ export function initWebSocket(server: http.Server) {
               }
             }
           } catch (err) {
-            console.error('Error processing Kafka message for WebSocket:', err);
+            logger.error({ err }, 'Error processing Kafka message for WebSocket');
           }
         },
       });
     } catch (err) {
-      console.error('WebSocket Kafka consumer error:', err);
+      if (isShuttingDown) return;
+      logger.error({ err }, 'WebSocket Kafka consumer error');
       setTimeout(runConsumer, 5000);
     }
   }
 
   runConsumer();
+
+  return {
+    shutdown: async () => {
+      isShuttingDown = true;
+      logger.info('Shutting down WebSocket Manager and Kafka Consumer...');
+      for (const [ws] of clientSubscriptions.entries()) {
+         ws.close(1001, 'Server shutting down');
+      }
+      try {
+        await consumer.disconnect();
+        logger.info('WebSocket Kafka Consumer disconnected.');
+      } catch (err) {
+        logger.error({ err }, 'Error disconnecting WebSocket Kafka Consumer');
+      }
+    }
+  };
 }

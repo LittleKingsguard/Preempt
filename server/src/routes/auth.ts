@@ -1,3 +1,4 @@
+import { logger } from "../utils/logger.js";
 import express from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -56,7 +57,7 @@ router.post("/login", async (req, res) => {
 
     res.json({ message: "Logged in successfully", user });
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    logger.error({ err: err }, "LOGIN ERROR:");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -82,7 +83,7 @@ router.post("/verify-2fa", async (req, res) => {
     res.cookie("token", token, { httpOnly: true, secure: false });
     res.json({ message: "Logged in successfully", user });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -106,7 +107,7 @@ router.post("/register", async (req, res) => {
 
     return await generateAndSendCode(res, user.username, user.email, 'VERIFY');
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -134,7 +135,7 @@ router.post("/verify-email", async (req, res) => {
       res.status(404).json({ error: "User not found" });
     }
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -151,7 +152,7 @@ router.post("/forgot-password", async (req, res) => {
     // Always return 200 to avoid email enumeration
     res.json({ message: "If an account with that email exists, a reset link has been sent." });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -170,7 +171,7 @@ router.post("/reset-password", async (req, res) => {
 
     res.json({ message: "Password has been successfully reset" });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -192,7 +193,7 @@ router.post("/change-password", authenticateToken, async (req, res) => {
     await user.updatePassword(new_password);
     res.json({ message: "Password updated successfully" });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -218,7 +219,7 @@ router.post("/update-home-page", authenticateToken, async (req, res) => {
       res.status(404).json({ error: "User not found" });
     }
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });

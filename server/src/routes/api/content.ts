@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Content } from "../../models/content.js";
@@ -45,7 +46,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     res.json(responsePayload);
 
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -59,7 +60,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const contents = await Content.getLatest(pgContentSource, {}, user);
     res.json(contents);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -80,7 +81,7 @@ router.post("/", authenticateToken, async (req, res) => {
     }
     res.json({ message: "Content created successfully", content: result.content });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -105,7 +106,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
     }
     res.json({ message: "Content updated successfully", content: result.content });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -127,7 +128,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -150,7 +151,7 @@ router.post("/:id/users", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -172,7 +173,7 @@ router.delete("/:id/users/:username", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -194,7 +195,7 @@ router.post("/:id/groups", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -216,7 +217,7 @@ router.delete("/:id/groups/:groupId", authenticateToken, async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });

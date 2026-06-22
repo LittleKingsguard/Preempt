@@ -1,5 +1,6 @@
 import { pool } from "../db.js";
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+import { logger } from "./logger.js";
 
 export async function queryFirstRow(query: string, params: any[] = [], errorMsg?: string, client?: any): Promise<any> {
   const queryFn = client ? client.query.bind(client) : pool.query.bind(pool);
@@ -40,6 +41,6 @@ export function fireAndForgetEvent(event: IPreemptEvent) {
       event.correlationId, event.version, event.topic || 'preempt-events'
     ]
   ).catch(err => {
-    console.error("Failed to fire-and-forget event save:", err);
+    logger.error({ err }, "Failed to fire-and-forget event save");
   });
 }

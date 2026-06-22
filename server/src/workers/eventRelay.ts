@@ -3,14 +3,20 @@ import { pool } from '../db.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
+if (!process.env.KAFKA_BROKERS) {
+  logger.error('KAFKA_BROKERS environment variable is required');
+  process.exit(1);
+}
+
 const kafka = new Kafka({
   clientId: 'preempt-relay',
-  brokers: [process.env.KAFKA_BROKERS || 'kafka:9092'],
+  brokers: [process.env.KAFKA_BROKERS],
   retry: {
     initialRetryTime: 100,
     retries: 8
@@ -18,22 +24,48 @@ const kafka = new Kafka({
 });
 
 const producer = kafka.producer();
+let isShuttingDown = false;
 
 async function startRelay() {
   try {
     await producer.connect();
-    console.log("Connected to Kafka as Producer");
+    logger.info("Connected to Kafka as Producer");
   } catch (err) {
-    console.error("Failed to connect to Kafka, retrying...", err);
+    if (isShuttingDown) return;
+    logger.error({ err }, "Failed to connect to Kafka, retrying...");
     setTimeout(startRelay, 5000);
     return;
   }
 
   // Poll DB periodically
-  setInterval(pollEvents, 1000);
+  const interval = setInterval(() => {
+    if (!isShuttingDown) {
+      pollEvents();
+    }
+  }, 1000);
+
+  async function shutdown(signal: string) {
+    logger.info(`Received ${signal}. Shutting down Event Relay gracefully...`);
+    isShuttingDown = true;
+    clearInterval(interval);
+    try {
+      await producer.disconnect();
+      logger.info('Kafka producer disconnected');
+      await pool.end();
+      logger.info('Database pool closed');
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err }, 'Error during shutdown');
+      process.exit(1);
+    }
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 async function pollEvents() {
+  if (isShuttingDown) return;
   const client = await pool.connect();
   let result;
   try {
@@ -56,7 +88,7 @@ async function pollEvents() {
 
     await client.query('COMMIT');
   } catch (dbErr) {
-    console.error("Error polling database for events:", dbErr);
+    logger.error({ err: dbErr }, "Error polling database for events");
     await client.query('ROLLBACK');
     client.release();
     return;
@@ -89,12 +121,14 @@ async function pollEvents() {
     // If successful, delete from DB
     const ids = result.rows.map(r => r.event_id);
     await client.query('DELETE FROM Events WHERE event_id = ANY($1)', [ids]);
-    console.log(`Relayed ${ids.length} events to Kafka`);
+    logger.info(`Relayed ${ids.length} events to Kafka`);
   } catch (kafkaErr) {
-    console.error("Failed to push to Kafka, events will be retried later...", kafkaErr);
+    logger.error({ err: kafkaErr }, "Failed to push to Kafka, events will be retried later...");
   } finally {
     client.release();
   }
 }
 
-startRelay().catch(console.error);
+startRelay().catch(err => {
+  logger.error({ err }, 'Fatal error starting relay');
+});

@@ -1,3 +1,4 @@
+import { logger } from "../../utils/logger.js";
 import express from "express";
 import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Template } from "../../models/template.js";
@@ -20,7 +21,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
       res.json(result.template);
     }
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -43,7 +44,7 @@ router.post("/", authenticateToken, async (req, res) => {
     }
     res.json({ message: "Template created successfully", template: result.template });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -70,7 +71,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
 
     res.json({ message: "Template updated successfully", template: result.template });
   } catch (err) {
-    console.error(err);
+    logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });
   }
 });
