@@ -1,25 +1,19 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 import type { IAuthTokenSource } from "../models/interfaces.js";
 
 export async function dbCreateAuthToken(event: IPreemptEvent, username: string, type: string, tokenValue: string, expiresInMinutes: number) {
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60000);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      "INSERT INTO AuthTokens (username, token_type, token_hash, expires_at) VALUES ($1, $2, crypt($3, gen_salt('bf')), $4)",
-      [username, type, tokenValue, expiresAt]
-    );
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 5);
+  await pool.query(
+    `WITH inserted AS (
+       INSERT INTO AuthTokens (username, token_type, token_hash, expires_at) VALUES ($1, $2, crypt($3, gen_salt('bf')), $4)
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [username, type, tokenValue, expiresAt, ...cte.params]
+  );
 }
 
 export async function dbVerifyAuthToken(event: IPreemptEvent, username: string, type: string, tokenValue: string) {
@@ -32,18 +26,15 @@ export async function dbVerifyAuthToken(event: IPreemptEvent, username: string, 
 }
 
 export async function dbDeleteAuthTokens(event: IPreemptEvent, username: string, type: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("DELETE FROM AuthTokens WHERE username = $1 AND token_type = $2", [username, type]);
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH deleted AS (
+       DELETE FROM AuthTokens WHERE username = $1 AND token_type = $2
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [username, type, ...cte.params]
+  );
 }
 
 export const pgAuthTokenSource: IAuthTokenSource = {

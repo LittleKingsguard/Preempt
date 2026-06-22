@@ -35,56 +35,63 @@ async function startRelay() {
 
 async function pollEvents() {
   const client = await pool.connect();
+  let result;
   try {
     await client.query('BEGIN');
     
-    // Select batch of events, locking them
-    const result = await client.query(`
-      SELECT event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version, topic 
-      FROM Events 
-      ORDER BY timestamp ASC 
-      LIMIT 100
-      FOR UPDATE SKIP LOCKED
+    // Select batch of events, locking them and marking as PROCESSING
+    result = await client.query(`
+      UPDATE Events
+      SET status = 'PROCESSING', processing_started_at = CURRENT_TIMESTAMP
+      WHERE event_id IN (
+        SELECT event_id 
+        FROM Events 
+        WHERE status = 'PENDING' OR (status = 'PROCESSING' AND processing_started_at < CURRENT_TIMESTAMP - INTERVAL '1 minute')
+        ORDER BY timestamp ASC 
+        LIMIT 100
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version, topic 
     `);
 
-    if (result.rows.length === 0) {
-      await client.query('COMMIT');
-      return;
-    }
-
-    const messagesByTopic: Record<string, any[]> = {};
-    for (const row of result.rows) {
-      const topic = row.topic || 'preempt-events';
-      if (!messagesByTopic[topic]) messagesByTopic[topic] = [];
-      messagesByTopic[topic].push({
-        key: row.event_id,
-        value: JSON.stringify(row)
-      });
-    }
-
-    try {
-      const sendPromises = Object.entries(messagesByTopic).map(([topic, messages]) => {
-        return producer.send({
-          topic,
-          messages
-        });
-      });
-      await Promise.all(sendPromises);
-
-      // If successful, delete from DB
-      const ids = result.rows.map(r => r.event_id);
-      await client.query('DELETE FROM Events WHERE event_id = ANY($1)', [ids]);
-      
-      await client.query('COMMIT');
-      console.log(`Relayed ${ids.length} events to Kafka`);
-    } catch (kafkaErr) {
-      console.error("Failed to push to Kafka, rolling back DB transaction...", kafkaErr);
-      await client.query('ROLLBACK');
-    }
-
+    await client.query('COMMIT');
   } catch (dbErr) {
     console.error("Error polling database for events:", dbErr);
     await client.query('ROLLBACK');
+    client.release();
+    return;
+  }
+
+  if (result.rows.length === 0) {
+    client.release();
+    return;
+  }
+
+  const messagesByTopic: Record<string, any[]> = {};
+  for (const row of result.rows) {
+    const topic = row.topic || 'preempt-events';
+    if (!messagesByTopic[topic]) messagesByTopic[topic] = [];
+    messagesByTopic[topic].push({
+      key: row.event_id,
+      value: JSON.stringify(row)
+    });
+  }
+
+  try {
+    const sendPromises = Object.entries(messagesByTopic).map(([topic, messages]) => {
+      return producer.send({
+        topic,
+        messages
+      });
+    });
+    await Promise.all(sendPromises);
+
+    // If successful, delete from DB
+    const ids = result.rows.map(r => r.event_id);
+    await client.query('DELETE FROM Events WHERE event_id = ANY($1)', [ids]);
+    console.log(`Relayed ${ids.length} events to Kafka`);
+  } catch (kafkaErr) {
+    console.error("Failed to push to Kafka, events will be retried later...", kafkaErr);
   } finally {
     client.release();
   }

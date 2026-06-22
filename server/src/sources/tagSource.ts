@@ -1,5 +1,5 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
-import { logEvent, fireAndForgetEvent } from "../utils/db.js";
+import { fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 import { pool } from "../db.js";
 
 export async function dbFetchAllTags(event: IPreemptEvent): Promise<string[]> {
@@ -9,41 +9,61 @@ export async function dbFetchAllTags(event: IPreemptEvent): Promise<string[]> {
 }
 
 export async function dbUpdateTemplateTags(event: IPreemptEvent, client: any, templateId: number, tags: string[]) {
+  const logCte = getLogEventCTE(event, 3);
   if (!tags || tags.length === 0) {
-    await client.query("DELETE FROM TemplateTags WHERE template_id = $1", [templateId]);
-    await logEvent(client, event);
+    await pool.query(`WITH deleted AS (DELETE FROM TemplateTags WHERE template_id = $1), ${logCte.sql} SELECT 1`, [templateId, null, ...logCte.params]);
     return;
   }
   
-  await client.query("INSERT INTO Tags (name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING", [tags]);
+  await pool.query(`
+    WITH ${buildUpdateTemplateTagsCTE('$1', 2)},
+    ${logCte.sql}
+    SELECT 1
+  `, [templateId, tags, ...logCte.params]);
+}
 
-  const result = await client.query("SELECT id FROM Tags WHERE name = ANY($1::text[])", [tags]);
-  const tagIds = result.rows.map((r: any) => r.id);
-  
-  await client.query("DELETE FROM TemplateTags WHERE template_id = $1", [templateId]);
-  if (tagIds.length > 0) {
-    await client.query("INSERT INTO TemplateTags (template_id, tag_id) SELECT $1, unnest($2::int[])", [templateId, tagIds]);
-  }
-  await logEvent(client, event);
+export function buildUpdateTemplateTagsCTE(templateIdRef: string, tagsParamIdx: number) {
+  return `
+    inserted_tags AS (
+      INSERT INTO Tags (name) SELECT unnest($${tagsParamIdx}::text[]) ON CONFLICT DO NOTHING
+    ),
+    deleted_template_tags AS (
+      DELETE FROM TemplateTags WHERE template_id = ${templateIdRef}
+    ),
+    inserted_template_tags AS (
+      INSERT INTO TemplateTags (template_id, tag_id)
+      SELECT ${templateIdRef}, id FROM Tags WHERE name = ANY($${tagsParamIdx}::text[])
+    )
+  `;
 }
 
 export async function dbUpdateContentTags(event: IPreemptEvent, client: any, contentId: number, tags: string[]) {
+  const logCte = getLogEventCTE(event, 3);
   if (!tags || tags.length === 0) {
-    await client.query("DELETE FROM ContentTags WHERE content_id = $1", [contentId]);
-    await logEvent(client, event);
+    await pool.query(`WITH deleted AS (DELETE FROM ContentTags WHERE content_id = $1), ${logCte.sql} SELECT 1`, [contentId, null, ...logCte.params]);
     return;
   }
   
-  await client.query("INSERT INTO Tags (name) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING", [tags]);
+  await pool.query(`
+    WITH ${buildUpdateContentTagsCTE('$1', 2)},
+    ${logCte.sql}
+    SELECT 1
+  `, [contentId, tags, ...logCte.params]);
+}
 
-  const result = await client.query("SELECT id FROM Tags WHERE name = ANY($1::text[])", [tags]);
-  const tagIds = result.rows.map((r: any) => r.id);
-  
-  await client.query("DELETE FROM ContentTags WHERE content_id = $1", [contentId]);
-  if (tagIds.length > 0) {
-    await client.query("INSERT INTO ContentTags (content_id, tag_id) SELECT $1, unnest($2::int[])", [contentId, tagIds]);
-  }
-  await logEvent(client, event);
+export function buildUpdateContentTagsCTE(contentIdRef: string, tagsParamIdx: number) {
+  return `
+    inserted_tags AS (
+      INSERT INTO Tags (name) SELECT unnest($${tagsParamIdx}::text[]) ON CONFLICT DO NOTHING
+    ),
+    deleted_content_tags AS (
+      DELETE FROM ContentTags WHERE content_id = ${contentIdRef}
+    ),
+    inserted_content_tags AS (
+      INSERT INTO ContentTags (content_id, tag_id)
+      SELECT ${contentIdRef}, id FROM Tags WHERE name = ANY($${tagsParamIdx}::text[])
+    )
+  `;
 }
 
 

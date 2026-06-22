@@ -1,6 +1,6 @@
 import { PreemptEvent, type IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from '../db.js';
-import { queryFirstRow, logEvent, fireAndForgetEvent } from '../utils/db.js';
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from '../utils/db.js';
 import type { IContentSource, IContentData, IContentUserData, IContentUserGroupData } from '../models/interfaces.js';
 import { pgSettingSource } from './settingsSource.js';
 
@@ -147,88 +147,98 @@ export const pgCommentSource: IContentSource = {
     // Expected payload to contain { comment_list_id, body, parent_comment_id, target_placement }
     const { comment_list_id, body, parent_comment_id, target_placement } = payload;
     
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await client.query(
-        `INSERT INTO Comments (comment_list_id, parent_comment_id, target_placement, author_id, body) 
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [comment_list_id, parent_comment_id || null, target_placement || null, authorId, body]
-      );
-      const row = result.rows[0];
-      const defaultComp = await getDefaultCommentComponent(event);
-      const compiled = compileCommentsToContent([row], defaultComp);
+    // Pre-generate ID and dates to construct the JSON state change without a transaction
+    const idRes = await pool.query("SELECT nextval('comments_id_seq')");
+    const newId = parseInt(idRes.rows[0].nextval, 10);
+    const now = new Date();
+    
+    const row = {
+      id: newId,
+      comment_list_id,
+      parent_comment_id: parent_comment_id || null,
+      target_placement: target_placement || null,
+      author_id: authorId,
+      body,
+      created_at: now,
+      updated_at: now
+    };
 
-      event.interestedParties = [`commentList:${comment_list_id}`];
-      event.stateChange = { before: null, after: compiled };
+    const defaultComp = await getDefaultCommentComponent(event);
+    const compiled = compileCommentsToContent([row], defaultComp);
 
-      await logEvent(client, event);
-      await client.query('COMMIT');
-      
-      return compiled;
-    } catch (err) {
-      console.log('Error inside pgCommentSource.create:', err);
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    event.interestedParties = [`commentList:${comment_list_id}`];
+    event.stateChange = { before: null, after: compiled };
+    const cte = getLogEventCTE(event, 9);
+
+    await pool.query(
+      `WITH inserted AS (
+         INSERT INTO Comments (id, comment_list_id, parent_comment_id, target_placement, author_id, body, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+       ),
+       ${cte.sql}
+       SELECT 1`,
+      [newId, comment_list_id, row.parent_comment_id, row.target_placement, authorId, body, now, now, ...cte.params]
+    );
+
+    return compiled;
   },
 
   async update(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await client.query(
-        `UPDATE Comments SET body = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
-        [payload.body, id]
-      );
-      if (result.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return { error: "Comment not found", status: 404 };
-      }
-      const row = result.rows[0];
-      const defaultComp = await getDefaultCommentComponent(event);
-      const compiled = compileCommentsToContent([row], defaultComp);
+    const existing = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [id]);
+    if (!existing) return { error: "Comment not found", status: 404 };
 
-      event.interestedParties = [`commentList:${row.comment_list_id}`];
-      event.stateChange = { before: null, after: compiled };
+    const now = new Date();
+    const row = {
+      ...existing,
+      body: payload.body,
+      updated_at: now
+    };
 
-      await logEvent(client, event);
-      await client.query('COMMIT');
-      
-      return compiled;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    const defaultComp = await getDefaultCommentComponent(event);
+    const compiled = compileCommentsToContent([row], defaultComp);
+
+    event.interestedParties = [`commentList:${row.comment_list_id}`];
+    event.stateChange = { before: null, after: compiled };
+    const cte = getLogEventCTE(event, 4);
+
+    const result = await pool.query(
+      `WITH updated AS (
+         UPDATE Comments SET body = $1, updated_at = $2 WHERE id = $3 RETURNING *
+       ),
+       ${cte.sql}
+       SELECT * FROM updated`,
+      [payload.body, now, id, ...cte.params]
+    );
+
+    if (result.rows.length === 0) {
+      return { error: "Comment not found", status: 404 };
     }
+
+    return compiled;
   },
 
   async delete(event: IPreemptEvent, id: number) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await client.query("DELETE FROM Comments WHERE id = $1 RETURNING *", [id]);
-      if (result.rowCount === 0) {
-        await client.query('ROLLBACK');
-        return { error: "Comment not found", status: 404 };
-      }
-      const row = result.rows[0];
+    const existing = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [id]);
+    if (!existing) return { error: "Comment not found", status: 404 };
 
-      event.interestedParties = [`commentList:${row.comment_list_id}`];
-      event.stateChange = { before: row, after: null };
+    event.interestedParties = [`commentList:${existing.comment_list_id}`];
+    event.stateChange = { before: existing, after: null };
+    const cte = getLogEventCTE(event, 2);
 
-      await logEvent(client, event);
-      await client.query('COMMIT');
-      return row;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+    const result = await pool.query(
+      `WITH deleted AS (
+         DELETE FROM Comments WHERE id = $1 RETURNING *
+       ),
+       ${cte.sql}
+       SELECT * FROM deleted`,
+      [id, ...cte.params]
+    );
+
+    if (result.rowCount === 0) {
+      return { error: "Comment not found", status: 404 };
     }
+
+    return result.rows[0];
   },
 
   async stage(event: IPreemptEvent) { return { error: "Not supported", status: 400 }; },

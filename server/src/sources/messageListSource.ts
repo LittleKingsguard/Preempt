@@ -1,7 +1,7 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { pool } from '../db.js';
-import { queryFirstRow, logEvent, fireAndForgetEvent } from '../utils/db.js';
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from '../utils/db.js';
 import type { IContentSource, IContentData } from '../models/interfaces.js';
 import { pgSettingSource } from './settingsSource.js';
 
@@ -94,22 +94,16 @@ export async function getMessageListGroup(event: IPreemptEvent, listId: number) 
 }
 
 export async function createMessageList(event: IPreemptEvent, groupId: number, name?: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO MessageLists (name, group_id) VALUES ($1, $2) RETURNING *",
-      [name || null, groupId]
-    );
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    return result.rows[0];
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  const result = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO MessageLists (name, group_id) VALUES ($1, $2) RETURNING *
+     ),
+     ${cte.sql}
+     SELECT * FROM inserted`,
+    [name || null, groupId, ...cte.params]
+  );
+  return result.rows[0];
 }
 
 export const pgMessageListSource: IContentSource = {

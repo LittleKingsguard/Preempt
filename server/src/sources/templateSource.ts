@@ -1,7 +1,7 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
-import { pgTagSource } from "./tagSource.js";
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
+import { pgTagSource, buildUpdateTemplateTagsCTE } from "./tagSource.js";
 import type { IContentSource } from "../models/interfaces.js";
 
 interface CacheEntry {
@@ -14,29 +14,24 @@ const CACHE_TTL = 60000; // 1 minute
 
 export async function dbCreateTemplate(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO Templates (author_id, group_id, payload) VALUES ($1, $2, $3) RETURNING *",
-      [authorId, groupId, payload]
-    );
-    const row = result.rows[0];
+  const hasTags = tags && Array.isArray(tags);
+  const baseParams = [authorId, groupId, payload];
+  const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+  const cte = getLogEventCTE(event, baseParams.length + 1);
+  const tagsCte = hasTags ? buildUpdateTemplateTagsCTE('(SELECT id FROM inserted)', tagsParamIdx) + ',' : '';
+  const params = [...baseParams, ...cte.params];
 
-    if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
-    }
-
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
+  const result = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO Templates (author_id, group_id, payload) VALUES ($1, $2, $3) RETURNING *
+     ),
+     ${tagsCte}
+     ${cte.sql}
+     SELECT * FROM inserted`,
+    params
+  );
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbGetTemplateAuthorId(event: IPreemptEvent, templateId: number) {
@@ -51,94 +46,90 @@ export async function dbGetTemplateAuthorId(event: IPreemptEvent, templateId: nu
 
 export async function dbUpdateTemplate(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "UPDATE Templates SET payload = $1, group_id = COALESCE($2, group_id), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *",
-      [payload, groupId, id]
-    );
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { error: "Template not found", status: 404 };
-    }
-    const row = result.rows[0];
+  const hasTags = tags && Array.isArray(tags);
+  const baseParams = [payload, groupId, id];
+  const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+  const cte = getLogEventCTE(event, baseParams.length + 1);
+  const tagsCte = hasTags ? buildUpdateTemplateTagsCTE('$3', tagsParamIdx) + ',' : '';
+  const params = [...baseParams, ...cte.params];
 
-    if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
-    }
-
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+  const result = await pool.query(
+    `WITH updated AS (
+       UPDATE Templates SET payload = $1, group_id = COALESCE($2, group_id), updated_at = CURRENT_TIMESTAMP WHERE id = $3 RETURNING *
+     ),
+     ${tagsCte}
+     ${cte.sql}
+     SELECT * FROM updated`,
+    params
+  );
+  if (result.rows.length === 0) {
+    return { error: "Template not found", status: 404 };
   }
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbStageTemplate(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    let actualGroupId = groupId;
-    let isStagedRow = false;
+  const cte = getLogEventCTE(event, 7);
+  let actualGroupId = groupId;
+  let isStagedRow = false;
+  
+  if (originalId) {
+    const origRowRes = await pool.query(`
+      SELECT t.group_id, t.change_batch_id, cb.merged_at
+      FROM Templates t
+      LEFT JOIN ChangeBatches cb ON t.change_batch_id = cb.id
+      WHERE t.id = $1
+    `, [originalId]);
     
-    if (originalId) {
-      const origRowRes = await client.query(`
-        SELECT t.group_id, t.change_batch_id, cb.merged_at
-        FROM Templates t
-        LEFT JOIN ChangeBatches cb ON t.change_batch_id = cb.id
-        WHERE t.id = $1
-      `, [originalId]);
-      
-      if (origRowRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return { error: "Template not found", status: 404 };
-      }
-      
-      const origRow = origRowRes.rows[0];
-      if (!actualGroupId) actualGroupId = origRow.group_id;
-      if (origRow.change_batch_id !== null && origRow.merged_at === null) isStagedRow = true;
+    if (origRowRes.rows.length === 0) {
+      return { error: "Template not found", status: 404 };
     }
-
-    let row;
-    if (isStagedRow) {
-      const result = await client.query(
-        "UPDATE Templates SET group_id = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *",
-        [actualGroupId, payload, batchId, originalId]
-      );
-      if (result.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return { error: "Staged template not found", status: 404 };
-      }
-      row = result.rows[0];
-    } else {
-      const result = await client.query(
-        "INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *",
-        [authorId, actualGroupId, payload, originalId, batchId]
-      );
-      row = result.rows[0];
-    }
-
-    if (tags && Array.isArray(tags) && (isStagedRow || tags.length > 0)) {
-      await pgTagSource.updateTemplateTags(event, client, row.id, tags);
-    }
-
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+    
+    const origRow = origRowRes.rows[0];
+    if (!actualGroupId) actualGroupId = origRow.group_id;
+    if (origRow.change_batch_id !== null && origRow.merged_at === null) isStagedRow = true;
   }
+
+  const hasTags = tags && Array.isArray(tags);
+
+  let result;
+  if (isStagedRow) {
+    const baseParams = [actualGroupId, payload, batchId, originalId];
+    const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+    const cte = getLogEventCTE(event, baseParams.length + 1);
+    
+    result = await pool.query(
+      `WITH modified AS (
+         UPDATE Templates SET group_id = $1, payload = $2, change_batch_id = $3 WHERE id = $4 RETURNING *
+       ),
+       ${hasTags ? buildUpdateTemplateTagsCTE('$4', tagsParamIdx) + ',' : ''}
+       ${cte.sql}
+       SELECT * FROM modified`,
+      [...baseParams, ...cte.params]
+    );
+    if (result.rows.length === 0) {
+      return { error: "Staged template not found", status: 404 };
+    }
+  } else {
+    const baseParams = [authorId, actualGroupId, payload, originalId, batchId];
+    const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+    const cte = getLogEventCTE(event, baseParams.length + 1);
+
+    result = await pool.query(
+      `WITH modified AS (
+         INSERT INTO Templates (author_id, group_id, payload, original_id, change_batch_id, is_approved) VALUES ($1, $2, $3, $4, $5, false) RETURNING *
+       ),
+       ${hasTags ? buildUpdateTemplateTagsCTE('(SELECT id FROM modified)', tagsParamIdx) + ',' : ''}
+       ${cte.sql}
+       SELECT * FROM modified`,
+      [...baseParams, ...cte.params]
+    );
+  }
+
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbGetTemplate(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; list_id?: number; tags?: string[] } = {}, user?: any, placeholder?: any) {

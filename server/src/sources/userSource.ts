@@ -1,6 +1,6 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 
 export async function dbAuthenticateUser(event: IPreemptEvent, username: string, passwordPlain: string) {
   const row = await queryFirstRow(
@@ -12,24 +12,24 @@ export async function dbAuthenticateUser(event: IPreemptEvent, username: string,
 }
 
 export async function dbCreateUser(event: IPreemptEvent, username: string, email: string, passwordPlain: string) {
-  const client = await pool.connect();
+  const cte = getLogEventCTE(event, 4);
   try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified, validated_hosts) VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false, '{}'::text[]) RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page, validated_hosts",
-      [username, email, passwordPlain]
+    const result = await pool.query(
+      `WITH inserted AS (
+         INSERT INTO Users (username, email, password_hash, is_shadowed, has_verified, validated_hosts) 
+         VALUES ($1, $2, crypt($3, gen_salt('bf')), true, false, '{}'::text[]) 
+         RETURNING username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page, validated_hosts
+       ),
+       ${cte.sql}
+       SELECT * FROM inserted`,
+      [username, email, passwordPlain, ...cte.params]
     );
-    await logEvent(client, event);
-    await client.query('COMMIT');
     return result.rows[0];
   } catch (err: any) {
-    await client.query('ROLLBACK');
     if (err.code === '23505') {
       return { error: "Username or email already exists", status: 409 };
     }
     throw err;
-  } finally {
-    client.release();
   }
 }
 
@@ -46,35 +46,27 @@ export async function dbGetUserByUsername(event: IPreemptEvent, username: string
 }
 
 export async function dbUpdatePassword(event: IPreemptEvent, username: string, newPasswordPlain: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("UPDATE Users SET password_hash = crypt($1, gen_salt('bf')) WHERE username = $2", [newPasswordPlain, username]);
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH updated AS (
+       UPDATE Users SET password_hash = crypt($1, gen_salt('bf')) WHERE username = $2 RETURNING username
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [newPasswordPlain, username, ...cte.params]
+  );
 }
 
-
-
 export async function dbVerifyUserEmail(event: IPreemptEvent, username: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1", [username]);
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 2);
+  await pool.query(
+    `WITH updated AS (
+       UPDATE Users SET is_shadowed = false, has_verified = true WHERE username = $1 RETURNING username
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [username, ...cte.params]
+  );
 }
 
 export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
@@ -98,17 +90,21 @@ export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, 
   if (updates.length === 0) return;
 
   values.push(username);
-  const client = await pool.connect();
+  const usernameIndex = index;
+  index++; // for CTE params
+
+  const cte = getLogEventCTE(event, index);
+
   try {
-    await client.query('BEGIN');
-    await client.query(
-      `UPDATE Users SET ${updates.join(', ')} WHERE username = $${index}`,
-      values
+    await pool.query(
+      `WITH updated AS (
+         UPDATE Users SET ${updates.join(', ')} WHERE username = $${usernameIndex} RETURNING username
+       ),
+       ${cte.sql}
+       SELECT 1`,
+      [...values, ...cte.params]
     );
-    await logEvent(client, event);
-    await client.query('COMMIT');
   } catch (err: any) {
-    await client.query('ROLLBACK');
     if (err.code === '23514' && err.constraint === 'check_bot_roles') {
       return { error: "A bot cannot have admin or contributor roles", status: 400 };
     }
@@ -116,45 +112,31 @@ export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, 
       return { error: "User must verify their email before receiving admin or contributor roles", status: 400 };
     }
     throw err;
-  } finally {
-    client.release();
   }
 }
 
 export async function dbUpdateUserHomePage(event: IPreemptEvent, username: string, homePage: number | null) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      "UPDATE Users SET home_page = $1 WHERE username = $2",
-      [homePage, username]
-    );
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH updated AS (
+       UPDATE Users SET home_page = $1 WHERE username = $2 RETURNING username
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [homePage, username, ...cte.params]
+  );
 }
 
 export async function dbAddValidatedHost(event: IPreemptEvent, username: string, host: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      "UPDATE Users SET validated_hosts = array_append(validated_hosts, $1) WHERE username = $2 AND NOT ($1 = ANY(validated_hosts))",
-      [host, username]
-    );
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH updated AS (
+       UPDATE Users SET validated_hosts = array_append(validated_hosts, $1) WHERE username = $2 AND NOT ($1 = ANY(validated_hosts)) RETURNING username
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [host, username, ...cte.params]
+  );
 }
 
 export async function dbGetUsers(event: IPreemptEvent) {

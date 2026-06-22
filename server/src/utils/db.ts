@@ -11,15 +11,23 @@ export async function queryFirstRow(query: string, params: any[] = [], errorMsg?
 }
 
 export async function logEvent(client: any, event: IPreemptEvent) {
-  await client.query(
-    `INSERT INTO Events (event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version, topic) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (event_id) DO NOTHING`,
-    [
-      event.id, event.type, event.timestamp, event.source.id, event.source.type, 
-      event.interestedParties, event.stateChange ? JSON.stringify(event.stateChange) : null,
-      event.correlationId, event.version, event.topic || 'preempt-events'
-    ]
-  );
+  const cte = getLogEventCTE(event, 1);
+  await client.query(`WITH ${cte.sql} SELECT 1`, cte.params);
+}
+
+export function getLogEventCTE(event: IPreemptEvent, paramStartIndex: number) {
+  const sql = `
+    logged_event AS (
+      INSERT INTO Events (event_id, type, timestamp, source_id, source_type, interested_parties, state_change, correlation_id, version, topic) 
+      VALUES ($${paramStartIndex}, $${paramStartIndex+1}, $${paramStartIndex+2}, $${paramStartIndex+3}, $${paramStartIndex+4}, $${paramStartIndex+5}, $${paramStartIndex+6}, $${paramStartIndex+7}, $${paramStartIndex+8}, $${paramStartIndex+9}) ON CONFLICT (event_id) DO NOTHING
+    )
+  `;
+  const params = [
+    event.id, event.type, event.timestamp, event.source.id, event.source.type, 
+    event.interestedParties, event.stateChange ? JSON.stringify(event.stateChange) : null,
+    event.correlationId, event.version, event.topic || 'preempt-events'
+  ];
+  return { sql, params };
 }
 
 export function fireAndForgetEvent(event: IPreemptEvent) {

@@ -1,7 +1,7 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
-import { queryFirstRow, logEvent, fireAndForgetEvent } from "../utils/db.js";
-import { pgTagSource } from "./tagSource.js";
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
+import { pgTagSource, buildUpdateContentTagsCTE } from "./tagSource.js";
 import type { IContentSource } from "../models/interfaces.js";
 
 interface CacheEntry {
@@ -231,186 +231,195 @@ export async function dbGetContentAuthor(event: IPreemptEvent, contentId: number
 }
 
 export async function dbStageContent(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    let isStagedRow = false;
-    if (originalId) {
-      const result = await client.query(`
-        SELECT c.change_batch_id 
-        FROM Content c 
-        JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
-        WHERE c.id = $1 AND cb.merged_at IS NULL
-      `, [originalId]);
-      isStagedRow = result.rows.length > 0;
-    }
-
-    let row;
-    if (isStagedRow) {
-      const result = await client.query(
-        "UPDATE Content SET author_id = $1, payload = $2, headers = $3, change_batch_id = $4, promo = $5 WHERE id = $6 RETURNING *",
-        [authorId, payload, headers, batchId, promo, originalId]
-      );
-      row = result.rows[0];
-    } else {
-      const result = await client.query(
-        "INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id, promo) VALUES ($1, $2, $3, false, $4, $5, $6) RETURNING *",
-        [authorId, payload, headers, originalId, batchId, promo]
-      );
-      row = result.rows[0];
-    }
-
-    if (tags && Array.isArray(tags) && (isStagedRow || tags.length > 0)) {
-      await pgTagSource.updateContentTags(event, client, row.id, tags);
-    }
-    if (groupIds && Array.isArray(groupIds) && (isStagedRow || groupIds.length > 0)) {
-      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
-    }
-
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+  const cte = getLogEventCTE(event, 10);
+  let isStagedRow = false;
+  
+  if (originalId) {
+    const result = await pool.query(`
+      SELECT c.change_batch_id 
+      FROM Content c 
+      JOIN ChangeBatches cb ON c.change_batch_id = cb.id 
+      WHERE c.id = $1 AND cb.merged_at IS NULL
+    `, [originalId]);
+    isStagedRow = result.rows.length > 0;
   }
+
+  const hasTags = tags && Array.isArray(tags);
+  const hasGroups = groupIds && Array.isArray(groupIds);
+
+  let result;
+  if (isStagedRow) {
+    const baseParams = [authorId, payload, headers, batchId, promo, originalId];
+    const tagsParamIdx = (hasTags || isStagedRow) ? baseParams.push(tags || []) : -1;
+    const groupsParamIdx = (hasGroups || isStagedRow) ? baseParams.push(groupIds || []) : -1;
+    const cte = getLogEventCTE(event, baseParams.length + 1);
+
+    const tagsCte = (hasTags || isStagedRow) ? buildUpdateContentTagsCTE('(SELECT id FROM modified)', tagsParamIdx) + ',' : '';
+    const groupsCte = (hasGroups || isStagedRow) ? buildUpdateContentTemplateGroupsCTE('(SELECT id FROM modified)', groupsParamIdx) + ',' : '';
+
+    result = await pool.query(
+      `WITH modified AS (
+         UPDATE Content SET author_id = $1, payload = $2, headers = $3, change_batch_id = $4, promo = $5 WHERE id = $6 RETURNING *
+       ),
+       ${tagsCte}
+       ${groupsCte}
+       ${cte.sql}
+       SELECT * FROM modified`,
+      [...baseParams, ...cte.params]
+    );
+  } else {
+    const baseParams = [authorId, payload, headers, originalId, batchId, promo];
+    const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+    const groupsParamIdx = hasGroups ? baseParams.push(groupIds) : -1;
+    const cte = getLogEventCTE(event, baseParams.length + 1);
+
+    const tagsCte = hasTags ? buildUpdateContentTagsCTE('(SELECT id FROM modified)', tagsParamIdx) + ',' : '';
+    const groupsCte = hasGroups ? buildUpdateContentTemplateGroupsCTE('(SELECT id FROM modified)', groupsParamIdx) + ',' : '';
+
+    result = await pool.query(
+      `WITH modified AS (
+         INSERT INTO Content (author_id, payload, headers, is_visible, original_id, change_batch_id, promo) VALUES ($1, $2, $3, false, $4, $5, $6) RETURNING *
+       ),
+       ${tagsCte}
+       ${groupsCte}
+       ${cte.sql}
+       SELECT * FROM modified`,
+      [...baseParams, ...cte.params]
+    );
+  }
+
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbCreateContent(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO Content (author_id, payload, headers, is_visible, live_date, promo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [authorId, payload, headers, isVisible, liveDate, promo]
-    );
-    const row = result.rows[0];
-    
-    await client.query(
-      "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3)",
-      [row.id, authorId, 'Owner']
-    );
+  const hasTags = tags && Array.isArray(tags);
+  const hasGroups = groupIds && Array.isArray(groupIds);
 
-    if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateContentTags(event, client, row.id, tags);
-    }
-    if (groupIds && Array.isArray(groupIds)) {
-      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
-    }
+  const baseParams = [authorId, payload, headers, isVisible, liveDate, promo];
+  const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+  const groupsParamIdx = hasGroups ? baseParams.push(groupIds) : -1;
+  const cte = getLogEventCTE(event, baseParams.length + 1);
 
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
+  const tagsCte = hasTags ? buildUpdateContentTagsCTE('(SELECT id FROM inserted)', tagsParamIdx) + ',' : '';
+  const groupsCte = hasGroups ? buildUpdateContentTemplateGroupsCTE('(SELECT id FROM inserted)', groupsParamIdx) + ',' : '';
+
+  const result = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO Content (author_id, payload, headers, is_visible, live_date, promo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *
+     ),
+     inserted_content_users AS (
+       INSERT INTO ContentUsers (content_id, username, role) SELECT id, $1, 'Owner' FROM inserted
+     ),
+     ${tagsCte}
+     ${groupsCte}
+     ${cte.sql}
+     SELECT * FROM inserted`,
+    [...baseParams, ...cte.params]
+  );
+  
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbUpdateContent(event: IPreemptEvent, contentId: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | string | null, tags: string[], groupIds: number[], promo?: any) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "UPDATE Content SET author_id = $1, payload = $2, headers = $3, is_visible = $4, live_date = $5, promo = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7 RETURNING *",
-      [authorId, payload, headers, isVisible, liveDate, promo, contentId]
-    );
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { error: "Content not found", status: 404 };
-    }
-    const row = result.rows[0];
+  const hasTags = tags && Array.isArray(tags);
+  const hasGroups = groupIds && Array.isArray(groupIds);
 
-    if (tags && Array.isArray(tags)) {
-      await pgTagSource.updateContentTags(event, client, row.id, tags);
-    }
-    if (groupIds && Array.isArray(groupIds)) {
-      await dbUpdateContentTemplateGroups(event, client, row.id, groupIds);
-    }
+  const baseParams = [authorId, payload, headers, isVisible, liveDate, promo, contentId];
+  const tagsParamIdx = hasTags ? baseParams.push(tags) : -1;
+  const groupsParamIdx = hasGroups ? baseParams.push(groupIds) : -1;
+  const cte = getLogEventCTE(event, baseParams.length + 1);
 
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    cache.clear();
-    return row;
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
+  const tagsCte = hasTags ? buildUpdateContentTagsCTE('$7', tagsParamIdx) + ',' : '';
+  const groupsCte = hasGroups ? buildUpdateContentTemplateGroupsCTE('$7', groupsParamIdx) + ',' : '';
+
+  const result = await pool.query(
+    `WITH updated AS (
+       UPDATE Content SET author_id = $1, payload = $2, headers = $3, is_visible = $4, live_date = $5, promo = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $7 RETURNING *
+     ),
+     ${tagsCte}
+     ${groupsCte}
+     ${cte.sql}
+     SELECT * FROM updated`,
+    [...baseParams, ...cte.params]
+  );
+  if (result.rows.length === 0) {
+    return { error: "Content not found", status: 404 };
   }
+
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbUpdateContentTemplateGroups(event: IPreemptEvent, client: any, contentId: number, groupIds: number[]) {
-  await client.query("DELETE FROM ContentTemplateGroups WHERE content_id = $1", [contentId]);
-
-  if (groupIds && groupIds.length > 0) {
-    await client.query("INSERT INTO ContentTemplateGroups (content_id, group_id) SELECT $1, unnest($2::int[])", [contentId, groupIds]);
+  const logCte = getLogEventCTE(event, 3);
+  if (!groupIds || groupIds.length === 0) {
+    await pool.query(`WITH deleted AS (DELETE FROM ContentTemplateGroups WHERE content_id = $1), ${logCte.sql} SELECT 1`, [contentId, null, ...logCte.params]);
+  } else {
+    await pool.query(`
+      WITH ${buildUpdateContentTemplateGroupsCTE('$1', 2)},
+      ${logCte.sql}
+      SELECT 1
+    `, [contentId, groupIds, ...logCte.params]);
   }
   cache.clear();
-  await logEvent(client, event);
+}
+
+export function buildUpdateContentTemplateGroupsCTE(contentIdRef: string, groupIdsParamIdx: number) {
+  return `
+    deleted_content_groups AS (
+      DELETE FROM ContentTemplateGroups WHERE content_id = ${contentIdRef}
+    ),
+    inserted_content_groups AS (
+      INSERT INTO ContentTemplateGroups (content_id, group_id)
+      SELECT ${contentIdRef}, unnest($${groupIdsParamIdx}::int[])
+    )
+  `;
 }
 
 export async function dbDeleteContent(event: IPreemptEvent, contentId: number) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query("DELETE FROM Content WHERE id = $1 RETURNING id", [contentId]);
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return { error: "Content not found", status: 404 };
-    }
-    cache.clear();
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    return result.rows[0];
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
+  const cte = getLogEventCTE(event, 2);
+  const result = await pool.query(
+    `WITH deleted AS (
+       DELETE FROM Content WHERE id = $1 RETURNING id
+     ),
+     ${cte.sql}
+     SELECT * FROM deleted`,
+    [contentId, ...cte.params]
+  );
+  if (result.rows.length === 0) {
+    return { error: "Content not found", status: 404 };
   }
+  cache.clear();
+  return result.rows[0];
 }
 
 export async function dbAddContentUser(event: IPreemptEvent, contentId: number, username: string, role: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING role",
-      [contentId, username, role]
-    );
-    cache.clear();
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    return result.rows[0].role;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 4);
+  const result = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO ContentUsers (content_id, username, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, username) DO UPDATE SET role = EXCLUDED.role RETURNING role
+     ),
+     ${cte.sql}
+     SELECT * FROM inserted`,
+    [contentId, username, role, ...cte.params]
+  );
+  cache.clear();
+  return result.rows[0].role;
 }
 
 export async function dbRemoveContentUser(event: IPreemptEvent, contentId: number, username: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2", [contentId, username]);
-    cache.clear();
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH deleted AS (
+       DELETE FROM ContentUsers WHERE content_id = $1 AND username = $2
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [contentId, username, ...cte.params]
+  );
+  cache.clear();
 }
 
 export async function dbGetContentUsers(event: IPreemptEvent, contentId: number) {
@@ -426,39 +435,30 @@ export async function dbGetContentUsers(event: IPreemptEvent, contentId: number)
 }
 
 export async function dbAddContentGroup(event: IPreemptEvent, contentId: number, groupId: number, role: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await client.query(
-      "INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING role",
-      [contentId, groupId, role]
-    );
-    cache.clear();
-    await logEvent(client, event);
-    await client.query('COMMIT');
-    return result.rows[0].role;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 4);
+  const result = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO ContentUserGroups (content_id, group_id, role) VALUES ($1, $2, $3) ON CONFLICT (content_id, group_id) DO UPDATE SET role = EXCLUDED.role RETURNING role
+     ),
+     ${cte.sql}
+     SELECT * FROM inserted`,
+    [contentId, groupId, role, ...cte.params]
+  );
+  cache.clear();
+  return result.rows[0].role;
 }
 
 export async function dbRemoveContentGroup(event: IPreemptEvent, contentId: number, groupId: number) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query("DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2", [contentId, groupId]);
-    cache.clear();
-    await logEvent(client, event);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const cte = getLogEventCTE(event, 3);
+  await pool.query(
+    `WITH deleted AS (
+       DELETE FROM ContentUserGroups WHERE content_id = $1 AND group_id = $2
+     ),
+     ${cte.sql}
+     SELECT 1`,
+    [contentId, groupId, ...cte.params]
+  );
+  cache.clear();
 }
 
 export async function dbGetContentGroups(event: IPreemptEvent, contentId: number) {
