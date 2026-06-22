@@ -144,4 +144,19 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
   await renderContent(contentId, editorMode, req, res);
 });
 
+router.get(/(.*)/, authenticateToken, async (req, res, next) => {
+  try {
+    const aliases = await Setting.get(pgSettingSource, 'page_aliases');
+    if (aliases && typeof aliases === 'object' && aliases[req.path]) {
+      const contentId = aliases[req.path];
+      await renderContent(contentId, null, req, res);
+    } else {
+      next(); // Pass to next middleware (like static files or 404 handler)
+    }
+  } catch (err) {
+    logger.error({ err }, "An error occurred checking aliases");
+    next(err);
+  }
+});
+
 export default router;
