@@ -94,7 +94,7 @@ export function initWebSocket(server: http.Server) {
           try {
             const eventPayload = JSON.parse(message.value.toString());
             // The stateChange comes from Events table (stringified JSON)
-            const stateChange = eventPayload.state_change ? JSON.parse(eventPayload.state_change) : null;
+            const stateChange = typeof eventPayload.state_change === 'string' ? JSON.parse(eventPayload.state_change) : (eventPayload.state_change || null);
             const interestedParties = eventPayload.interested_parties || [];
 
             // Broadcast to connected websockets

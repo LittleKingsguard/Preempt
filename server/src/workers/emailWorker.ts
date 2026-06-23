@@ -75,7 +75,7 @@ async function startWorker() {
         if (eventData.type === 'auth.create' && eventData.state_change) {
           const stateChange = typeof eventData.state_change === 'string' 
             ? JSON.parse(eventData.state_change) 
-            : eventData.state_change;
+            : (eventData.state_change || null);
             
           const after = stateChange.after;
           if (!after || !after.username || !after.type || !after.tokenValue) return;
