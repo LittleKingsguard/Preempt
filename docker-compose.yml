@@ -56,55 +56,38 @@ services:
     working_dir: /app
     env_file:
       - ./server/.env
+    environment:
+      OAUTH_PORT: 3002
+      OIDC_ISSUER: http://localhost/auth/realms/preempt
+      OIDC_CLIENT_ID: preempt-app
+      OIDC_CLIENT_SECRET: secret
+      OIDC_REDIRECT_URI: http://localhost/api/oauth/callback
+      KAFKA_BROKERS: kafka:9092
+    extra_hosts:
+      - "localhost:host-gateway"
     labels:
       # TODO: Update these Traefik rules before production readiness
       - "traefik.enable=true"
+      # backend
       - "traefik.http.routers.backend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.backend.entrypoints=web"
       - "traefik.http.services.backend.loadbalancer.server.port=3001"
+      # oauth
+      - "traefik.http.routers.oauth.rule=PathPrefix(`/api/oauth`)"
+      - "traefik.http.routers.oauth.entrypoints=web"
+      - "traefik.http.services.oauth.loadbalancer.server.port=3002"
     ports:
       - "3001:3001"
+      - "3002:3002"
     volumes:
       - ./server:/app
       - ./dist:/dist
       - ./src:/src
-    command: sh -c "npm install && npx tsx watch src/index.ts"
+    command: sh -c "npm install && npm run start:all"
     depends_on:
       - db
       - kafka
-
-  # TODO: Break relay and email_worker into separate microservices before production readiness
-  relay:
-    image: node:20-alpine
-    container_name: preempt_relay
-    restart: always
-    working_dir: /app
-    env_file:
-      - ./server/.env
-    volumes:
-      - ./server:/app
-      - ./dist:/dist
-      - ./src:/src
-    command: sh -c "npm install && npx tsx watch src/workers/eventRelay.ts"
-    depends_on:
-      - db
-      - kafka
-
-  email_worker:
-    image: node:20-alpine
-    container_name: preempt_email_worker
-    restart: always
-    working_dir: /app
-    env_file:
-      - ./server/.env
-    volumes:
-      - ./server:/app
-      - ./dist:/dist
-      - ./src:/src
-    command: sh -c "npm install && npx tsx watch src/workers/emailWorker.ts"
-    depends_on:
-      - db
-      - kafka
+      - keycloak
 
   keycloak:
     build:
@@ -139,35 +122,6 @@ services:
     depends_on:
       - db
       - kafka
-
-  oauth_worker:
-    image: node:20-alpine
-    container_name: preempt_oauth_worker
-    restart: always
-    working_dir: /app
-    env_file:
-      - ./server/.env
-    environment:
-      OAUTH_PORT: 3002
-      OIDC_ISSUER: http://localhost/auth/realms/preempt
-      OIDC_CLIENT_ID: preempt-app
-      OIDC_CLIENT_SECRET: secret
-      OIDC_REDIRECT_URI: http://localhost/api/oauth/callback
-    extra_hosts:
-      - "localhost:host-gateway"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.oauth.rule=PathPrefix(`/api/oauth`)"
-      - "traefik.http.routers.oauth.entrypoints=web"
-      - "traefik.http.services.oauth.loadbalancer.server.port=3002"
-    volumes:
-      - ./server:/app
-      - ./dist:/dist
-      - ./src:/src
-    command: sh -c "npx tsx watch src/workers/oauthWorker.ts"
-    depends_on:
-      - db
-      - keycloak
 
 volumes:
   preempt_pgdata:
