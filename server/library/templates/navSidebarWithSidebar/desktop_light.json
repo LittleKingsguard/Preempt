@@ -1,14 +1,126 @@
 {
   "type": "div",
-  "css": { "style": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+  "css": {
+    "style": {
+      "background": "#ffffff",
+      "color": "#333333",
+      "minHeight": "100vh",
+      "display": "flex",
+      "flexDirection": "column"
+    }
+  },
   "content": [
-    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
-    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
-    { "type": "div", "css": { "style": { "display": "flex", "flex": "1", "maxWidth": "1400px", "margin": "0 auto", "width": "100%" } }, "content": [
-        { "type": "nav", "css": { "style": { "width": "200px", "padding": "1.5rem", "borderRight": "1px solid #eaeaea" } }, "placement": {"placementName": "sidebar_left"} },
-        { "type": "main", "css": { "style": { "flex": "1", "padding": "2rem" } }, "placement": {"placementName": "article"} },
-        { "type": "aside", "css": { "style": { "width": "250px", "padding": "1.5rem", "borderLeft": "1px solid #eaeaea" } }, "placement": {"placementName": "sidebar_right"} }
-    ] },
-    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "navBar"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "header"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "flex",
+          "flex": "1",
+          "maxWidth": "1400px",
+          "margin": "0 auto",
+          "width": "100%"
+        }
+      },
+      "content": [
+        {
+          "type": "nav",
+          "css": {
+            "style": {
+              "width": "200px",
+              "padding": "1.5rem",
+              "borderRight": "1px solid #eaeaea"
+            }
+          },
+          "placement": {
+            "placementName": "sidebar_left"
+          }
+        },
+        {
+          "type": "div",
+          "css": {
+            "style": {
+              "flex": "1",
+              "padding": "2rem"
+            }
+          },
+          "content": [
+            {
+              "type": "div",
+              "placement": {
+                "placementName": "article"
+              }
+            },
+            {
+              "type": "button",
+              "content": "Show Comments",
+              "component": [
+                {
+                  "target": "handlers.onLoad",
+                  "reference": "toggleCommentsButton"
+                },
+                {
+                  "target": "handlers.click",
+                  "reference": "showComments"
+                }
+              ],
+              "css": {
+                "style": {
+                  "marginTop": "2rem",
+                  "padding": "10px 20px",
+                  "background": "#42b883",
+                  "color": "white",
+                  "border": "none",
+                  "borderRadius": "4px",
+                  "cursor": "pointer",
+                  "fontSize": "1rem",
+                  "fontWeight": "bold",
+                  "width": "100%"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "aside",
+          "css": {
+            "style": {
+              "width": "250px",
+              "padding": "1.5rem",
+              "borderLeft": "1px solid #eaeaea"
+            }
+          },
+          "placement": {
+            "placementName": "sidebar_right"
+          }
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "footer"
+        }
+      ]
+    }
   ]
 }

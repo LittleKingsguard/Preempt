@@ -9,6 +9,7 @@ import adminRouter from "./api/admin.js";
 import userGroupsRouter from "./api/usergroups.js";
 import commentsRouter from "./api/comments.js";
 import messagesRouter from "./api/messages.js";
+import usersRouter from "./api/users.js";
 
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.use("/admin", adminRouter);
 router.use("/usergroups", userGroupsRouter);
 router.use("/comments", commentsRouter);
 router.use("/messages", messagesRouter);
+router.use("/users", usersRouter);
 
 export default router;

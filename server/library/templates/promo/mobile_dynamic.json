@@ -1,16 +1,102 @@
 {
   "type": "div",
-  "css": { 
-    "classes": ["promo-mobile"],
+  "css": {
+    "classes": [
+      "promo-mobile"
+    ],
     "cssDef": [
-      { "selector": ".promo-mobile", "styles": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
-      { "selector": "@media (prefers-color-scheme: dark)", "styles": { "background": "#121212", "color": "#e0e0e0" } }
+      {
+        "selector": ".promo-mobile",
+        "styles": {
+          "background": "#ffffff",
+          "color": "#333333",
+          "minHeight": "100vh",
+          "display": "flex",
+          "flexDirection": "column"
+        }
+      },
+      {
+        "selector": "@media (prefers-color-scheme: dark)",
+        "styles": {
+          "background": "#121212",
+          "color": "#e0e0e0"
+        }
+      }
     ]
   },
   "content": [
-    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
-    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
-    { "type": "div", "css": { "style": { "flex": "1", "padding": "1rem", "width": "100%" } }, "placement": {"placementName": "main"} },
-    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "navBar"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "header"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "flex": "1",
+          "padding": "1rem",
+          "width": "100%"
+        }
+      },
+      "content": [
+        {
+          "type": "div",
+          "placement": {
+            "placementName": "main"
+          }
+        },
+        {
+          "type": "button",
+          "content": "Show Comments",
+          "component": [
+            {
+              "target": "handlers.onLoad",
+              "reference": "toggleCommentsButton"
+            },
+            {
+              "target": "handlers.click",
+              "reference": "showComments"
+            }
+          ],
+          "css": {
+            "style": {
+              "marginTop": "2rem",
+              "padding": "10px 20px",
+              "background": "#42b883",
+              "color": "white",
+              "border": "none",
+              "borderRadius": "4px",
+              "cursor": "pointer",
+              "fontSize": "1rem",
+              "fontWeight": "bold",
+              "width": "100%"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "footer"
+        }
+      ]
+    }
   ]
 }

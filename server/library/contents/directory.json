@@ -1,5 +1,6 @@
 {
   "type": "div",
+  "props": { "commentsAllowed": true },
   "css": { "style": { "padding": "2rem", "fontFamily": "sans-serif" } },
   "component": [{"target": "handlers.onLoad", "reference": "onDBLoad_directory"}],
   "content": [

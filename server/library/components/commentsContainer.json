@@ -1,0 +1,58 @@
+{
+  "type": "div",
+  "css": { "style": { "marginTop": "3rem", "borderTop": "2px solid #eee", "paddingTop": "2rem" } },
+  "component": [{"target": "handlers.onLoad", "reference": "fetchComments"}],
+  "content": [
+    { "type": "h2", "content": "Comments", "css": {"style": {"marginBottom": "1.5rem"}} },
+    {
+      "type": "div",
+      "css": {"style": {"marginBottom": "2rem"}},
+      "content": [
+        {
+          "type": "textarea",
+          "props": {
+            "id": "new-comment-input",
+            "placeholder": "Write a comment...",
+            "rows": "4"
+          },
+          "css": {
+            "style": {
+              "width": "100%",
+              "padding": "1rem",
+              "borderRadius": "4px",
+              "border": "1px solid #ccc",
+              "marginBottom": "1rem",
+              "fontFamily": "inherit"
+            }
+          }
+        },
+        {
+          "type": "button",
+          "content": "Post Comment",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "postComment"
+            }
+          ],
+          "css": {
+            "style": {
+              "padding": "10px 20px",
+              "background": "#0070f3",
+              "color": "white",
+              "border": "none",
+              "borderRadius": "4px",
+              "cursor": "pointer",
+              "fontWeight": "bold"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "props": { "id": "comments-list" },
+      "placement": { "placementName": "commentsList" }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "type": "div",
+  "css": { "style": { "padding": "2rem", "maxWidth": "800px", "margin": "0 auto", "fontFamily": "sans-serif" } },
+  "content": [
+    { "type": "h1", "content": "Messages" },
+    { "type": "div", "component": [{"target": "type", "reference": "messageContainer"}] }
+  ]
+}

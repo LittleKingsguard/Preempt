@@ -1,5 +1,6 @@
 {
   "type": "div",
+  "props": { "commentsAllowed": true },
   "css": { "style": { "padding": "3rem 2rem", "lineHeight": "1.6", "fontFamily": "sans-serif", "maxWidth": "800px", "margin": "0 auto" } },
   "content": [
     { "type": "h1", "content": "Welcome to Preempt", "css": {"style": {"color": "#333"}} },

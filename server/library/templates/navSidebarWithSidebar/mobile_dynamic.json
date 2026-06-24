@@ -1,26 +1,158 @@
 {
   "type": "div",
-  "css": { 
-    "classes": ["nav-sidebar-double-mobile"],
+  "css": {
+    "classes": [
+      "nav-sidebar-double-mobile"
+    ],
     "cssDef": [
-      { "selector": ".nav-sidebar-double-mobile", "styles": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
-      { "selector": ".sidebar-left-mobile", "styles": { "padding": "1rem", "borderBottom": "1px solid #eaeaea" } },
-      { "selector": ".sidebar-right-mobile", "styles": { "padding": "1rem", "borderTop": "1px solid #eaeaea" } },
-      { "selector": "@media (prefers-color-scheme: dark)", "styles": { 
-          ".nav-sidebar-double-mobile": { "background": "#121212", "color": "#e0e0e0" },
-          ".sidebar-left-mobile": { "borderBottom": "1px solid #333" },
-          ".sidebar-right-mobile": { "borderTop": "1px solid #333" }
-      } }
+      {
+        "selector": ".nav-sidebar-double-mobile",
+        "styles": {
+          "background": "#ffffff",
+          "color": "#333333",
+          "minHeight": "100vh",
+          "display": "flex",
+          "flexDirection": "column"
+        }
+      },
+      {
+        "selector": ".sidebar-left-mobile",
+        "styles": {
+          "padding": "1rem",
+          "borderBottom": "1px solid #eaeaea"
+        }
+      },
+      {
+        "selector": ".sidebar-right-mobile",
+        "styles": {
+          "padding": "1rem",
+          "borderTop": "1px solid #eaeaea"
+        }
+      },
+      {
+        "selector": "@media (prefers-color-scheme: dark)",
+        "styles": {
+          ".nav-sidebar-double-mobile": {
+            "background": "#121212",
+            "color": "#e0e0e0"
+          },
+          ".sidebar-left-mobile": {
+            "borderBottom": "1px solid #333"
+          },
+          ".sidebar-right-mobile": {
+            "borderTop": "1px solid #333"
+          }
+        }
+      }
     ]
   },
   "content": [
-    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
-    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
-    { "type": "div", "css": { "style": { "display": "flex", "flexDirection": "column", "flex": "1", "width": "100%" } }, "content": [
-        { "type": "nav", "css": { "classes": ["sidebar-left-mobile"] }, "placement": {"placementName": "sidebar_left"} },
-        { "type": "main", "css": { "style": { "flex": "1", "padding": "1rem" } }, "placement": {"placementName": "article"} },
-        { "type": "aside", "css": { "classes": ["sidebar-right-mobile"] }, "placement": {"placementName": "sidebar_right"} }
-    ] },
-    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "navBar"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "header"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "flex",
+          "flexDirection": "column",
+          "flex": "1",
+          "width": "100%"
+        }
+      },
+      "content": [
+        {
+          "type": "nav",
+          "css": {
+            "classes": [
+              "sidebar-left-mobile"
+            ]
+          },
+          "placement": {
+            "placementName": "sidebar_left"
+          }
+        },
+        {
+          "type": "div",
+          "css": {
+            "style": {
+              "flex": "1",
+              "padding": "1rem"
+            }
+          },
+          "content": [
+            {
+              "type": "div",
+              "placement": {
+                "placementName": "article"
+              }
+            },
+            {
+              "type": "button",
+              "content": "Show Comments",
+              "component": [
+                {
+                  "target": "handlers.onLoad",
+                  "reference": "toggleCommentsButton"
+                },
+                {
+                  "target": "handlers.click",
+                  "reference": "showComments"
+                }
+              ],
+              "css": {
+                "style": {
+                  "marginTop": "2rem",
+                  "padding": "10px 20px",
+                  "background": "#42b883",
+                  "color": "white",
+                  "border": "none",
+                  "borderRadius": "4px",
+                  "cursor": "pointer",
+                  "fontSize": "1rem",
+                  "fontWeight": "bold",
+                  "width": "100%"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "aside",
+          "css": {
+            "classes": [
+              "sidebar-right-mobile"
+            ]
+          },
+          "placement": {
+            "placementName": "sidebar_right"
+          }
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "footer"
+        }
+      ]
+    }
   ]
 }

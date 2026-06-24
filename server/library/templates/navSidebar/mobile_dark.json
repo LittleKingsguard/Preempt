@@ -1,13 +1,111 @@
 {
   "type": "div",
-  "css": { "style": { "background": "#121212", "color": "#e0e0e0", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+  "css": {
+    "style": {
+      "background": "#121212",
+      "color": "#e0e0e0",
+      "minHeight": "100vh",
+      "display": "flex",
+      "flexDirection": "column"
+    }
+  },
   "content": [
-    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
-    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
-    { "type": "div", "css": { "style": { "display": "flex", "flexDirection": "column", "flex": "1", "width": "100%" } }, "content": [
-        { "type": "nav", "css": { "style": { "padding": "1rem", "borderBottom": "1px solid #333" } }, "placement": {"placementName": "sidebar"} },
-        { "type": "main", "css": { "style": { "flex": "1", "padding": "1rem" } }, "placement": {"placementName": "article"} }
-    ] },
-    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "navBar"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "header"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "flex",
+          "flexDirection": "column",
+          "flex": "1",
+          "width": "100%"
+        }
+      },
+      "content": [
+        {
+          "type": "nav",
+          "css": {
+            "style": {
+              "padding": "1rem",
+              "borderBottom": "1px solid #333"
+            }
+          },
+          "placement": {
+            "placementName": "sidebar"
+          }
+        },
+        {
+          "type": "div",
+          "css": {
+            "style": {
+              "flex": "1",
+              "padding": "1rem"
+            }
+          },
+          "content": [
+            {
+              "type": "div",
+              "placement": {
+                "placementName": "article"
+              }
+            },
+            {
+              "type": "button",
+              "content": "Show Comments",
+              "component": [
+                {
+                  "target": "handlers.onLoad",
+                  "reference": "toggleCommentsButton"
+                },
+                {
+                  "target": "handlers.click",
+                  "reference": "showComments"
+                }
+              ],
+              "css": {
+                "style": {
+                  "marginTop": "2rem",
+                  "padding": "10px 20px",
+                  "background": "#42b883",
+                  "color": "white",
+                  "border": "none",
+                  "borderRadius": "4px",
+                  "cursor": "pointer",
+                  "fontSize": "1rem",
+                  "fontWeight": "bold",
+                  "width": "100%"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "content",
+          "reference": "footer"
+        }
+      ]
+    }
   ]
 }

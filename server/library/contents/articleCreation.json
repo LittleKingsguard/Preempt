@@ -1,5 +1,6 @@
 {
   "type": "div",
+  "props": { "commentsAllowed": true },
   "css": { 
     "classes": ["article-creator-panel"],
     "cssDef": [
