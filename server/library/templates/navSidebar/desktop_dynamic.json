@@ -1,0 +1,23 @@
+{
+  "type": "div",
+  "css": { 
+    "classes": ["nav-sidebar-desktop"],
+    "cssDef": [
+      { "selector": ".nav-sidebar-desktop", "styles": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+      { "selector": ".nav-sidebar-sidebar", "styles": { "width": "250px", "padding": "2rem", "borderRight": "1px solid #eaeaea" } },
+      { "selector": "@media (prefers-color-scheme: dark)", "styles": { 
+          ".nav-sidebar-desktop": { "background": "#121212", "color": "#e0e0e0" },
+          ".nav-sidebar-sidebar": { "borderRight": "1px solid #333" }
+      } }
+    ]
+  },
+  "content": [
+    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
+    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
+    { "type": "div", "css": { "style": { "display": "flex", "flex": "1", "maxWidth": "1200px", "margin": "0 auto", "width": "100%" } }, "content": [
+        { "type": "nav", "css": { "classes": ["nav-sidebar-sidebar"] }, "placement": {"placementName": "sidebar"} },
+        { "type": "main", "css": { "style": { "flex": "1", "padding": "2rem" } }, "placement": {"placementName": "article"} }
+    ] },
+    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+  ]
+}

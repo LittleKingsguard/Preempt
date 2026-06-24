@@ -1,0 +1,13 @@
+{
+  "type": "div",
+  "css": { "style": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+  "content": [
+    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
+    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
+    { "type": "div", "css": { "style": { "display": "flex", "flexDirection": "column", "flex": "1", "width": "100%" } }, "content": [
+        { "type": "nav", "css": { "style": { "padding": "1rem", "borderBottom": "1px solid #eaeaea" } }, "placement": {"placementName": "sidebar"} },
+        { "type": "main", "css": { "style": { "flex": "1", "padding": "1rem" } }, "placement": {"placementName": "article"} }
+    ] },
+    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "type": "div",
+  "css": {
+    "classes": ["rich-text-toolbar"],
+    "cssDef": [
+      { "selector": ".rich-text-toolbar", "styles": { "display": "flex", "gap": "10px", "padding": "10px", "borderBottom": "1px solid #ccc", "background": "#f9f9f9", "flexWrap": "wrap" } }
+    ]
+  },
+  "content": [
+    { "type": "button", "content": "Bold", "component": [{"target": "handlers.click", "reference": "applyBold"}], "css": {"style": {"fontWeight": "bold"}} },
+    { "type": "button", "content": "Italic", "component": [{"target": "handlers.click", "reference": "applyItalic"}], "css": {"style": {"fontStyle": "italic"}} },
+    { "type": "button", "content": "Heading", "component": [{"target": "handlers.click", "reference": "applyHeading"}] },
+    { "type": "button", "content": "Link", "component": [{"target": "handlers.click", "reference": "insertLink"}], "css": {"style": {"textDecoration": "underline", "color": "blue"}} },
+    { "type": "button", "content": "Image", "component": [{"target": "handlers.click", "reference": "insertImage"}] }
+  ]
+}

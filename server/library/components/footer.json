@@ -1,0 +1,25 @@
+{
+  "type": "footer",
+  "css": {
+    "classes": ["page-footer"],
+    "cssDef": [
+      { "selector": ".page-footer", "styles": { "padding": "2rem", "textAlign": "center", "background": "#f1f1f1", "color": "#666", "marginTop": "auto", "borderTop": "1px solid #e1e1e1" } },
+      {
+        "selector": "@media (prefers-color-scheme: dark)",
+        "styles": { ".page-footer": { "background": "#1a1a1a", "color": "#ccc", "borderTop": "1px solid #333" } }
+      }
+    ]
+  },
+  "content": [
+    {
+      "type": "div",
+      "css": { "style": { "display": "flex", "justifyContent": "center", "gap": "20px", "marginBottom": "1rem" } },
+      "content": [
+        { "type": "a", "props": { "href": "/contact" }, "content": "Contact Us", "css": { "style": { "color": "inherit" } } },
+        { "type": "a", "props": { "href": "/privacy" }, "content": "Privacy Policy", "css": { "style": { "color": "inherit" } } },
+        { "type": "a", "props": { "href": "/terms" }, "content": "Terms of Service", "css": { "style": { "color": "inherit" } } }
+      ]
+    },
+    { "type": "p", "content": "© 2026 Preempt Platform. All rights reserved.", "css": { "style": { "margin": "0", "fontSize": "0.9rem" } } }
+  ]
+}

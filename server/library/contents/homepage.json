@@ -1,0 +1,17 @@
+{
+  "type": "div",
+  "css": { "style": { "padding": "3rem 2rem", "lineHeight": "1.6", "fontFamily": "sans-serif", "maxWidth": "800px", "margin": "0 auto" } },
+  "content": [
+    { "type": "h1", "content": "Welcome to Preempt", "css": {"style": {"color": "#333"}} },
+    { "type": "p", "content": "Preempt is up and running. To get started:", "css": {"style": {"fontSize": "1.1rem"}} },
+    {
+      "type": "ul",
+      "css": {"style": {"paddingLeft": "1.5rem", "fontSize": "1.1rem"}},
+      "content": [
+        { "type": "li", "content": "Log in with the default admin credentials.", "css": {"style": {"marginBottom": "0.5rem"}} },
+        { "type": "li", "content": "Navigate to the Admin Dashboard to manage users and content.", "css": {"style": {"marginBottom": "0.5rem"}} },
+        { "type": "li", "content": "Explore the components and templates in the library to build your site.", "css": {"style": {"marginBottom": "0.5rem"}} }
+      ]
+    }
+  ]
+}

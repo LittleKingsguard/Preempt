@@ -1,0 +1,16 @@
+{
+  "type": "div",
+  "css": { 
+    "classes": ["promo-mobile"],
+    "cssDef": [
+      { "selector": ".promo-mobile", "styles": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+      { "selector": "@media (prefers-color-scheme: dark)", "styles": { "background": "#121212", "color": "#e0e0e0" } }
+    ]
+  },
+  "content": [
+    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
+    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
+    { "type": "div", "css": { "style": { "flex": "1", "padding": "1rem", "width": "100%" } }, "placement": {"placementName": "main"} },
+    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+  ]
+}

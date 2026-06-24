@@ -1,0 +1,32 @@
+{
+  "type": "div",
+  "css": { 
+    "classes": ["user-auth-dropdown"], 
+    "cssDef": [
+      { "selector": ".user-auth-dropdown", "styles": { "position": "relative", "fontFamily": "sans-serif" } },
+      { "selector": ".auth-main-btn", "styles": { "padding": "8px 16px", "background": "#007BFF", "color": "#fff", "border": "none", "borderRadius": "4px", "cursor": "pointer", "textDecoration": "none", "display": "inline-block" } },
+      { "selector": ".dropdown-menu", "styles": { "display": "none", "position": "absolute", "right": "0", "top": "100%", "marginTop": "5px", "background": "#fff", "border": "1px solid #ccc", "borderRadius": "4px", "boxShadow": "0 2px 5px rgba(0,0,0,0.1)", "minWidth": "150px", "zIndex": "10" } },
+      { "selector": ".dropdown-link", "styles": { "display": "block", "padding": "10px", "textDecoration": "none", "color": "#333" } },
+      { "selector": ".dropdown-btn-danger", "styles": { "display": "block", "width": "100%", "padding": "10px", "background": "none", "border": "none", "textAlign": "left", "cursor": "pointer", "borderTop": "1px solid #eee", "color": "#d9534f" } }
+    ]
+  },
+  "component": [
+    {"target": "handlers.afterInstantiate", "reference": "AuthInitHandler"}
+  ],
+  "content": [
+    {
+      "type": "button",
+      "content": "Sign In / Profile",
+      "css": { "classes": ["auth-main-btn"] },
+      "component": [{"target": "handlers.click", "reference": "ToggleUserDropdown"}]
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["dropdown-menu"] },
+      "content": [
+        { "type": "a", "props": { "href": "/profile" }, "content": "Profile", "css": { "classes": ["dropdown-link"] } },
+        { "type": "button", "content": "Logout", "css": { "classes": ["dropdown-btn-danger"] }, "component": [{"target": "handlers.click", "reference": "LogoutHandler"}] }
+      ]
+    }
+  ]
+}

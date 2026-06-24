@@ -172,6 +172,30 @@ app.get("/api/oauth/callback", async (req, res) => {
   }
 });
 
+app.get("/api/oauth/logout", async (req, res) => {
+  try {
+    const oidcConfig = await getOIDCConfig();
+    
+    // Attempt to use the end_session_endpoint if available, otherwise fallback to standard Keycloak logout URL
+    let endSessionEndpoint = oidcConfig.serverMetadata().end_session_endpoint;
+    if (!endSessionEndpoint) {
+      endSessionEndpoint = `${OIDC_ISSUER}/protocol/openid-connect/logout`;
+    }
+    
+    const logoutUrl = new URL(endSessionEndpoint);
+    
+    // Redirect back to the root of the app after logout
+    const postLogoutRedirectUri = new URL("/", REDIRECT_URI).href;
+    logoutUrl.searchParams.set("post_logout_redirect_uri", postLogoutRedirectUri);
+    logoutUrl.searchParams.set("client_id", CLIENT_ID);
+
+    res.redirect(logoutUrl.href);
+  } catch (err: any) {
+    logger.error({ err }, "Failed to initialize logout");
+    res.status(500).json({ error: "Logout failed" });
+  }
+});
+
 app.post("/api/oauth/link", async (req, res) => {
   try {
     const token = req.cookies.token;

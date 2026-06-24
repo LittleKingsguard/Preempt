@@ -1,0 +1,80 @@
+{
+  "type": "div",
+  "css": {
+    "classes": ["publish-modal-overlay"],
+    "cssDef": [
+      { "selector": ".publish-modal-overlay", "styles": { "display": "none", "position": "fixed", "top": "0", "left": "0", "width": "100%", "height": "100%", "background": "rgba(0,0,0,0.5)", "zIndex": "9999", "justifyContent": "center", "alignItems": "center", "fontFamily": "sans-serif" } },
+      { "selector": ".publish-modal-content", "styles": { "background": "#fff", "padding": "2rem", "borderRadius": "8px", "width": "100%", "maxWidth": "500px", "boxShadow": "0 4px 12px rgba(0,0,0,0.15)", "display": "flex", "flexDirection": "column", "gap": "1rem" } },
+      { "selector": ".publish-modal-header", "styles": { "margin": "0", "fontSize": "1.5rem" } },
+      { "selector": ".publish-modal-field", "styles": { "display": "flex", "flexDirection": "column", "gap": "0.5rem" } },
+      { "selector": ".publish-modal-input", "styles": { "padding": "0.5rem", "border": "1px solid #ccc", "borderRadius": "4px", "fontSize": "1rem", "fontFamily": "monospace" } },
+      { "selector": ".publish-modal-checkbox", "styles": { "display": "flex", "alignItems": "center", "gap": "0.5rem", "cursor": "pointer" } },
+      { "selector": ".publish-modal-actions", "styles": { "display": "flex", "justifyContent": "flex-end", "gap": "1rem", "marginTop": "1rem" } },
+      { "selector": ".publish-modal-btn", "styles": { "padding": "10px 20px", "border": "none", "borderRadius": "4px", "cursor": "pointer", "fontSize": "1rem", "fontWeight": "bold" } },
+      { "selector": ".publish-modal-btn-cancel", "styles": { "background": "#e0e0e0", "color": "#333" } },
+      { "selector": ".publish-modal-btn-confirm", "styles": { "background": "#42b883", "color": "#fff" } }
+    ]
+  },
+  "component": [
+    {"target": "handlers.afterInstantiate", "reference": "fetchTagsAutocomplete"}
+  ],
+  "content": [
+    {
+      "type": "div",
+      "css": { "classes": ["publish-modal-content"] },
+      "content": [
+        { "type": "h2", "content": "Publish Article", "css": { "classes": ["publish-modal-header"] } },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-field"] },
+          "content": [
+            { "type": "label", "content": "Article Title" },
+            { "type": "input", "props": { "id": "publish-modal-title", "type": "text", "placeholder": "Enter Title" }, "css": { "classes": ["publish-modal-input"] } }
+          ]
+        },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-field"] },
+          "content": [
+            { "type": "label", "content": "Article Subtitle" },
+            { "type": "input", "props": { "id": "publish-modal-subtitle", "type": "text", "placeholder": "Enter Subtitle" }, "css": { "classes": ["publish-modal-input"] } }
+          ]
+        },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-field"] },
+          "content": [
+            { "type": "label", "content": "Raw Headers (JSON)" },
+            { "type": "textarea", "props": { "id": "publish-modal-headers", "rows": "3", "placeholder": "{ \"key\": \"value\" }" }, "css": { "classes": ["publish-modal-input"] } }
+          ]
+        },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-field"] },
+          "content": [
+            { "type": "label", "content": "Tags (comma separated)" },
+            { "type": "input", "props": { "id": "publish-modal-tags", "type": "text", "placeholder": "tech, news", "list": "tags-datalist" }, "css": { "classes": ["publish-modal-input"] } },
+            { "type": "datalist", "props": { "id": "tags-datalist" }, "content": [] }
+          ]
+        },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-field"] },
+          "content": [
+            { "type": "label", "content": "Live Date (Optional)" },
+            { "type": "input", "props": { "id": "publish-modal-livedate", "type": "datetime-local" }, "css": { "classes": ["publish-modal-input"] } }
+          ]
+        },
+        {
+          "type": "label", "css": { "classes": ["publish-modal-checkbox"] },
+          "content": [
+            { "type": "input", "props": { "id": "publish-modal-visibility", "type": "checkbox", "checked": "true" } },
+            "Is Visible (Public)"
+          ]
+        },
+        {
+          "type": "div", "css": { "classes": ["publish-modal-actions"] },
+          "content": [
+            { "type": "button", "content": "Cancel", "css": { "classes": ["publish-modal-btn", "publish-modal-btn-cancel"] }, "component": [{"target": "handlers.click", "reference": "closePublishModal"}] },
+            { "type": "button", "content": "Confirm Publish", "css": { "classes": ["publish-modal-btn", "publish-modal-btn-confirm"] }, "component": [{"target": "handlers.click", "reference": "commitArticlePublish"}] }
+          ]
+        }
+      ]
+    }
+  ]
+}

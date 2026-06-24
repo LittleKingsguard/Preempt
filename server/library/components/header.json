@@ -1,0 +1,15 @@
+{
+  "type": "header",
+  "css": {
+    "classes": ["page-header"],
+    "cssDef": [
+      { "selector": ".page-header", "styles": { "padding": "4rem 2rem", "textAlign": "center", "background": "linear-gradient(135deg, #f6d365 0%, #fda085 100%)", "color": "#fff" } },
+      { "selector": ".header-title", "styles": { "fontSize": "3rem", "margin": "0 0 1rem 0", "textShadow": "0 2px 4px rgba(0,0,0,0.2)" } },
+      { "selector": ".header-subtitle", "styles": { "fontSize": "1.25rem", "margin": "0" } }
+    ]
+  },
+  "content": [
+    { "type": "h1", "content": "Welcome to Preempt", "component": [{"target": "content", "reference": "articleTitle"}], "css": { "classes": ["header-title"] } },
+    { "type": "p", "content": "A high-performance SSR component framework.", "component": [{"target": "content", "reference": "articleSubtitle"}], "css": { "classes": ["header-subtitle"] } }
+  ]
+}

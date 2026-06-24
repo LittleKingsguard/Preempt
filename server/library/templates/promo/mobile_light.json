@@ -1,0 +1,10 @@
+{
+  "type": "div",
+  "css": { "style": { "background": "#ffffff", "color": "#333333", "minHeight": "100vh", "display": "flex", "flexDirection": "column" } },
+  "content": [
+    { "type": "div", "component": [{"target": "content", "reference": "navBar"}] },
+    { "type": "div", "component": [{"target": "content", "reference": "header"}] },
+    { "type": "div", "css": { "style": { "flex": "1", "padding": "1rem", "width": "100%" } }, "placement": {"placementName": "main"} },
+    { "type": "div", "component": [{"target": "content", "reference": "footer"}] }
+  ]
+}

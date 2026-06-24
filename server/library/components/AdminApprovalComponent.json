@@ -1,0 +1,19 @@
+{
+  "type": "div",
+  "css": { "classes": ["admin-approval-container"] },
+  "handlers": {
+    "afterInstantiate": "fetchPendingBatches"
+  },
+  "content": [
+    {
+      "type": "h3",
+      "content": "Pending Change Batches",
+      "css": { "style": { "marginBottom": "1rem", "borderBottom": "1px solid #eee", "paddingBottom": "0.5rem" } }
+    },
+    {
+      "type": "div",
+      "props": { "id": "batches-list" },
+      "content": "Loading batches..."
+    }
+  ]
+}

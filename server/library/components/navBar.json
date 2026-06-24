@@ -1,0 +1,38 @@
+{
+  "type": "nav",
+  "css": {
+    "classes": ["nav-bar"],
+    "cssDef": [
+      { "selector": ".nav-bar", "styles": { "display": "flex", "justifyContent": "space-between", "alignItems": "center", "padding": "1rem 2rem", "borderBottom": "1px solid #eaeaea", "background": "#fff" } },
+      { "selector": ".nav-logo", "styles": { "fontWeight": "bold", "fontSize": "1.5rem" } },
+      { "selector": ".nav-links", "styles": { "display": "flex", "gap": "20px", "alignItems": "center" } },
+      { "selector": ".nav-link", "styles": { "textDecoration": "none", "color": "inherit" } },
+      {
+        "selector": "@media (prefers-color-scheme: dark)",
+        "styles": { ".nav-bar": { "background": "#222", "color": "#fff", "borderBottom": "1px solid #444" } }
+      }
+    ]
+  },
+  "content": [
+    {
+      "type": "div",
+      "css": { "classes": ["nav-logo"] },
+      "content": "Preempt"
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["nav-links"] },
+      "content": [
+        { "type": "a", "props": { "href": "/" }, "content": "Home", "css": { "classes": ["nav-link"] } },
+        { "type": "a", "props": { "href": "/directory" }, "content": "Directory", "css": { "classes": ["nav-link"] } },
+        { "placement": { "placementName": "navAdditionalLinks" } }
+      ]
+    },
+    {
+      "type": "div",
+      "component": [
+        {"target": "content", "reference": "userAuthComponent"}
+      ]
+    }
+  ]
+}

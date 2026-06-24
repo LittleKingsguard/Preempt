@@ -1,0 +1,46 @@
+{
+  "type": "div",
+  "css": { 
+    "style": { "padding": "2rem", "fontFamily": "sans-serif", "maxWidth": "1200px", "margin": "0 auto" },
+    "cssDef": [
+      { "selector": ".admin-tab-content", "styles": {} },
+      { "selector": ".users-tab", "styles": {} },
+      { "selector": ".handlers-tab", "styles": {} },
+      { "selector": ".content-tab", "styles": {} },
+      { "selector": ".batches-tab", "styles": {} }
+    ]
+  },
+  "content": [
+    { "type": "h1", "content": "Admin Dashboard", "css": {"style": {"marginBottom": "1.5rem"}} },
+    {
+      "type": "div",
+      "css": { "style": { "display": "flex", "gap": "10px", "marginBottom": "2rem", "borderBottom": "1px solid #ccc", "paddingBottom": "10px" } },
+      "content": [
+        { "type": "button", "content": "Users", "props": {"data-tab": "users-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
+        { "type": "button", "content": "Handlers", "props": {"data-tab": "handlers-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
+        { "type": "button", "content": "Content", "props": {"data-tab": "content-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
+        { "type": "button", "content": "Pending Batches", "props": {"data-tab": "batches-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] }
+      ]
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["admin-tab-content", "users-tab"] },
+      "content": { "type": "h2", "content": "User Management" }
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["admin-tab-content", "handlers-tab"], "style": { "display": "none" } },
+      "content": { "type": "h2", "content": "Handler Management" }
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["admin-tab-content", "content-tab"], "style": { "display": "none" } },
+      "content": { "type": "h2", "content": "Content Management" }
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["admin-tab-content", "batches-tab"], "style": { "display": "none" } },
+      "content": { "type": "div", "component": [{"target": "content", "reference": "AdminApprovalComponent"}] }
+    }
+  ]
+}
