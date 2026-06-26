@@ -8,7 +8,8 @@
       { "selector": ".users-tab", "styles": {} },
       { "selector": ".handlers-tab", "styles": {} },
       { "selector": ".content-tab", "styles": {} },
-      { "selector": ".batches-tab", "styles": {} }
+      { "selector": ".batches-tab", "styles": {} },
+      { "selector": ".settings-tab", "styles": {} }
     ]
   },
   "content": [
@@ -20,28 +21,56 @@
         { "type": "button", "content": "Users", "props": {"data-tab": "users-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
         { "type": "button", "content": "Handlers", "props": {"data-tab": "handlers-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
         { "type": "button", "content": "Content", "props": {"data-tab": "content-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
-        { "type": "button", "content": "Pending Batches", "props": {"data-tab": "batches-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] }
+        { "type": "button", "content": "Pending Batches", "props": {"data-tab": "batches-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] },
+        { "type": "button", "content": "Server Settings", "props": {"data-tab": "settings-tab"}, "css": {"style": {"padding": "8px 16px", "cursor": "pointer", "background": "#f1f1f1", "border": "1px solid #ccc", "borderRadius": "4px"}}, "component": [{"target": "handlers.click", "reference": "adminTabs"}] }
       ]
     },
     {
       "type": "div",
       "css": { "classes": ["admin-tab-content", "users-tab"] },
-      "content": { "type": "h2", "content": "User Management" }
+      "content": [
+        { "type": "h2", "content": "User Management" },
+        { "type": "div", "placement": { "placementName": "users-data" } }
+      ]
     },
     {
       "type": "div",
       "css": { "classes": ["admin-tab-content", "handlers-tab"], "style": { "display": "none" } },
-      "content": { "type": "h2", "content": "Handler Management" }
+      "content": [
+        { "type": "h2", "content": "Handler Management" },
+        { "type": "div", "placement": { "placementName": "handlers-data" } }
+      ]
     },
     {
       "type": "div",
       "css": { "classes": ["admin-tab-content", "content-tab"], "style": { "display": "none" } },
-      "content": { "type": "h2", "content": "Content Management" }
+      "content": [
+        { "type": "h2", "content": "Content Management" },
+        { "type": "div", "placement": { "placementName": "content-data" } }
+      ]
     },
     {
       "type": "div",
       "css": { "classes": ["admin-tab-content", "batches-tab"], "style": { "display": "none" } },
-      "content": { "type": "div", "component": [{"target": "content", "reference": "AdminApprovalComponent"}] }
+      "content": [
+        { "type": "h2", "content": "Pending Batches" },
+        { "type": "div", "component": [{"target": "content", "reference": "AdminApprovalComponent"}], "placement": { "placementName": "batches-data" } }
+      ]
+    },
+    {
+      "type": "div",
+      "css": { "classes": ["admin-tab-content", "settings-tab"], "style": { "display": "none" } },
+      "content": [
+        { "type": "h2", "content": "Server Settings" },
+        {
+          "type": "div",
+          "placement": { "placementName": "settings-data" },
+          "content": [
+            { "type": "h3", "content": "Page Aliases" },
+            { "type": "div", "placement": { "placementName": "page-aliases-data" } }
+          ]
+        }
+      ]
     }
   ]
 }
