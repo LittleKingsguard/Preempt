@@ -7,8 +7,9 @@ import { pgHandlerSource } from "../../sources/handlerSource.js";
 const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
+  const format = req.query.format === 'content' ? 'content' : 'raw';
   try {
-    const handlers = await Handler.getAll(pgHandlerSource, (req as any).user);
+    const handlers = await Handler.getAll(pgHandlerSource, (req as any).user, { format });
     res.json(handlers);
   } catch (err) {
     logger.error({ err }, "An error occurred");
@@ -26,6 +27,19 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(result.status || 400).json({ error: result.error });
     }
     res.json(result);
+  } catch (err) {
+    logger.error({ err }, "An error occurred");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/:id", authenticateToken, async (req, res) => {
+  const handlerId = parseInt(req.params.id as string, 10);
+  const format = req.query.format === 'content' ? 'content' : 'raw';
+  try {
+    const handler = await Handler.getById(pgHandlerSource, handlerId, { format });
+    if (!handler) return res.status(404).json({ error: "Handler not found" });
+    res.json(handler);
   } catch (err) {
     logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });

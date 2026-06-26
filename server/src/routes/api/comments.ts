@@ -36,11 +36,13 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
   const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
 
+  const format = req.query.format === 'raw' ? 'raw' : 'content';
   const comments = await pgCommentSource.get(new PreemptEvent('comment.get', { id: req.user?.username || 'system', type: 'process' }), { 
     list_id: commentListId,
     limit,
     offset,
-    hide_pattern: 'Overlook'
+    hide_pattern: 'Overlook',
+    format
   });
   res.json(comments);
 });

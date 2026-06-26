@@ -2,6 +2,9 @@ import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 
+import type { IHandlerSource, IContentData } from "../models/interfaces.js";
+import { pgSettingSource } from './settingsSource.js';
+
 interface CacheEntry {
   timestamp: number;
   value: any;
@@ -10,7 +13,60 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
-export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }) {
+let cachedDefaultHandler: any = null;
+let cachedDefaultHandlerTimestamp: number = 0;
+
+async function getDefaultHandlerComponent(event: IPreemptEvent) {
+  const now = Date.now();
+  if (!cachedDefaultHandler || now - cachedDefaultHandlerTimestamp > CACHE_TTL) {
+    const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", ['default-handler']);
+    cachedDefaultHandler = row ? JSON.parse(row.value) : null;
+    cachedDefaultHandlerTimestamp = now;
+    
+    if (!cachedDefaultHandler) {
+      cachedDefaultHandler = {
+        type: 'div',
+        css: { classes: ['handler-item'] },
+        content: [
+          { type: 'strong', component: [{ reference: 'handlerName', target: 'content' }] },
+          { type: 'span', content: ' (Author: ' },
+          { type: 'span', component: [{ reference: 'handlerAuthor', target: 'content' }] },
+          { type: 'span', content: ')' },
+          { type: 'pre', component: [{ reference: 'handlerBody', target: 'content' }] }
+        ]
+      };
+    }
+  }
+  return cachedDefaultHandler;
+}
+
+function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): IContentData {
+  const payload = handlerRows.map(row => {
+    return {
+      ...defaultHandlerComp,
+      placement: { targetPlacement: [`handler-${row.id}`, "handlers"] },
+      component: [
+        { reference: 'handlerName', value: row.name },
+        { reference: 'handlerAuthor', value: row.author_id },
+        { reference: 'handlerBody', value: row.body }
+      ]
+    };
+  });
+
+  return {
+    id: 0,
+    author_id: 'system',
+    payload: payload,
+    headers: null,
+    is_visible: true,
+    live_date: new Date(),
+    resolved_template_id: 0,
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+}
+
+export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }) {
   const cacheKey = criteria ? `getAll:${JSON.stringify(criteria)}` : 'getAll';
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -39,19 +95,30 @@ export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateI
   }
 
   const result = await pool.query(query, params);
-  cache.set(cacheKey, { timestamp: Date.now(), value: result.rows });
+  let finalResult = result.rows;
+  
+  if (criteria?.format === 'content') {
+    const defaultComp = await getDefaultHandlerComponent(event);
+    finalResult = compileHandlersToContent(result.rows, defaultComp) as any;
+  }
+  
+  cache.set(cacheKey, { timestamp: Date.now(), value: finalResult });
   fireAndForgetEvent(event);
-  return result.rows;
+  return finalResult;
 }
 
-export async function dbGetHandlerById(event: IPreemptEvent, id: number, client?: any) {
-  const cacheKey = `getById:${id}`;
+export async function dbGetHandlerById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }, client?: any) {
+  const cacheKey = criteria?.format ? `getById:${id}:${criteria.format}` : `getById:${id}`;
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     return cached.value;
   }
-  const result = await queryFirstRow("SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers WHERE id = $1", [id], "Handler not found", client);
+  let result = await queryFirstRow("SELECT id, name, body, author_id, is_approved, approved_roles, created_at, updated_at FROM Handlers WHERE id = $1", [id], "Handler not found", client);
   if (result && !('error' in result)) {
+    if (criteria?.format === 'content') {
+      const defaultComp = await getDefaultHandlerComponent(event);
+      result = compileHandlersToContent([result], defaultComp) as any;
+    }
     cache.set(cacheKey, { timestamp: Date.now(), value: result });
   }
   fireAndForgetEvent(event);
@@ -216,7 +283,6 @@ export async function dbApproveHandler(event: IPreemptEvent, id: number, is_appr
   cache.clear();
   return result.rows[0];
 }
-import type { IHandlerSource } from "../models/interfaces.js";
 export const pgHandlerSource: IHandlerSource = {
   getAll: dbGetHandlers,
   getById: dbGetHandlerById,

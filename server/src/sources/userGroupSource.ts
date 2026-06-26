@@ -1,18 +1,83 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
-import type { IUserGroupSource, IUserGroupData, IUserGroupMemberData } from "../models/interfaces.js";
+import type { IUserGroupSource, IUserGroupData, IUserGroupMemberData, IContentData } from "../models/interfaces.js";
+import { pgSettingSource } from './settingsSource.js';
+
+let cachedDefaultUsergroup: any = null;
+let cachedDefaultUsergroupTimestamp: number = 0;
+const CACHE_TTL_MS = 60000;
+
+async function getDefaultUsergroupComponent(event: IPreemptEvent) {
+  const now = Date.now();
+  if (!cachedDefaultUsergroup || now - cachedDefaultUsergroupTimestamp > CACHE_TTL_MS) {
+    const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", ['default-usergroup']);
+    cachedDefaultUsergroup = row ? JSON.parse(row.value) : null;
+    cachedDefaultUsergroupTimestamp = now;
+    
+    if (!cachedDefaultUsergroup) {
+      cachedDefaultUsergroup = {
+        type: 'div',
+        css: { classes: ['usergroup-item'] },
+        content: [
+          { type: 'strong', component: [{ reference: 'groupName', target: 'content' }] },
+          { type: 'span', content: ' (ID: ' },
+          { type: 'span', component: [{ reference: 'groupId', target: 'content' }] },
+          { type: 'span', content: ')' }
+        ]
+      };
+    }
+  }
+  return cachedDefaultUsergroup;
+}
+
+function compileUserGroupsToContent(groupRows: any[], defaultGroupComp: any): IContentData {
+  const payload = groupRows.map(row => {
+    return {
+      ...defaultGroupComp,
+      placement: { targetPlacement: [`usergroup-${row.id}`, "usergroups"] },
+      component: [
+        { reference: 'groupName', value: row.name },
+        { reference: 'groupId', value: row.id.toString() }
+      ]
+    };
+  });
+
+  return {
+    id: 0,
+    author_id: 'system',
+    payload: payload,
+    headers: null,
+    is_visible: true,
+    live_date: new Date(),
+    resolved_template_id: 0,
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+}
 
 export const pgUserGroupSource: IUserGroupSource = {
-  async getAll(event: IPreemptEvent): Promise<IUserGroupData[]> {
+  async getAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any> {
     const result = await pool.query("SELECT * FROM UserGroups ORDER BY id ASC");
     fireAndForgetEvent(event);
+    
+    if (criteria?.format === 'content') {
+      const defaultComp = await getDefaultUsergroupComponent(event);
+      return compileUserGroupsToContent(result.rows, defaultComp);
+    }
+    
     return result.rows;
   },
 
-  async getById(event: IPreemptEvent, id: number): Promise<IUserGroupData | { error: string; status: number }> {
+  async getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }> {
     const row = await queryFirstRow("SELECT * FROM UserGroups WHERE id = $1", [id], "UserGroup not found");
     fireAndForgetEvent(event);
+    
+    if (row && !('error' in row) && criteria?.format === 'content') {
+      const defaultComp = await getDefaultUsergroupComponent(event);
+      return compileUserGroupsToContent([row], defaultComp);
+    }
+    
     return row;
   },
 

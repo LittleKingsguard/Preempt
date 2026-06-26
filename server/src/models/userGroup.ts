@@ -11,14 +11,16 @@ export class UserGroup {
     this.name = data.name;
   }
 
-  static async getAll(source: IUserGroupSource = pgUserGroupSource) {
-    const data = await source.getAll(new PreemptEvent<any>('userGroup.getAll', { id: 'system', type: 'process' }));
-    return data.map(d => new UserGroup(d));
+  static async getAll(source: IUserGroupSource = pgUserGroupSource, criteria?: { format?: 'raw' | 'content' }) {
+    const data = await source.getAll(new PreemptEvent<any>('userGroup.getAll', { id: 'system', type: 'process' }), criteria);
+    if (criteria?.format === 'content') return data;
+    return data.map((d: any) => new UserGroup(d));
   }
 
-  static async getById(id: number, source: IUserGroupSource = pgUserGroupSource) {
-    const data = await source.getById(new PreemptEvent<any>('userGroup.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
+  static async getById(id: number, source: IUserGroupSource = pgUserGroupSource, criteria?: { format?: 'raw' | 'content' }) {
+    const data = await source.getById(new PreemptEvent<any>('userGroup.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id, criteria);
     if ('error' in data) return data;
+    if (criteria?.format === 'content') return data;
     return new UserGroup(data);
   }
 

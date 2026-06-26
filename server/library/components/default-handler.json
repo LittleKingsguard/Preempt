@@ -1,0 +1,11 @@
+{
+  "type": "div",
+  "css": { "classes": ["handler-item"] },
+  "content": [
+    { "type": "strong", "component": [{ "reference": "handlerName", "target": "content" }] },
+    { "type": "span", "content": " (Author: " },
+    { "type": "span", "component": [{ "reference": "handlerAuthor", "target": "content" }] },
+    { "type": "span", "content": ")" },
+    { "type": "pre", "component": [{ "reference": "handlerBody", "target": "content" }] }
+  ]
+}

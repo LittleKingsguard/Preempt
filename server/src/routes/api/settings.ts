@@ -6,6 +6,19 @@ import { pgSettingSource } from "../../sources/settingsSource.js";
 
 const router = express.Router();
 
+router.get("/", authenticateToken, async (req, res) => {
+  const format = req.query.format === 'content' ? 'content' : 'raw';
+  try {
+    const settings = await Setting.getAll(pgSettingSource, { format });
+    res.json(settings);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch settings");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+
 router.post("/default-index", authenticateToken, async (req, res) => {
   const user = (req as any).user;
   if (!user || !user.is_admin) {
@@ -30,8 +43,9 @@ router.post("/default-index", authenticateToken, async (req, res) => {
 });
 
 router.get("/aliases", authenticateToken, async (req, res) => {
+  const format = req.query.format === 'content' ? 'content' : 'raw';
   try {
-    const aliases = await Setting.get(pgSettingSource, 'page_aliases') || {};
+    const aliases = await Setting.get(pgSettingSource, 'page_aliases', { format }) || (format === 'content' ? null : {});
     res.json(aliases);
   } catch (err) {
     logger.error({ err }, "Failed to fetch aliases");
@@ -79,6 +93,21 @@ router.post("/aliases", authenticateToken, async (req, res) => {
     res.json({ message: "Aliases updated successfully", aliases: currentAliases });
   } catch (err) {
     logger.error({ err }, "An error occurred updating aliases");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/:key", authenticateToken, async (req, res) => {
+  const format = req.query.format === 'content' ? 'content' : 'raw';
+  const key = req.params.key as string;
+  try {
+    const setting = await Setting.get(pgSettingSource, key, { format });
+    if (setting === null) {
+      return res.status(404).json({ error: "Setting not found" });
+    }
+    res.json(setting);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch setting");
     res.status(500).json({ error: "Internal server error" });
   }
 });

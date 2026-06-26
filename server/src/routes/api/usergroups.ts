@@ -5,8 +5,9 @@ import { authenticateToken } from '../../middleware/auth.js';
 const router = express.Router();
 
 router.get('/', authenticateToken, async (req, res) => {
+  const format = req.query.format === 'content' ? 'content' : 'raw';
   try {
-    const groups = await UserGroup.getAll();
+    const groups = await UserGroup.getAll(undefined, { format });
     res.json(groups);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

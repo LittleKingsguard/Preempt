@@ -4,6 +4,7 @@ import { authenticateToken, validateUserRoles } from "../../middleware/auth.js";
 import { Content } from "../../models/content.js";
 import { pgContentSource } from "../../sources/contentSource.js";
 import { pgTemplateSource } from "../../sources/templateSource.js";
+import { PreemptEvent } from "../../../../src/types/Event.js";
 
 const router = express.Router();
 
@@ -12,9 +13,18 @@ router.get("/:id", authenticateToken, async (req, res) => {
   const templateId = req.query.templateId ? parseInt(req.query.templateId as string, 10) : null;
   const clientTemplateId = req.query.clientTemplateId ? parseInt(req.query.clientTemplateId as string, 10) : null;
   const tagsParam = req.query.tags as string;
+  const format = req.query.format === 'raw' ? 'raw' : 'content';
   const user = (req as any).user;
 
   try {
+    if (format === 'raw') {
+      const rows = await pgContentSource.get(new PreemptEvent('content.get', { id: 'system', type: 'process' }), { id: contentId }, user);
+      if (!rows || rows.length === 0 || 'error' in rows) {
+        return res.status(404).json({ error: "Content not found" });
+      }
+      return res.json(rows[0]);
+    }
+
     let contentRes = null;
     
     if (clientTemplateId) {
@@ -52,11 +62,16 @@ router.get("/:id", authenticateToken, async (req, res) => {
 });
 
 router.get("/", authenticateToken, async (req, res) => {
+  const format = req.query.format === 'raw' ? 'raw' : 'content';
   const user = (req as any).user;
   const authErr = validateUserRoles(user, ["admin", "contributor"]);
   if (authErr) return res.status(authErr.status).json({ error: authErr.error });
 
   try {
+    if (format === 'raw') {
+      const rows = await pgContentSource.get(new PreemptEvent('content.get', { id: 'system', type: 'process' }), {}, user);
+      return res.json(rows);
+    }
     const contents = await Content.getLatest(pgContentSource, {}, user);
     res.json(contents);
   } catch (err) {

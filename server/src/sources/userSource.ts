@@ -1,6 +1,60 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
+import type { IUserSource, IContentData } from "../models/interfaces.js";
+import { pgSettingSource } from './settingsSource.js';
+
+let cachedDefaultUser: any = null;
+let cachedDefaultUserTimestamp: number = 0;
+const CACHE_TTL_MS = 60000;
+
+async function getDefaultUserComponent(event: IPreemptEvent) {
+  const now = Date.now();
+  if (!cachedDefaultUser || now - cachedDefaultUserTimestamp > CACHE_TTL_MS) {
+    const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", ['default-user']);
+    cachedDefaultUser = row ? JSON.parse(row.value) : null;
+    cachedDefaultUserTimestamp = now;
+    
+    if (!cachedDefaultUser) {
+      cachedDefaultUser = {
+        type: 'div',
+        css: { classes: ['user-item'] },
+        content: [
+          { type: 'strong', component: [{ reference: 'userUsername', target: 'content' }] },
+          { type: 'span', content: ' (' },
+          { type: 'span', component: [{ reference: 'userEmail', target: 'content' }] },
+          { type: 'span', content: ')' }
+        ]
+      };
+    }
+  }
+  return cachedDefaultUser;
+}
+
+function compileUsersToContent(userRows: any[], defaultUserComp: any): IContentData {
+  const payload = userRows.map(row => {
+    return {
+      ...defaultUserComp,
+      placement: { targetPlacement: [`user-${row.username}`, "users"] },
+      component: [
+        { reference: 'userUsername', value: row.username },
+        { reference: 'userEmail', value: row.email }
+      ]
+    };
+  });
+
+  return {
+    id: 0,
+    author_id: 'system',
+    payload: payload,
+    headers: null,
+    is_visible: true,
+    live_date: new Date(),
+    resolved_template_id: 0,
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+}
 
 export async function dbAuthenticateUser(event: IPreemptEvent, username: string, passwordPlain: string) {
   const row = await queryFirstRow(
@@ -39,9 +93,15 @@ export async function dbGetUserByEmail(event: IPreemptEvent, email: string) {
   return row;
 }
 
-export async function dbGetUserByUsername(event: IPreemptEvent, username: string) {
+export async function dbGetUserByUsername(event: IPreemptEvent, username: string, criteria?: { format?: 'raw' | 'content' }) {
   const row = await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page, validated_hosts FROM Users WHERE username = $1", [username], "User not found");
   fireAndForgetEvent(event);
+  
+  if (row && !('error' in row) && criteria?.format === 'content') {
+    const defaultComp = await getDefaultUserComponent(event);
+    return compileUsersToContent([row], defaultComp);
+  }
+  
   return row;
 }
 
@@ -139,15 +199,20 @@ export async function dbAddValidatedHost(event: IPreemptEvent, username: string,
   );
 }
 
-export async function dbGetUsers(event: IPreemptEvent) {
+export async function dbGetUsers(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }) {
   const result = await pool.query(
     "SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_shadowed, has_verified, is_bot, home_page, validated_hosts FROM Users"
   );
   fireAndForgetEvent(event);
+  
+  if (criteria?.format === 'content') {
+    const defaultComp = await getDefaultUserComponent(event);
+    return compileUsersToContent(result.rows, defaultComp);
+  }
+  
   return result.rows;
 }
 
-import type { IUserSource } from "../models/interfaces.js";
 export const pgUserSource: IUserSource = {
   authenticate: dbAuthenticateUser,
   create: dbCreateUser,

@@ -28,16 +28,18 @@ export class Handler {
     this.updated_at = data.updated_at || new Date();
   }
 
-  static async getAll(source: IHandlerSource = pgHandlerSource, user: any) {
-    const rows = await source.getAll(new PreemptEvent<any>('handler.getAll', { id: 'system', type: 'process' }));
+  static async getAll(source: IHandlerSource = pgHandlerSource, user: any, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }) {
+    const rows = await source.getAll(new PreemptEvent<any>('handler.getAll', { id: 'system', type: 'process' }), criteria);
+    if (criteria?.format === 'content') return rows;
     return rows
-      .filter(h => !validateUserRoles(user, h.approved_roles || [], h.author_id))
-      .map(h => new Handler(h, source));
+      .filter((h: any) => !validateUserRoles(user, h.approved_roles || [], h.author_id))
+      .map((h: any) => new Handler(h, source));
   }
 
-  static async getById(source: IHandlerSource = pgHandlerSource, id: number) {
-    const row = await source.getById(new PreemptEvent<any>('handler.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id);
+  static async getById(source: IHandlerSource = pgHandlerSource, id: number, criteria?: { format?: 'raw' | 'content' }) {
+    const row = await source.getById(new PreemptEvent<any>('handler.getById', { id: 'system', type: 'process' }, [], { before: null, after: { id } }), id, criteria);
     if ('error' in row) return row;
+    if (criteria?.format === 'content') return row;
     return new Handler(row, source);
   }
 

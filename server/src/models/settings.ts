@@ -15,19 +15,41 @@ export function clearCache() {
 }
 
 export class Setting {
-  static async get(source: ISettingSource = pgSettingSource, key: string): Promise<any> {
+  static async get(source: ISettingSource = pgSettingSource, key: string, criteria?: { format?: 'raw' | 'content' }): Promise<any> {
+    const format = criteria?.format || 'raw';
+    const cacheKey = `get:${key}:${format}`;
     const now = Date.now();
-    const cached = cache.get(key);
+    const cached = cache.get(cacheKey);
     
     if (cached && (now - cached.timestamp < CACHE_TTL)) {
       return cached.value;
     }
 
-    const row = await source.get(new PreemptEvent<any>('settings.get', { id: 'system', type: 'process' }, [], { before: null, after: { key } }), key);
-    const value = row ? row.value : null;
+    const result = await source.get(new PreemptEvent<any>('settings.get', { id: 'system', type: 'process' }, [], { before: null, after: { key } }), key, criteria);
     
-    cache.set(key, { value, timestamp: now });
+    // If format is content, result is an IContentData object. If raw, result might be a string (updated source logic) or undefined.
+    // Wait, in my updated source, if format='raw', it returns row ? row.value : null.
+    // So `result` is already the value or the content payload.
+    const value = result;
+    
+    cache.set(cacheKey, { value, timestamp: now });
     return value;
+  }
+
+  static async getAll(source: ISettingSource = pgSettingSource, criteria?: { format?: 'raw' | 'content' }): Promise<any> {
+    const format = criteria?.format || 'raw';
+    const cacheKey = `getAll:${format}`;
+    const now = Date.now();
+    const cached = cache.get(cacheKey);
+    
+    if (cached && (now - cached.timestamp < CACHE_TTL)) {
+      return cached.value;
+    }
+
+    const result = await source.getAll!(new PreemptEvent<any>('settings.getAll', { id: 'system', type: 'process' }), criteria);
+    
+    cache.set(cacheKey, { value: result, timestamp: now });
+    return result;
   }
 
   static async set(source: ISettingSource = pgSettingSource, key: string, value: any): Promise<void | { error: string, status: number }> {

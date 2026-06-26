@@ -1,0 +1,10 @@
+{
+  "type": "div",
+  "css": { "classes": ["user-item"] },
+  "content": [
+    { "type": "strong", "component": [{ "reference": "userUsername", "target": "content" }] },
+    { "type": "span", "content": " (" },
+    { "type": "span", "component": [{ "reference": "userEmail", "target": "content" }] },
+    { "type": "span", "content": ")" }
+  ]
+}

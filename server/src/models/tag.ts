@@ -24,7 +24,10 @@ export class Tag {
     }
   }
 
-  static getTags() {
+  static async getTags(source: ITagSource = pgTagSource, criteria?: { format?: 'raw' | 'content' }) {
+    if (criteria?.format === 'content') {
+      return await source.fetchAll(new PreemptEvent<any>('tag.fetchAll', { id: 'system', type: 'process' }), criteria);
+    }
     return Array.from(this.tagCache);
   }
 

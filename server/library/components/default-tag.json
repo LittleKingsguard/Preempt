@@ -1,0 +1,7 @@
+{
+  "type": "div",
+  "css": { "classes": ["tag-item"] },
+  "content": [
+    { "type": "span", "component": [{ "reference": "tagName", "target": "content" }] }
+  ]
+}

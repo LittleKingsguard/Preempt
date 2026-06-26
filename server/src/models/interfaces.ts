@@ -43,8 +43,8 @@ export interface IUserGroupMemberData {
 }
 
 export interface IUserGroupSource {
-  getAll(event: IPreemptEvent): Promise<IUserGroupData[]>;
-  getById(event: IPreemptEvent, id: number): Promise<IUserGroupData | { error: string; status: number }>;
+  getAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
+  getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
   create(event: IPreemptEvent, name: string): Promise<IUserGroupData | { error: string; status: number }>;
   delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
   getMembers(event: IPreemptEvent, groupId: number): Promise<IUserGroupMemberData[]>;
@@ -78,7 +78,7 @@ export interface IContentData {
 }
 
 export interface IContentSource {
-  get(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[] }, user?: any, placeholder?: any): Promise<any>;
+  get(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[]; format?: 'raw' | 'content' }, user?: any, placeholder?: any): Promise<any>;
   getHeaders(event: IPreemptEvent, id: number): Promise<any>;
   query(event: IPreemptEvent, query: string, params: any[]): Promise<any | { error: string; status: number }>;
   stage(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, originalId: number | null, batchId: number, tags: string[], groupIds: number[], promo?: any, metadata?: any): Promise<any>;
@@ -108,8 +108,8 @@ export interface IHandlerData {
 }
 
 export interface IHandlerSource {
-  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[] }): Promise<any[]>;
-  getById(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
+  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }): Promise<any[]>;
+  getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
   create(event: IPreemptEvent, name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
   update(event: IPreemptEvent, id: number, name: string, body: string): Promise<any | { error: string; status: number }>;
   delete(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
@@ -138,13 +138,13 @@ export interface IUserSource {
   authenticate(event: IPreemptEvent, username: string, passwordPlain: string): Promise<any | null>;
   create(event: IPreemptEvent, username: string, email: string, passwordPlain: string): Promise<any>;
   getByEmail(event: IPreemptEvent, email: string): Promise<any | { error: string; status: number }>;
-  getByUsername(event: IPreemptEvent, username: string): Promise<any | { error: string; status: number }>;
+  getByUsername(event: IPreemptEvent, username: string, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
   updatePassword(event: IPreemptEvent, username: string, newPasswordPlain: string): Promise<void>;
   verifyEmail(event: IPreemptEvent, username: string): Promise<void>;
   updateRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
   updateHomePage(event: IPreemptEvent, username: string, homePage: number | null): Promise<void>;
   addValidatedHost(event: IPreemptEvent, username: string, host: string): Promise<void>;
-  getAll(event: IPreemptEvent): Promise<any[]>;
+  getAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
 }
 
 export interface IAuthTokenSource {
@@ -176,7 +176,7 @@ export interface ITagData {
 }
 
 export interface ITagSource {
-  fetchAll(event: IPreemptEvent): Promise<string[]>;
+  fetchAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   updateTemplateTags(event: IPreemptEvent, client: any, templateId: number, tags: string[]): Promise<void>;
   updateContentTags(event: IPreemptEvent, client: any, contentId: number, tags: string[]): Promise<void>;
 }
@@ -187,6 +187,7 @@ export interface ISettingData {
 }
 
 export interface ISettingSource {
-  get(event: IPreemptEvent, key: string): Promise<any>;
+  get(event: IPreemptEvent, key: string, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
+  getAll?(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   set(event: IPreemptEvent, key: string, valueStr: string): Promise<void>;
 }

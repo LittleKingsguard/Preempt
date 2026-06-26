@@ -1,0 +1,9 @@
+{
+  "type": "div",
+  "css": { "classes": ["setting-item"] },
+  "content": [
+    { "type": "strong", "component": [{ "reference": "settingKey", "target": "content" }] },
+    { "type": "span", "content": ": " },
+    { "type": "span", "component": [{ "reference": "settingValue", "target": "content" }] }
+  ]
+}

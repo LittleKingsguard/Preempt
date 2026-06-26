@@ -1,10 +1,66 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
-import { fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
+import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
+import { pgSettingSource } from './settingsSource.js';
+import type { IContentData } from '../models/interfaces.js';
 import { pool } from "../db.js";
 
-export async function dbFetchAllTags(event: IPreemptEvent): Promise<string[]> {
+let cachedDefaultTag: any = null;
+let cachedDefaultTagTimestamp: number = 0;
+const CACHE_TTL_MS = 60000;
+
+async function getDefaultTagComponent(event: IPreemptEvent) {
+  const now = Date.now();
+  if (!cachedDefaultTag || now - cachedDefaultTagTimestamp > CACHE_TTL_MS) {
+    const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", ['default-tag']);
+    cachedDefaultTag = row ? JSON.parse(row.value) : null;
+    cachedDefaultTagTimestamp = now;
+    
+    if (!cachedDefaultTag) {
+      cachedDefaultTag = {
+        type: 'div',
+        css: { classes: ['tag-item'] },
+        content: [
+          { type: 'span', component: [{ reference: 'tagName', target: 'content' }] }
+        ]
+      };
+    }
+  }
+  return cachedDefaultTag;
+}
+
+function compileTagsToContent(tagRows: any[], defaultTagComp: any): IContentData {
+  const payload = tagRows.map(row => {
+    return {
+      ...defaultTagComp,
+      placement: { targetPlacement: [`tag-${row.name}`, "tags"] },
+      component: [
+        { reference: 'tagName', value: row.name }
+      ]
+    };
+  });
+
+  return {
+    id: 0,
+    author_id: 'system',
+    payload: payload,
+    headers: null,
+    is_visible: true,
+    live_date: new Date(),
+    resolved_template_id: 0,
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+}
+
+export async function dbFetchAllTags(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }) {
   const result = await pool.query("SELECT name FROM Tags");
   fireAndForgetEvent(event);
+  
+  if (criteria?.format === 'content') {
+    const defaultComp = await getDefaultTagComponent(event);
+    return compileTagsToContent(result.rows, defaultComp);
+  }
+  
   return result.rows.map((r: any) => r.name);
 }
 

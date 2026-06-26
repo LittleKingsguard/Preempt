@@ -103,6 +103,9 @@ export const pgCommentSource: IContentSource = {
       const row = await queryFirstRow("SELECT * FROM Comments WHERE id = $1", [criteria.id], "Comment not found");
       fireAndForgetEvent(event);
       if (row && !('error' in row)) {
+        if (criteria.format === 'raw') {
+          return row;
+        }
         const defaultComp = await getDefaultCommentComponent(event);
         return compileCommentsToContent([row], defaultComp);
       }
@@ -126,15 +129,19 @@ export const pgCommentSource: IContentSource = {
     params.push(offset);
     query += ` OFFSET $${params.length}`;
 
-    const res = await this.query(event, query, params);
+    const result = await pool.query(query, params);
     fireAndForgetEvent(event);
-    return res;
+    if (criteria?.format === 'raw') {
+      return result.rows;
+    }
+    const defaultComp = await getDefaultCommentComponent(event);
+    return [compileCommentsToContent(result.rows, defaultComp)];
   },
 
   async query(event: IPreemptEvent, query: string, params: any[]) {
     const result = await pool.query(query, params);
-    const defaultComp = await getDefaultCommentComponent(event);
     fireAndForgetEvent(event);
+    const defaultComp = await getDefaultCommentComponent(event);
     return [compileCommentsToContent(result.rows, defaultComp)];
   },
 

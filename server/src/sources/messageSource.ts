@@ -95,6 +95,9 @@ export const pgMessageSource: IContentSource = {
       const row = await queryFirstRow("SELECT * FROM Messages WHERE id = $1", [criteria.id], "Message not found");
       fireAndForgetEvent(event);
       if (row && !('error' in row)) {
+        if (criteria.format === 'raw') {
+          return row;
+        }
         const defaultComp = await getDefaultMessageComponent();
         return compileMessagesToContent([row], defaultComp);
       }
@@ -118,15 +121,19 @@ export const pgMessageSource: IContentSource = {
     params.push(offset);
     query += ` OFFSET $${params.length}`;
 
-    const res = await this.query(event, query, params);
+    const result = await pool.query(query, params);
     fireAndForgetEvent(event);
-    return res;
+    if (criteria?.format === 'raw') {
+      return result.rows;
+    }
+    const defaultComp = await getDefaultMessageComponent();
+    return [compileMessagesToContent(result.rows, defaultComp)];
   },
 
   async query(event: IPreemptEvent, query: string, params: any[]) {
     const result = await pool.query(query, params);
-    const defaultComp = await getDefaultMessageComponent();
     fireAndForgetEvent(event);
+    const defaultComp = await getDefaultMessageComponent();
     return [compileMessagesToContent(result.rows, defaultComp)];
   },
 

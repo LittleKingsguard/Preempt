@@ -51,9 +51,10 @@ export class User {
     return new User(row, source);
   }
 
-  static async getByUsername(source: IUserSource = pgUserSource, username: string) {
-    const row = await source.getByUsername(new PreemptEvent<any>('user.getByUsername', { id: 'system', type: 'process' }, [], { before: null, after: { username } }), username);
+  static async getByUsername(source: IUserSource = pgUserSource, username: string, criteria?: { format?: 'raw' | 'content' }) {
+    const row = await source.getByUsername(new PreemptEvent<any>('user.getByUsername', { id: 'system', type: 'process' }, [], { before: null, after: { username } }), username, criteria);
     if ('error' in row) return row;
+    if (criteria?.format === 'content') return row;
     return new User(row, source);
   }
 
@@ -92,8 +93,9 @@ export class User {
     }
   }
 
-  static async getAll(source: IUserSource = pgUserSource) {
-    const rows = await source.getAll(new PreemptEvent<any>('user.getAll', { id: 'system', type: 'process' }));
-    return rows.map(r => new User(r, source));
+  static async getAll(source: IUserSource = pgUserSource, criteria?: { format?: 'raw' | 'content' }) {
+    const rows = await source.getAll(new PreemptEvent<any>('user.getAll', { id: 'system', type: 'process' }), criteria);
+    if (criteria?.format === 'content') return rows;
+    return rows.map((r: any) => new User(r, source));
   }
 }
