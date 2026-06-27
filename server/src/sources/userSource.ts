@@ -129,11 +129,15 @@ export async function dbVerifyUserEmail(event: IPreemptEvent, username: string) 
   );
 }
 
-export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
+export async function dbUpdateUserRoles(event: IPreemptEvent, username: string, roles: { is_admin?: boolean, is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
   const updates: string[] = [];
   const values: any[] = [];
   let index = 1;
   
+  if (roles.is_admin !== undefined) {
+    updates.push(`is_admin = $${index++}`);
+    values.push(roles.is_admin);
+  }
   if (roles.is_contributor !== undefined) {
     updates.push(`is_contributor = $${index++}`);
     values.push(roles.is_contributor);
@@ -213,6 +217,12 @@ export async function dbGetUsers(event: IPreemptEvent, criteria?: { format?: 'ra
   return result.rows;
 }
 
+export async function dbHasAdmin(event: IPreemptEvent): Promise<boolean> {
+  const result = await pool.query("SELECT 1 FROM Users WHERE is_admin = true LIMIT 1");
+  fireAndForgetEvent(event);
+  return result.rowCount !== null && result.rowCount > 0;
+}
+
 export const pgUserSource: IUserSource = {
   authenticate: dbAuthenticateUser,
   create: dbCreateUser,
@@ -223,5 +233,6 @@ export const pgUserSource: IUserSource = {
   updateRoles: dbUpdateUserRoles,
   updateHomePage: dbUpdateUserHomePage,
   addValidatedHost: dbAddValidatedHost,
-  getAll: dbGetUsers
+  getAll: dbGetUsers,
+  hasAdmin: dbHasAdmin
 };

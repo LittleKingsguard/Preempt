@@ -78,7 +78,7 @@ export class User {
     return await this.source.verifyEmail(new PreemptEvent<any>('user.verifyEmail', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username: this.username } }), this.username);
   }
 
-  async updateRoles(roles: { is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
+  async updateRoles(roles: { is_admin?: boolean, is_contributor?: boolean, is_bot?: boolean, is_shadowed?: boolean }) {
     return await this.source.updateRoles(new PreemptEvent<any>('user.updateRoles', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { username: this.username, roles } }), this.username, roles);
   }
 
@@ -97,5 +97,9 @@ export class User {
     const rows = await source.getAll(new PreemptEvent<any>('user.getAll', { id: 'system', type: 'process' }), criteria);
     if (criteria?.format === 'content') return rows;
     return rows.map((r: any) => new User(r, source));
+  }
+
+  static async hasAdmin(source: IUserSource = pgUserSource): Promise<boolean> {
+    return await source.hasAdmin(new PreemptEvent<any>('user.hasAdmin', { id: 'system', type: 'process' }));
   }
 }

@@ -141,10 +141,11 @@ export interface IUserSource {
   getByUsername(event: IPreemptEvent, username: string, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
   updatePassword(event: IPreemptEvent, username: string, newPasswordPlain: string): Promise<void>;
   verifyEmail(event: IPreemptEvent, username: string): Promise<void>;
-  updateRoles(event: IPreemptEvent, username: string, roles: { is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
+  updateRoles(event: IPreemptEvent, username: string, roles: { is_admin?: boolean; is_contributor?: boolean; is_bot?: boolean; is_shadowed?: boolean }): Promise<void | { error: string; status: number }>;
   updateHomePage(event: IPreemptEvent, username: string, homePage: number | null): Promise<void>;
   addValidatedHost(event: IPreemptEvent, username: string, host: string): Promise<void>;
   getAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
+  hasAdmin(event: IPreemptEvent): Promise<boolean>;
 }
 
 export interface IAuthTokenSource {

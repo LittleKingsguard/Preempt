@@ -10,6 +10,8 @@ import userGroupsRouter from "./api/usergroups.js";
 import commentsRouter from "./api/comments.js";
 import messagesRouter from "./api/messages.js";
 import usersRouter from "./api/users.js";
+import setupRouter from "./api/setup.js";
+import setupTraefikRouter from "./api/setupTraefik.js";
 
 const router = express.Router();
 
@@ -24,5 +26,7 @@ router.use("/usergroups", userGroupsRouter);
 router.use("/comments", commentsRouter);
 router.use("/messages", messagesRouter);
 router.use("/users", usersRouter);
+router.use("/setup", setupRouter);
+router.use("/setup/traefik", setupTraefikRouter);
 
 export default router;

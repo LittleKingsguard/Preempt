@@ -5,9 +5,9 @@ services:
     container_name: preempt_postgres
     restart: always
     environment:
-      POSTGRES_USER: preempt
-      POSTGRES_PASSWORD: preemptpassword
-      POSTGRES_DB: preempt
+      POSTGRES_USER: ${POSTGRES_USER:-preempt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-preemptpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-preempt}
     ports:
       - "5432:5432"
     volumes:
@@ -55,12 +55,12 @@ services:
     restart: always
     working_dir: /app
     env_file:
-      - ./server/.env
+      - ./.env
     environment:
       OAUTH_PORT: 3002
       OIDC_ISSUER: http://localhost/auth/realms/preempt
       OIDC_CLIENT_ID: preempt-app
-      OIDC_CLIENT_SECRET: secret
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
       OIDC_REDIRECT_URI: http://localhost/api/oauth/callback
       KAFKA_BROKERS: kafka:9092
     extra_hosts:
@@ -83,6 +83,8 @@ services:
       - ./server:/app
       - ./dist:/dist
       - ./src:/src
+      - ./.env:/app/.env
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
     command: sh -c "npm install && npm run start:all"
     depends_on:
       - db
@@ -96,9 +98,9 @@ services:
     container_name: preempt_keycloak
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
-      KC_DB_USERNAME: preempt
-      KC_DB_PASSWORD: preemptpassword
+      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-preempt}
+      KC_DB_USERNAME: ${POSTGRES_USER:-preempt}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-preemptpassword}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HOSTNAME: localhost
