@@ -123,9 +123,9 @@ export class Node {
       if (resolvedValue === null) {
         let currentParent = this.parent;
         while (currentParent) {
-          const parentBinding = currentParent.data.component?.find(b => b.reference === binding.reference);
-          if (parentBinding && parentBinding.value !== null && parentBinding.value !== undefined) {
-            resolvedValue = parentBinding.value;
+          const parentBinding = currentParent.data.component?.find(b => b.reference === binding.reference && b.value !== null && b.value !== undefined);
+          if (parentBinding) {
+            resolvedValue = parentBinding.value !== undefined ? parentBinding.value : null;
             break;
           }
           currentParent = currentParent.parent;

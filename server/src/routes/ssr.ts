@@ -83,7 +83,13 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 
   try {
-    const contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, contentId, null, null, editorMode, req.user);
+    const userAgent = req.headers['user-agent']?.toLowerCase() || '';
+    const device = userAgent.includes('mobile') ? 'mobile' : 'desktop';
+    // Use optional chaining for cookies in case cookie-parser isn't used
+    const theme = (req.cookies && req.cookies.theme) ? req.cookies.theme : 'dynamic';
+    const tagsParam = `${device},${theme}`;
+
+    const contentRes = await Content.getWithTemplate(pgContentSource, pgTemplateSource, contentId, null, tagsParam, editorMode, req.user);
     if (!contentRes || 'error' in contentRes) {
       return res.status((contentRes as any)?.status || 404).send((contentRes as any)?.error || "Content not found");
     }
@@ -103,11 +109,16 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
   }
 }
 
+let cachedAdminExists = false;
+
 router.get("/", authenticateToken, async (req: any, res) => {
   try {
-    const adminExists = await User.hasAdmin(pgUserSource);
-    if (!adminExists) {
-      return res.redirect("/setup");
+    if (!cachedAdminExists) {
+      const adminExists = await User.hasAdmin(pgUserSource);
+      if (!adminExists) {
+        return res.redirect("/setup");
+      }
+      cachedAdminExists = true;
     }
 
     const setting = await Setting.get(pgSettingSource, 'default_index_content_id');

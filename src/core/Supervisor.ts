@@ -210,7 +210,15 @@ export class Supervisor {
     const safeTemplateData = JSON.parse(JSON.stringify(templateData));
     const safeContentData = JSON.parse(JSON.stringify(contentData));
     this.rootNode = new Node(safeTemplateData);
-    this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
+    
+    if (safeContentData.type) {
+      this.contentNodes = [new Node(safeContentData as any)];
+    } else if (safeContentData.content && Array.isArray(safeContentData.content)) {
+      this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
+    } else {
+      this.contentNodes = [];
+    }
+    
     this.hasInstantiated = true;
   }
 
