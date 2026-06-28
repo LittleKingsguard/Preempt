@@ -25,7 +25,7 @@
       "content": [
         { "type": "a", "props": { "href": "/" }, "content": "Home", "css": { "classes": ["nav-link"] } },
         { "type": "a", "props": { "href": "/directory" }, "content": "Directory", "css": { "classes": ["nav-link"] } },
-        { "placement": { "placementName": "navAdditionalLinks" } }
+        { "type": "div", "placement": { "placementName": "navAdditionalLinks" } }
       ]
     },
     {

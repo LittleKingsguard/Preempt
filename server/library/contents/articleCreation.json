@@ -1,5 +1,6 @@
 {
   "type": "div",
+  "placement": { "targetPlacement": ["article"] },
   "props": { "commentsAllowed": true },
   "css": { 
     "classes": ["article-creator-panel"],

@@ -218,7 +218,7 @@ export async function dbGetUsers(event: IPreemptEvent, criteria?: { format?: 'ra
 }
 
 export async function dbHasAdmin(event: IPreemptEvent): Promise<boolean> {
-  const result = await pool.query("SELECT 1 FROM Users WHERE is_admin = true LIMIT 1");
+  const result = await pool.query("SELECT 1 FROM Users WHERE is_admin = true AND is_bot = false LIMIT 1");
   fireAndForgetEvent(event);
   return result.rowCount !== null && result.rowCount > 0;
 }

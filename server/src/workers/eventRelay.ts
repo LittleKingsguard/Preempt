@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env'), override: true });
 
 if (!process.env.KAFKA_BROKERS) {
   logger.error('KAFKA_BROKERS environment variable is required');
@@ -87,8 +87,10 @@ async function pollEvents() {
     `);
 
     await client.query('COMMIT');
-  } catch (dbErr) {
-    logger.error({ err: dbErr }, "Error polling database for events");
+  } catch (dbErr: any) {
+    if (dbErr.code !== '42P01') {
+      logger.error({ err: dbErr }, "Error polling database for events");
+    }
     await client.query('ROLLBACK');
     client.release();
     return;

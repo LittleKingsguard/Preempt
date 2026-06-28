@@ -193,6 +193,16 @@ export class Node {
 
       if (typeof resolvedValue === "string") {
         this.applyProperty(binding.target, resolvedValue);
+      } else if (binding.target === "content") {
+        if (!this.data.content) this.data.content = [];
+        if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
+        
+        const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
+        for (const d of dataArray) {
+          (this.data.content as NodeData[]).push(d as NodeData);
+          this.children.push(new Node(d as NodeData, this, true));
+        }
+        addedNew = true;
       } else {
         console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
       }

@@ -117,7 +117,7 @@ export function buildUpdateContentTagsCTE(contentIdRef: string, tagsParamIdx: nu
     ),
     inserted_content_tags AS (
       INSERT INTO ContentTags (content_id, tag_id)
-      SELECT ${contentIdRef}, id FROM Tags WHERE name = ANY($${tagsParamIdx}::text[])
+      SELECT ${contentIdRef}, id FROM Tags WHERE name = ANY($${tagsParamIdx}::text[]) ON CONFLICT DO NOTHING
     )
   `;
 }

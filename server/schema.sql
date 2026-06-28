@@ -11,6 +11,7 @@ CREATE TABLE Users (
     is_trusted_dev BOOLEAN DEFAULT FALSE,
     is_2fa_enabled BOOLEAN DEFAULT FALSE,
     is_bot BOOLEAN DEFAULT FALSE,
+    validated_hosts TEXT[] DEFAULT '{}'::text[],
     home_page INT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

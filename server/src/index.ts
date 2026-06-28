@@ -19,6 +19,13 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : [];
 
+if (process.env.DOMAIN) {
+  allowedOrigins.push(`https://${process.env.DOMAIN}`);
+  allowedOrigins.push(`http://${process.env.DOMAIN}`);
+}
+allowedOrigins.push('http://localhost');
+allowedOrigins.push('http://127.0.0.1');
+
 app.use(cors({ 
   origin: (origin, callback) => {
     // Allow if origin is undefined (e.g. mobile apps, curl)
@@ -35,10 +42,26 @@ app.use(cors({
 
 app.use((pinoHttp as any)({ logger }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Initialize cache
 Tag.initCache();
+
+// Auto-initialize DB schema if missing
+import fs from "fs";
+(async () => {
+  try {
+    await pool.query("SELECT 1 FROM Users LIMIT 1");
+  } catch (err: any) {
+    if (err.code === '42P01') {
+      logger.info("Users table not found. Initializing database schema...");
+      const schemaSql = fs.readFileSync(path.join(process.cwd(), 'schema.sql'), 'utf-8');
+      await pool.query(schemaSql);
+      logger.info("Database schema initialized successfully.");
+    }
+  }
+})();
 
 // Mount routers
 app.use("/api", authRoutes);

@@ -148,10 +148,15 @@ router.post("/", authenticateToken, async (req: any, res) => {
 
       const backendLabelsNode = backend.get('labels') as any;
       let backendLabels = backendLabelsNode ? backendLabelsNode.toJSON() : [];
-      backendLabels = backendLabels.filter((l: string) => !l.startsWith('traefik.http.routers.backend') && !l.startsWith('traefik.http.routers.oauth'));
+      backendLabels = backendLabels.filter((l: string) => !l.startsWith('traefik.http.routers.backend') && !l.startsWith('traefik.http.routers.oauth') && !l.startsWith('traefik.http.middlewares'));
       
+      backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsSeconds=31536000`);
+      backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsIncludeSubdomains=true`);
+      backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsPreload=true`);
+
       backendLabels.push(`traefik.http.routers.backend.rule=Host(\`${domain}\`)`);
       backendLabels.push('traefik.http.routers.backend.entrypoints=websecure');
+      backendLabels.push('traefik.http.routers.backend.middlewares=hsts-headers');
       if (sslMode === 'letsencrypt') {
         backendLabels.push('traefik.http.routers.backend.tls.certresolver=myresolver');
       } else {
@@ -160,6 +165,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
       
       backendLabels.push(`traefik.http.routers.oauth.rule=Host(\`${domain}\`) && PathPrefix(\`/api/oauth\`)`);
       backendLabels.push('traefik.http.routers.oauth.entrypoints=websecure');
+      backendLabels.push('traefik.http.routers.oauth.middlewares=hsts-headers');
       if (sslMode === 'letsencrypt') {
         backendLabels.push('traefik.http.routers.oauth.tls.certresolver=myresolver');
       } else {
@@ -183,6 +189,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
       kcLabels = kcLabels.filter((l: string) => !l.startsWith('traefik.http.routers.keycloak'));
       kcLabels.push(`traefik.http.routers.keycloak.rule=Host(\`${domain}\`) && PathPrefix(\`/auth\`)`);
       kcLabels.push('traefik.http.routers.keycloak.entrypoints=websecure');
+      kcLabels.push('traefik.http.routers.keycloak.middlewares=hsts-headers');
       if (sslMode === 'letsencrypt') {
         kcLabels.push('traefik.http.routers.keycloak.tls.certresolver=myresolver');
       } else {

@@ -1,3 +1,43 @@
+// Override global fetch in development so that when openid-client tries to contact
+// "localhost" (the external OIDC issuer), it correctly routes to the internal "keycloak:8080" container.
+// THIS MUST RUN BEFORE IMPORTING openid-client!
+if (process.env.NODE_ENV !== "production") {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url: any, options: any) => {
+    let fetchUrl = url;
+    let rewritten = false;
+    if (typeof fetchUrl === 'string' && fetchUrl.startsWith('http://localhost')) {
+      fetchUrl = fetchUrl.replace('http://localhost:8080', 'http://keycloak:8080').replace('http://localhost', 'http://keycloak:8080');
+      rewritten = true;
+    } else if (fetchUrl instanceof URL && fetchUrl.hostname === 'localhost') {
+      fetchUrl = new URL(fetchUrl.href);
+      fetchUrl.hostname = 'keycloak';
+      fetchUrl.port = '8080';
+      rewritten = true;
+    } else if (fetchUrl instanceof Request) {
+       const reqUrl = new URL(fetchUrl.url);
+       if (reqUrl.hostname === 'localhost') {
+         reqUrl.hostname = 'keycloak';
+         reqUrl.port = '8080';
+         fetchUrl = new Request(reqUrl, fetchUrl);
+         rewritten = true;
+       }
+    }
+    
+    // Force the X-Forwarded headers so Keycloak knows the original public URL
+    if (rewritten) {
+      options = options || {};
+      options.headers = new Headers(options.headers || {});
+      options.headers.set('X-Forwarded-Host', 'localhost');
+      options.headers.set('X-Forwarded-Port', '80');
+      options.headers.set('X-Forwarded-Proto', 'http');
+    }
+    
+    console.log("Fetch override called:", { originalUrl: url.toString?.() || url, fetchUrl: fetchUrl.toString?.() || fetchUrl, rewritten });
+    return originalFetch(fetchUrl, options);
+  };
+}
+
 import express from "express";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
@@ -5,12 +45,19 @@ import * as client from "openid-client";
 import { User } from "../models/user.js";
 import { pgUserSource } from "../sources/userSource.js";
 import { logger } from "../utils/logger.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '../../.env'), override: true });
 
 const app = express();
 app.use(cookieParser());
 app.use(express.json());
+
+
 
 const PORT = process.env.OAUTH_PORT || 3002;
 const OIDC_ISSUER = process.env.OIDC_ISSUER || "http://keycloak:8080/realms/preempt";
@@ -27,7 +74,7 @@ let config: client.Configuration;
 
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "default_dev_secret_change_me_in_prod";
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 // Helper to issue JWT
 function issuePreemptSession(res: express.Response, user: any) {
@@ -38,12 +85,25 @@ function issuePreemptSession(res: express.Response, user: any) {
 
 async function getOIDCConfig() {
   if (config) return config;
+
+  // We expect Keycloak's public frontend URL as the issuer.
+  // Because Keycloak internally thinks it's on port 8080 (even with KC_HOSTNAME_PORT=80), 
+  // its discovery metadata will contain `localhost:8080`.
+  // We use an interceptor to route the request to `keycloak:8080` internally 
+  // AND rewrite the JSON response so openid-client sees `localhost` as the issuer.
   const issuerUrl = new URL(OIDC_ISSUER);
   try {
+    const execute: any[] = [];
+    if (process.env.NODE_ENV !== "production") {
+      execute.push(client.allowInsecureRequests);
+    }
+    
     config = await client.discovery(
       issuerUrl,
       CLIENT_ID,
-      CLIENT_SECRET
+      CLIENT_SECRET,
+      undefined,
+      execute.length > 0 ? { execute } : undefined
     );
     return config;
   } catch (err) {
@@ -109,10 +169,15 @@ app.get("/api/oauth/callback", async (req, res) => {
     
     const oauthStateCookie = req.cookies.oauth_state;
     if (!oauthStateCookie) {
-      return res.status(400).json({ error: "Missing OAuth state cookie" });
+      return res.redirect("/?error=missing_oauth_state");
     }
     const { state, code_verifier } = JSON.parse(oauthStateCookie);
     res.clearCookie("oauth_state");
+
+    if (req.query.error) {
+      logger.warn({ error: req.query.error, error_description: req.query.error_description }, "OAuth callback received an error from IdP");
+      return res.redirect("/?error=" + encodeURIComponent(req.query.error as string));
+    }
 
     const tokens = await client.authorizationCodeGrant(
       oidcConfig,
@@ -140,7 +205,7 @@ app.get("/api/oauth/callback", async (req, res) => {
 
     if (!localUser) {
       if (emailVerified) {
-        // Auto-register
+        // Auto-register (trusting our Keycloak instance)
         const username = (claims.preferred_username as string) || email.split('@')[0] || "oauthuser";
         const randomPassword = Math.random().toString(36).slice(-8); // dummy password
         const createResult = await User.create(pgUserSource, username, email, randomPassword);
@@ -189,7 +254,12 @@ app.get("/api/oauth/logout", async (req, res) => {
     logoutUrl.searchParams.set("post_logout_redirect_uri", postLogoutRedirectUri);
     logoutUrl.searchParams.set("client_id", CLIENT_ID);
 
-    res.redirect(logoutUrl.href);
+    let finalUrl = logoutUrl.href;
+    if (process.env.NODE_ENV !== "production") {
+      finalUrl = finalUrl.replace("http://localhost:8080", "http://localhost");
+    }
+
+    res.redirect(finalUrl);
   } catch (err: any) {
     logger.error({ err }, "Failed to initialize logout");
     res.status(500).json({ error: "Logout failed" });

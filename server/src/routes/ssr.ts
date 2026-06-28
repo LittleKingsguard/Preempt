@@ -11,6 +11,7 @@ import { Supervisor } from "../../../src/core/Supervisor.js";
 import path from "path";
 import fs from "fs";
 import { authenticateToken } from "../middleware/auth.js";
+import { loadLibraryData } from "../utils/setupLibrary.js";
 
 const router = express.Router();
 
@@ -104,6 +105,11 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
 
 router.get("/", authenticateToken, async (req: any, res) => {
   try {
+    const adminExists = await User.hasAdmin(pgUserSource);
+    if (!adminExists) {
+      return res.redirect("/setup");
+    }
+
     const setting = await Setting.get(pgSettingSource, 'default_index_content_id');
     let defaultIndexId = (setting && setting.id) ? setting.id : null;
 
@@ -211,20 +217,31 @@ router.get("/setup", authenticateToken, async (req: any, res) => {
   try {
     const adminExists = await User.hasAdmin(pgUserSource);
     
-    if (adminExists) {
-      return res.status(403).send("Forbidden: Setup already completed.");
-    }
-
     if (!req.user) {
       return res.redirect("/api/oauth/login");
     }
 
-    const userObj = await User.getByUsername(pgUserSource, req.user.username);
-    if (!userObj || 'error' in userObj) {
-      return res.status(401).send("Unauthorized");
+    if (adminExists) {
+      const userObj = await User.getByUsername(pgUserSource, req.user.username);
+      if (!userObj || 'error' in userObj || !(userObj as User).is_admin) {
+        return res.status(403).send("Forbidden: Setup already completed.");
+      }
+      
+      // Act as a development tool to reload library data
+      await loadLibraryData(userObj as any);
+      return res.send(`
+        <html>
+          <head><title>Library Reloaded</title></head>
+          <body style="font-family: sans-serif; padding: 2rem; background: #f0f0f0;">
+            <div style="max-width: 500px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <h1 style="color: green; margin-top: 0;">Library Reloaded</h1>
+              <p>The library data (JSON components, templates, and settings) has been re-parsed and successfully re-inserted into the database.</p>
+              <p><a href="/">Return to homepage</a></p>
+            </div>
+          </body>
+        </html>
+      `);
     }
-
-    await (userObj as User).updateRoles({ is_admin: true, is_contributor: true });
 
     const html = `
       <html>
@@ -232,8 +249,7 @@ router.get("/setup", authenticateToken, async (req: any, res) => {
         <body style="font-family: sans-serif; padding: 2rem; background: #f0f0f0;">
           <div style="max-width: 500px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h1 style="margin-top: 0;">First-Time Setup</h1>
-            <p>Welcome, <strong>${req.user.username}</strong>! You have been elevated to Admin.</p>
-            <p>Please initialize the database to finish setup. JWT and OIDC secrets will be automatically generated and saved to your configuration.</p>
+            <p>Welcome, <strong>${req.user.username}</strong>! Please initialize the database to finish setup. JWT and OIDC secrets will be automatically generated and saved to your configuration. You will be automatically elevated to system administrator.</p>
             <form method="POST" action="/api/setup/initialize" style="display: flex; flex-direction: column; gap: 15px;">
               <label style="display: flex; flex-direction: column; gap: 5px; font-weight: bold;">
                 Postgres Password (Optional)

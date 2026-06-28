@@ -373,7 +373,7 @@ export function buildUpdateContentTemplateGroupsCTE(contentIdRef: string, groupI
     ),
     inserted_content_groups AS (
       INSERT INTO ContentTemplateGroups (content_id, group_id)
-      SELECT ${contentIdRef}, unnest($${groupIdsParamIdx}::int[])
+      SELECT ${contentIdRef}, unnest($${groupIdsParamIdx}::int[]) ON CONFLICT DO NOTHING
     )
   `;
 }

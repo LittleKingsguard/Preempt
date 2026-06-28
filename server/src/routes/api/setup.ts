@@ -7,22 +7,22 @@ import { logger } from "../../utils/logger.js";
 import { loadLibraryData } from "../../utils/setupLibrary.js";
 import { User } from "../../models/user.js";
 import { pgUserSource } from "../../sources/userSource.js";
+import { pool } from "../../db.js";
+
 
 const router = express.Router();
 
 router.post("/initialize", authenticateToken, async (req: any, res) => {
   const tokenUser = req.user;
+  const adminExists = await User.hasAdmin(pgUserSource);
+  if (adminExists) {
+    return res.status(403).send("Forbidden: Setup already completed.");
+  }
   
   if (!tokenUser) {
-    return res.status(401).send("Unauthorized");
+    return res.status(401).send("Unauthorized: Please log in first.");
   }
-
-  const dbUser = await User.getByUsername(pgUserSource, tokenUser.username);
-  if (!dbUser || 'error' in dbUser || !(dbUser as User).is_admin) {
-    return res.status(403).send("Forbidden: Only an admin can initialize the system.");
-  }
-  
-  const { POSTGRES_PASSWORD } = req.body;
+  const { POSTGRES_PASSWORD } = req.body || {};
   
   const JWT_SECRET = crypto.randomBytes(32).toString('hex');
   const OIDC_CLIENT_SECRET = crypto.randomBytes(32).toString('hex');
@@ -45,14 +45,70 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
     updateOrAddEnv("JWT_SECRET", JWT_SECRET);
     updateOrAddEnv("OIDC_CLIENT_SECRET", OIDC_CLIENT_SECRET);
     updateOrAddEnv("POSTGRES_PASSWORD", finalPostgresPassword);
+    updateOrAddEnv("PGPASSWORD", finalPostgresPassword);
     
     fs.writeFileSync(envPath, envContent.trim() + "\n");
     logger.info("Updated .env file with new secrets.");
     
-    // 2. Load Library Data
+    // Sync Keycloak
+    try {
+      const tokenRes = await fetch('http://keycloak:8080/auth/realms/master/protocol/openid-connect/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'client_id=admin-cli&username=admin&password=admin&grant_type=password'
+      });
+      const tokenData = await tokenRes.json();
+      const token = tokenData.access_token;
+      
+      const clientsRes = await fetch('http://keycloak:8080/auth/admin/realms/preempt/clients?clientId=preempt-app', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const clientsData = await clientsRes.json();
+      if (clientsData && clientsData.length > 0) {
+        const clientId = clientsData[0].id;
+        await fetch('http://keycloak:8080/auth/admin/realms/preempt/clients/' + clientId, {
+          method: 'PUT',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...clientsData[0], secret: OIDC_CLIENT_SECRET })
+        });
+        logger.info("Successfully synced Keycloak client secret.");
+      }
+    } catch (kcErr) {
+      logger.error({ kcErr }, "Failed to sync Keycloak client secret");
+    }
+    
+    // 2. Elevate the human user and use them for authoring the library content
+    let dbUser: any = await User.getByUsername(pgUserSource, tokenUser.username);
+    if (dbUser && !('error' in dbUser)) {
+      await (dbUser as User).updateRoles({ is_admin: true, is_contributor: true });
+      dbUser.is_admin = true;
+      dbUser.is_contributor = true;
+    }
+
     await loadLibraryData(dbUser);
     
-    // 3. Render success page prompting a restart
+    // 3. Complete admin configuration (host and homepage)
+    if (dbUser && !('error' in dbUser)) {
+      const user = dbUser as User;
+      await user.addValidatedHost(process.env.OIDC_ISSUER || "");
+
+      const { Setting } = await import("../../models/settings.js");
+      const { pgSettingSource } = await import("../../sources/settingsSource.js");
+      const adminDashboardSetting = await Setting.get(pgSettingSource, 'admin_dashboard_content_id');
+      if (adminDashboardSetting && adminDashboardSetting.id) {
+         await user.updateHomePage(adminDashboardSetting.id);
+      }
+
+      logger.info("Admin user properly configured.");
+    }
+    
+    // We DO change the Postgres password here now, since the workers use dotenv override to 
+    // dynamically reload their environment on 'docker restart' without needing full container recreation.
+    const pgUser = process.env.PGUSER || "preempt";
+    await pool.query(`ALTER USER ${pgUser} WITH PASSWORD '${finalPostgresPassword}'`);
+    logger.info("Updated postgres database password.");
+    
+    // Return success page prompting a restart
     const html = `
       <html>
         <head><title>Preempt - Setup Complete</title></head>
@@ -62,8 +118,8 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
             <p>Your secrets have been saved to the <code>.env</code> file, and the initial library components have been loaded into the database.</p>
             <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; border: 1px solid #ffeeba; margin: 20px 0;">
               <strong>Action Required:</strong>
-              <p>You MUST restart the Docker containers for the new database passwords and OIDC secrets to take effect.</p>
-              <code>docker compose down && docker compose up -d</code>
+              <p>You MUST restart the Docker containers for the OIDC secrets to take effect.</p>
+              <code>docker restart preempt_backend</code>
             </div>
             <p>After restarting, you can navigate back to <a href="/">the homepage</a>.</p>
           </div>

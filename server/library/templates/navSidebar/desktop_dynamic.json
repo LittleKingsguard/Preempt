@@ -1,5 +1,10 @@
 {
   "type": "div",
+  "component": [
+    { "reference": "userAuthComponent" },
+    { "reference": "articleTitle" },
+    { "reference": "articleSubtitle" }
+  ],
   "css": {
     "classes": [
       "nav-sidebar-desktop"

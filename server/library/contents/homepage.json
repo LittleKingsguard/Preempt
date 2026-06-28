@@ -1,5 +1,6 @@
 {
   "type": "div",
+  "placement": { "targetPlacement": ["article"] },
   "props": { "commentsAllowed": true },
   "css": { "style": { "padding": "3rem 2rem", "lineHeight": "1.6", "fontFamily": "sans-serif", "maxWidth": "800px", "margin": "0 auto" } },
   "content": [

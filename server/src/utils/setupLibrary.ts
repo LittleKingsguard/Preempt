@@ -141,7 +141,8 @@ export async function loadLibraryData(adminUser: any) {
           await scanDir(fullPath, nextGroupId, [...tags, item.toLowerCase()]);
         } else if (item.endsWith('.json')) {
           const payload = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
-          const itemTags = [...tags, 'structural', path.basename(item, '.json').toLowerCase()];
+          const baseName = item.replace('.json', '');
+          const itemTags = [...tags, 'structural', ...baseName.split('_').map(t => t.toLowerCase())];
           
           const tempRes: any = await Template.create(pgTemplateSource, adminUser.username, payload, [], currentGroupId);
           if (tempRes && !tempRes.error) {
@@ -217,6 +218,11 @@ export async function loadLibraryData(adminUser: any) {
         // If it's the admin dashboard, set it as home_page for admin user
         if (file === 'adminDashboard.json') {
            await pool.query("UPDATE Users SET home_page = $1 WHERE username = $2", [content.id, adminUser.username]);
+        }
+        
+        // If it's the homepage, set it as the default index content
+        if (file === 'homepage.json') {
+           await pool.query("INSERT INTO SiteSettings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", ['default_index_content_id', JSON.stringify({id: content.id})]);
         }
       }
     }

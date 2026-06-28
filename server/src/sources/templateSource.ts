@@ -156,7 +156,7 @@ export async function dbGetTemplate(event: IPreemptEvent, criteria: { count_only
       FROM Templates t
       JOIN TemplateGroups tg ON tg.id = t.group_id
       WHERE t.group_id = $1
-      ORDER BY match_count DESC, is_default DESC, t.id ASC
+      ORDER BY match_count DESC, is_default DESC, t.id DESC
       LIMIT 1
     `;
     const params = [criteria.list_id, criteria.tags || []];

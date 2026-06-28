@@ -1,9 +1,10 @@
 import { Pool } from "pg";
 import dotenv from "dotenv";
 
+import path from "path";
 import { logger } from "./utils/logger.js";
 
-dotenv.config();
+dotenv.config({ path: path.join(process.cwd(), ".env"), override: true });
 
 const password = process.env.PGPASSWORD || "preemptpassword";
 
