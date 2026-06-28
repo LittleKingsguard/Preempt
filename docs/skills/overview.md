@@ -17,7 +17,10 @@ This architecture enables:
 6. **Event Streaming**: Preempt leverages an internal event bus (via the `Events` table and a Kafka `eventRelay`) to stream real-time structural payload updates to distributed clients via WebSockets, enabling high-performance, dynamic UI reactivity.
 
 ## The Supervisor Pipeline
-At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline to convert raw JSON data from the database into a fully reactive UI. 
+At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline to convert raw JSON data from the database into a fully reactive UI.
+
+1. **Instantiation**: The Supervisor accepts the `templateData` and `contentData` (the SSR payload). If `contentData` is itself a Node (e.g. contains a `type` property), it is instantiated entirely as the root Content Node, preserving its root-level `placement` configuration. Otherwise, it instantiates its children individually.
+2. **Assembly**: It merges template and content components into the global registry, and then resolves all `targetPlacement` rules to insert content nodes into their requested template drop-zones. 
 
 The pipeline executes the following stages sequentially:
 1. **DB Load**: Fetches the Template, Content, Handlers, and Components from the SQL database. (SSR only)

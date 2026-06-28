@@ -6,6 +6,8 @@ In Preempt, a **Template** represents the structural foundation of a page. Techn
 ## Creating a Template
 Templates are defined as JSON structures matching the `NodeData` schema. A typical template consists of a top-level container, a header, a main content area, and a footer.
 
+Templates are stored in the filesystem under `server/library/templates/` and their filenames represent their associated tags using underscores (e.g., `desktop_dynamic.json` resolves to tags `["desktop", "dynamic"]`). During SSR, the server determines the requested tags (via User-Agent and cookies) and queries the database, which matches against these tags.
+
 Example Template:
 ```json
 {
