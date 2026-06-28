@@ -46,16 +46,20 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
     updateOrAddEnv("OIDC_CLIENT_SECRET", OIDC_CLIENT_SECRET);
     updateOrAddEnv("POSTGRES_PASSWORD", finalPostgresPassword);
     updateOrAddEnv("PGPASSWORD", finalPostgresPassword);
+    updateOrAddEnv("KEYCLOAK_ADMIN", tokenUser.username);
+    updateOrAddEnv("KEYCLOAK_ADMIN_PASSWORD", finalPostgresPassword);
     
     fs.writeFileSync(envPath, envContent.trim() + "\n");
     logger.info("Updated .env file with new secrets.");
     
     // Sync Keycloak
     try {
+      const currentAdmin = process.env.KEYCLOAK_ADMIN || "admin";
+      const currentAdminPass = process.env.KEYCLOAK_ADMIN_PASSWORD || "admin";
       const tokenRes = await fetch('http://keycloak:8080/auth/realms/master/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'client_id=admin-cli&username=admin&password=admin&grant_type=password'
+        body: `client_id=admin-cli&username=${currentAdmin}&password=${currentAdminPass}&grant_type=password`
       });
       const tokenData = await tokenRes.json();
       const token = tokenData.access_token;
@@ -73,8 +77,48 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
         });
         logger.info("Successfully synced Keycloak client secret.");
       }
+      
+      // Change default admin login to the new user
+      if (currentAdmin !== tokenUser.username) {
+        // Allow editing username in master realm
+        await fetch('http://keycloak:8080/auth/admin/realms/master', {
+          method: 'PUT',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ editUsernameAllowed: true })
+        });
+        
+        const usersRes = await fetch(`http://keycloak:8080/auth/admin/realms/master/users?username=${currentAdmin}`, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const usersData = await usersRes.json();
+        if (usersData && usersData.length > 0) {
+          const adminUserId = usersData[0].id;
+          
+          await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: tokenUser.username,
+              credentials: [{
+                type: "password",
+                value: finalPostgresPassword,
+                temporary: false
+              }]
+            })
+          });
+          logger.info("Successfully updated Keycloak master admin login to new user.");
+        }
+        
+        // Revert editUsernameAllowed
+        await fetch('http://keycloak:8080/auth/admin/realms/master', {
+          method: 'PUT',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ editUsernameAllowed: false })
+        });
+      }
+
     } catch (kcErr) {
-      logger.error({ kcErr }, "Failed to sync Keycloak client secret");
+      logger.error({ kcErr }, "Failed to sync Keycloak configuration");
     }
     
     // 2. Elevate the human user and use them for authoring the library content
