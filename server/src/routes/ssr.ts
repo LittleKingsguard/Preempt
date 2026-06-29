@@ -169,38 +169,38 @@ router.get("/content/:id", authenticateToken, async (req, res) => {
 router.get("/user/:username", authenticateToken, async (req, res) => {
   const username = req.params.username as string;
   const user = (req as any).user;
-  
+
   try {
     const profilePayloadPath = path.join(process.cwd(), "library/contents/userProfile.json");
     if (!fs.existsSync(profilePayloadPath)) {
       return res.status(404).send("User profile template not found");
     }
-    
+
     const targetUser = await User.getByUsername(pgUserSource, username);
     if (!targetUser) {
       return res.status(404).send("User not found");
     }
-    
+
     const profilePayload = JSON.parse(fs.readFileSync(profilePayloadPath, "utf-8"));
-    
+
     profilePayload.component = profilePayload.component || [];
     profilePayload.component.push({ reference: "username", value: `User Profile: ${targetUser.username}` });
     profilePayload.component.push({ reference: "role", value: `Role: ${targetUser.role}` });
     profilePayload.component.push({ reference: "home_page", value: targetUser.home_page ? `Home Page: ${targetUser.home_page}` : "" });
-    
+
     if (user && user.username !== targetUser.username) {
       profilePayload.component.push({
         reference: "message_button",
         value: {
           type: "button",
           content: "Message User",
-          component: [{"target": "handlers.click", "reference": "startMessage"}],
+          component: [{ "target": "handlers.click", "reference": "startMessage" }],
           props: { "data-target-user": targetUser.username },
           css: { style: { marginTop: "1.5rem", padding: "10px 20px", background: "#0070f3", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" } }
         }
       });
     }
-    
+
     const templatePath = path.join(process.cwd(), "library/templates/navSidebar/desktop_light.json");
     const templatePayload = fs.existsSync(templatePath) ? JSON.parse(fs.readFileSync(templatePath, "utf-8")) : { type: "div", placement: { placementName: "article" } };
 
@@ -209,7 +209,7 @@ router.get("/user/:username", authenticateToken, async (req, res) => {
       payload: profilePayload,
       metadata: { targetUsername: username }
     };
-    
+
     if (user) {
       contentData.payload.metadata = contentData.payload.metadata || {};
       contentData.payload.metadata.user = user;
@@ -227,7 +227,7 @@ router.get("/user/:username", authenticateToken, async (req, res) => {
 router.get("/setup", authenticateToken, async (req: any, res) => {
   try {
     const adminExists = await User.hasAdmin(pgUserSource);
-    
+
     if (!req.user) {
       return res.redirect("/api/oauth/login");
     }
@@ -237,7 +237,7 @@ router.get("/setup", authenticateToken, async (req: any, res) => {
       if (!userObj || 'error' in userObj || !(userObj as User).is_admin) {
         return res.status(403).send("Forbidden: Setup already completed.");
       }
-      
+
       // Act as a development tool to reload library data
       await loadLibraryData(userObj as any);
       return res.send(`

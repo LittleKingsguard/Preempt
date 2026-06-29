@@ -27,10 +27,17 @@ export class Setting {
 
     const result = await source.get(new PreemptEvent<any>('settings.get', { id: 'system', type: 'process' }, [], { before: null, after: { key } }), key, criteria);
     
-    // If format is content, result is an IContentData object. If raw, result might be a string (updated source logic) or undefined.
-    // Wait, in my updated source, if format='raw', it returns row ? row.value : null.
-    // So `result` is already the value or the content payload.
-    const value = result;
+    let value = result;
+    if (format === 'raw' && result !== null && typeof result === 'object' && 'value' in result) {
+      value = (result as any).value;
+    }
+    if (format === 'raw' && typeof value === 'string') {
+      try {
+        value = JSON.parse(value);
+      } catch (e) {
+        // Keep raw value
+      }
+    }
     
     cache.set(cacheKey, { value, timestamp: now });
     return value;
@@ -61,6 +68,10 @@ export class Setting {
     }
     await source.set(new PreemptEvent<any>('settings.set', { id: 'system', type: 'process' }, [], { before: null, after: { key, value } }), key, stringified);
     
-    cache.set(key, { value, timestamp: Date.now() });
+    cache.delete(`get:${key}:raw`);
+    cache.delete(`get:${key}:content`);
+    cache.delete("getAll:raw");
+    cache.delete("getAll:content");
+    cache.set(`get:${key}:raw`, { value, timestamp: Date.now() });
   }
 }
