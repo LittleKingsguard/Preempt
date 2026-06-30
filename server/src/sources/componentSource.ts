@@ -76,6 +76,53 @@ export async function dbCreateComponent(event: IPreemptEvent, name: string, payl
   }
 }
 
+function extractComponentRefs(payload: any): string[] {
+  const refs = new Set<string>();
+  const traverse = (node: any) => {
+    if (!node) return;
+    if (node.component && Array.isArray(node.component)) {
+      for (const comp of node.component) {
+        if (comp.reference && (!comp.target || !comp.target.startsWith('handlers.'))) {
+          refs.add(comp.reference);
+        }
+      }
+    }
+    if (node.content && Array.isArray(node.content)) {
+      node.content.forEach(traverse);
+    } else if (node.content && typeof node.content === 'object') {
+      traverse(node.content);
+    }
+  };
+  traverse(payload);
+  return Array.from(refs);
+}
+
+async function resolveAllComponentNamesRecursive(directNames: string[]): Promise<string[]> {
+  const allNames = new Set<string>(directNames);
+  const queue = [...directNames];
+  const processed = new Set<string>();
+
+  while (queue.length > 0) {
+    const currentName = queue.shift()!;
+    if (processed.has(currentName)) continue;
+    processed.add(currentName);
+
+    const res = await pool.query("SELECT payload FROM Components WHERE name = $1 AND is_approved = true AND change_batch_id IS NULL", [currentName]);
+    if (res.rows.length > 0) {
+      const payload = res.rows[0].payload;
+      const subRefs = extractComponentRefs(payload);
+      for (const ref of subRefs) {
+        if (!allNames.has(ref)) {
+          allNames.add(ref);
+          queue.push(ref);
+        }
+      }
+    }
+  }
+
+  return Array.from(allNames);
+}
+
 export async function dbUpdateComponent(event: IPreemptEvent, id: number, name: string, payload: any) {
   const cte = getLogEventCTE(event, 4);
   const result = await pool.query(
@@ -89,6 +136,32 @@ export async function dbUpdateComponent(event: IPreemptEvent, id: number, name: 
   if (result.rows.length === 0) {
     return { error: "Component not found", status: 404 };
   }
+
+  try {
+    const subcomponents = await resolveAllComponentNamesRecursive([name]);
+    if (subcomponents.length > 1) {
+      const templateRows = await pool.query("SELECT template_id FROM TemplateComponents WHERE component_id = $1", [id]);
+      for (const row of templateRows.rows) {
+        await pool.query(`
+          INSERT INTO TemplateComponents (template_id, component_id)
+          SELECT $1, id FROM Components WHERE name = ANY($2::text[])
+          ON CONFLICT DO NOTHING
+        `, [row.template_id, subcomponents]);
+      }
+      
+      const contentRows = await pool.query("SELECT content_id FROM ContentComponents WHERE component_id = $1", [id]);
+      for (const row of contentRows.rows) {
+        await pool.query(`
+          INSERT INTO ContentComponents (content_id, component_id)
+          SELECT $1, id FROM Components WHERE name = ANY($2::text[])
+          ON CONFLICT DO NOTHING
+        `, [row.content_id, subcomponents]);
+      }
+    }
+  } catch (err) {
+    console.error("Error propagating subcomponents on component update:", err);
+  }
+
   cache.clear();
   return result.rows[0];
 }
@@ -117,11 +190,12 @@ export async function dbUpdateTemplateComponents(event: IPreemptEvent, client: a
     cache.clear();
     return;
   }
+  const recursiveNames = await resolveAllComponentNamesRecursive(componentNames);
   await pool.query(`
     WITH ${buildUpdateTemplateComponentsCTE('$1', 2)},
     ${logCte.sql}
     SELECT 1
-  `, [templateId, componentNames, ...logCte.params]);
+  `, [templateId, recursiveNames, ...logCte.params]);
   cache.clear();
 }
 
@@ -144,11 +218,12 @@ export async function dbUpdateContentComponents(event: IPreemptEvent, client: an
     cache.clear();
     return;
   }
+  const recursiveNames = await resolveAllComponentNamesRecursive(componentNames);
   await pool.query(`
     WITH ${buildUpdateContentComponentsCTE('$1', 2)},
     ${logCte.sql}
     SELECT 1
-  `, [contentId, componentNames, ...logCte.params]);
+  `, [contentId, recursiveNames, ...logCte.params]);
   cache.clear();
 }
 

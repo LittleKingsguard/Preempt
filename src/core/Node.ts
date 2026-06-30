@@ -137,6 +137,8 @@ export class Node {
         continue;
       }
 
+      this.hasChangedSinceRender = true;
+
       if (binding.target === "type") {
         const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
         for (const d of dataArray) {
@@ -417,10 +419,21 @@ export class Node {
       }
     }
 
+    const activeChildElements = new Set<HTMLElement>();
     for (const child of this.children) {
       child.render();
-      if (child.element && child.element.parentNode !== el) {
-        el.appendChild(child.element);
+      if (child.element) {
+        activeChildElements.add(child.element);
+        if (child.element.parentNode !== el) {
+          el.appendChild(child.element);
+        }
+      }
+    }
+
+    const domChildren = Array.from(el.children);
+    for (const domChild of domChildren) {
+      if (!activeChildElements.has(domChild as HTMLElement)) {
+        domChild.remove();
       }
     }
 

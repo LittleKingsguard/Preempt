@@ -11,7 +11,7 @@
     ]
   },
   "component": [
-    {"target": "handlers.afterInstantiate", "reference": "AuthInitHandler"}
+    {"target": "handlers.afterAssembly", "reference": "AuthInitHandler"}
   ],
   "content": [
     {

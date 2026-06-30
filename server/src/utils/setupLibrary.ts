@@ -111,6 +111,10 @@ export async function loadLibraryData(adminUser: any) {
           compId = res.component.id;
         }
       }
+
+      if (compId !== undefined && name === 'adminDashboardLink') {
+        await pool.query("UPDATE Components SET approved_roles = $1 WHERE id = $2", [['admin'], compId]);
+      }
       
       if (compId !== undefined && refs.handlers.length > 0) {
         await pool.query("DELETE FROM ComponentHandlers WHERE component_id = $1", [compId]);
@@ -215,9 +219,9 @@ export async function loadLibraryData(adminUser: any) {
           await Handler.updateContentHandlers(pgHandlerSource, content.id, refs.handlers);
         }
         
-        // If it's the admin dashboard, set it as home_page for admin user
+        // If it's the admin dashboard, set the site setting
         if (file === 'adminDashboard.json') {
-           await pool.query("UPDATE Users SET home_page = $1 WHERE username = $2", [content.id, adminUser.username]);
+           await pool.query("INSERT INTO SiteSettings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", ['admin_dashboard_content_id', JSON.stringify({id: content.id})]);
         }
         
         // If it's the homepage, set it as the default index content

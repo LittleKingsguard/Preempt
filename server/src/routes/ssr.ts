@@ -70,6 +70,7 @@ async function renderAndSendHtml(res: any, contentData: any) {
   const headersInject = ((contentData as any).headers || "") + "\n" + payloadScript;
   html = html.replace("<!-- HEADERS_INJECT -->", headersInject);
   html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput || ""}</div>`);
+  html = html.replace(/(\/assets\/index-[a-zA-Z0-9_-]+\.js)/g, `$1?t=${Date.now()}`);
 
   res.send(html);
 }
@@ -222,6 +223,10 @@ router.get("/user/:username", authenticateToken, async (req, res) => {
     logger.error({ err }, "An error occurred generating user profile");
     res.status(500).send("Internal Server Error");
   }
+});
+
+router.get("/login", (req, res) => {
+  res.redirect("/api/oauth/login");
 });
 
 router.get("/setup", authenticateToken, async (req: any, res) => {

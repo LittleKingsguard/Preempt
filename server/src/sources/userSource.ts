@@ -88,7 +88,7 @@ export async function dbCreateUser(event: IPreemptEvent, username: string, email
 }
 
 export async function dbGetUserByEmail(event: IPreemptEvent, email: string) {
-  const row = await queryFirstRow("SELECT username, email, is_admin, validated_hosts FROM Users WHERE email = $1", [email], "User not found");
+  const row = await queryFirstRow("SELECT username, email, is_admin, is_contributor, is_trusted_dev, is_2fa_enabled, is_shadowed, has_verified, is_bot, home_page, validated_hosts FROM Users WHERE email = $1", [email], "User not found");
   fireAndForgetEvent(event);
   return row;
 }

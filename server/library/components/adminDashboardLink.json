@@ -1,0 +1,9 @@
+{
+  "type": "a",
+  "props": { "href": "/content/1" },
+  "content": "Admin",
+  "css": {
+    "classes": ["nav-link"],
+    "style": { "display": "inline-block" }
+  }
+}

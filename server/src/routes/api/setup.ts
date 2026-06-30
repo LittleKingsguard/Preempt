@@ -131,17 +131,10 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
 
     await loadLibraryData(dbUser);
     
-    // 3. Complete admin configuration (host and homepage)
+    // 3. Complete admin configuration (host)
     if (dbUser && !('error' in dbUser)) {
       const user = dbUser as User;
       await user.addValidatedHost(process.env.OIDC_ISSUER || "");
-
-      const { Setting } = await import("../../models/settings.js");
-      const { pgSettingSource } = await import("../../sources/settingsSource.js");
-      const adminDashboardSetting = await Setting.get(pgSettingSource, 'admin_dashboard_content_id');
-      if (adminDashboardSetting && adminDashboardSetting.id) {
-         await user.updateHomePage(adminDashboardSetting.id);
-      }
 
       logger.info("Admin user properly configured.");
     }

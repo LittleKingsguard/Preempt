@@ -1,5 +1,5 @@
 (event, context) => {
-  fetch('/auth/logout', { method: 'POST' }).then(() => {
+  fetch('/api/logout', { method: 'POST' }).then(() => {
     // Redirect to OAuth worker's logout endpoint which redirects to IdP
     window.location.href = '/api/oauth/logout';
   }).catch(err => {

@@ -13,7 +13,7 @@
     if (node.children[0]) {
       node.children[0].data.type = "a";
       node.children[0].data.content = "Sign In";
-      node.children[0].data.props = { href: "/login" };
+      node.children[0].data.props = { href: "/api/oauth/login" };
       // Remove the dropdown toggle handler
       if (node.children[0].data.component) {
         node.children[0].data.component = node.children[0].data.component.filter(c => c.reference !== "ToggleUserDropdown");
