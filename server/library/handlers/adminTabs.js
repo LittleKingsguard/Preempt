@@ -8,6 +8,8 @@
   allTabs.forEach(tabClass => {
     const tabNode = container.findNode({ classes: [tabClass] });
     if (tabNode) {
+      if (!tabNode.data.css) tabNode.data.css = {};
+      if (!tabNode.data.css.style) tabNode.data.css.style = {};
       if (tabClass === targetTabClass) {
         tabNode.data.css.style.display = "block";
       } else {
