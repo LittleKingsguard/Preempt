@@ -88,8 +88,6 @@ services:
       - ./src:/src
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
-
-
     command: sh -c "npm install && npm run start:all"
     depends_on:
       - db
