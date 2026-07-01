@@ -51,7 +51,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.join(__dirname, '../../.env'), override: true });
+const envKeys = ['JWT_SECRET', 'OIDC_CLIENT_SECRET', 'KEYCLOAK_ADMIN', 'KEYCLOAK_ADMIN_PASSWORD'];
+const parsed = dotenv.config({ path: path.join(__dirname, '../../.env'), override: true }).parsed || {};
+for (const key of envKeys) {
+  if (!(key in parsed)) {
+    delete process.env[key];
+  }
+}
 
 const app = express();
 app.use(cookieParser());
@@ -62,7 +68,26 @@ app.use(express.json());
 const PORT = process.env.OAUTH_PORT || 3002;
 const OIDC_ISSUER = process.env.OIDC_ISSUER || "http://keycloak:8080/realms/preempt";
 const CLIENT_ID = process.env.OIDC_CLIENT_ID || "preempt-app";
-const CLIENT_SECRET = process.env.OIDC_CLIENT_SECRET || "secret";
+function reloadEnv() {
+  const parsed = dotenv.config({ path: path.join(__dirname, '../../.env'), override: true }).parsed || {};
+  const envKeys = ['JWT_SECRET', 'OIDC_CLIENT_SECRET', 'KEYCLOAK_ADMIN', 'KEYCLOAK_ADMIN_PASSWORD'];
+  for (const key of envKeys) {
+    if (!(key in parsed)) {
+      delete process.env[key];
+    }
+  }
+}
+
+function getJWTSecret() {
+  reloadEnv();
+  return process.env.JWT_SECRET || "supersecretkey";
+}
+
+function getClientSecret() {
+  reloadEnv();
+  return process.env.OIDC_CLIENT_SECRET || "secret";
+}
+
 if (!process.env.OIDC_REDIRECT_URI) {
   logger.error("OIDC_REDIRECT_URI environment variable is required");
   process.exit(1);
@@ -74,16 +99,19 @@ let config: client.Configuration;
 
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
-
 // Helper to issue JWT
 function issuePreemptSession(res: express.Response, user: any) {
   (user as any).hasAuthenticated = true;
-  const token = jwt.sign(Object.assign({}, user), JWT_SECRET, { expiresIn: "24h" });
+  const token = jwt.sign(Object.assign({}, user), getJWTSecret(), { expiresIn: "24h" });
   res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production" });
 }
 
 async function getOIDCConfig() {
+  const currentSecret = getClientSecret();
+  if (config && (config as any).clientSecret !== currentSecret) {
+    config = undefined as any;
+  }
+
   if (config) return config;
 
   // We expect Keycloak's public frontend URL as the issuer.
@@ -101,10 +129,11 @@ async function getOIDCConfig() {
     config = await client.discovery(
       issuerUrl,
       CLIENT_ID,
-      CLIENT_SECRET,
+      currentSecret,
       undefined,
       execute.length > 0 ? { execute } : undefined
     );
+    (config as any).clientSecret = currentSecret;
     return config;
   } catch (err) {
     logger.error({ err }, "Failed to discover OIDC issuer");
@@ -273,7 +302,7 @@ app.post("/api/oauth/link", async (req, res) => {
     
     let decoded;
     try {
-      decoded = jwt.verify(token, JWT_SECRET) as any;
+      decoded = jwt.verify(token, getJWTSecret()) as any;
     } catch(err) {
       return res.status(401).json({ error: "Invalid token" });
     }

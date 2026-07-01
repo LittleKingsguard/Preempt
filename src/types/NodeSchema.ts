@@ -68,4 +68,5 @@ export interface NodeQuery {
   handlers?: Record<string, string>;
   style?: Record<string, string>;
   components?: { target?: string; reference?: string }[];
+  format?: string;
 }

@@ -36,7 +36,7 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
 
   try {
     // This will throw if validation fails
-    await Supervisor.process(templateData, contentData, config);
+    await Supervisor.process(config, templateData, contentData);
   } catch (err: any) {
     return res.status(400).json({ error: err.message || "Schema validation failed" });
   }

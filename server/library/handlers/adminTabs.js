@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("DEBUG", context);
   const targetTabClass = event.target.getAttribute("data-tab");
   if (!targetTabClass) return;
 
@@ -32,26 +33,13 @@
     const tabNode = container.findNode({ classes: [targetTabClass] });
     if (tabNode && !tabNode.data.hasFetched) {
       tabNode.data.hasFetched = true;
-      fetch(endpoint.url)
-        .then(res => res.json())
-        .then(data => {
-          if (!Array.isArray(data)) {
-            if (data && typeof data === 'object' && !('error' in data)) {
-              data = [data];
-            } else {
-              data = [];
-            }
-          }
-          const placementNode = tabNode.findNode(n => n.data && n.data.placement && n.data.placement.placementName === endpoint.placementName);
-          if (placementNode) {
-            data.forEach(item => placementNode.addChild(item));
-            placementNode.hasChangedSinceRender = true;
-            tabNode.render();
-          }
-        })
-        .catch(err => {
-          console.error(`Failed to fetch data for ${targetTabClass}:`, err);
-        });
+      context.fetchContent({
+        url: endpoint.url,
+        batchLabel: targetTabClass,
+        query: { format: "content" },
+        defaultTemplate: {},
+        placements: [endpoint.placementName]
+      });
     }
   }
 }

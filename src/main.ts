@@ -5,12 +5,12 @@ import type { PipelineConfig } from './types/Pipeline'
 (window as any).Preempt = { Supervisor, WebSocketClient };
 const defaultConfig: PipelineConfig = {
   runInstantiation: true,
-  runAssembly: true, 
-  runPreprocessing: true, 
-  runValidation: true, 
+  runAssembly: true,
+  runPreprocessing: true,
+  runValidation: true,
   runRendering: true,
-  runPostprocessing: true, 
-  runMonitoring: true 
+  runPostprocessing: true,
+  runMonitoring: true
 };
 
 async function init() {
@@ -37,8 +37,8 @@ async function init() {
     (window as any).Preempt.templateData = data.template;
     (window as any).Preempt.contentData = data.content;
     (window as any).Preempt.pipelineConfig = pipelineConfig;
-    
-    await Supervisor.process(data.template, data.content, pipelineConfig);
+
+    await Supervisor.process(pipelineConfig, data.template, data.content);
   } catch (err) {
     console.error("Initialization failed:", err);
     document.querySelector<HTMLDivElement>('#app')!.innerHTML = `<div>Error loading from backend: ${err}</div>`;

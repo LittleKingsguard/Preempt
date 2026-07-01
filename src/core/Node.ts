@@ -73,7 +73,7 @@ export class Node {
     }
 
     const targetTimestamp = targetVersion.timestamp;
-    
+
     const sortedVersions = [...this.data.versions].sort((a, b) => b.timestamp - a.timestamp);
     const matchedVersion = sortedVersions.find(v => v.timestamp <= targetTimestamp);
 
@@ -198,7 +198,7 @@ export class Node {
       } else if (binding.target === "content") {
         if (!this.data.content) this.data.content = [];
         if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
-        
+
         const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
         for (const d of dataArray) {
           (this.data.content as NodeData[]).push(d as NodeData);
@@ -386,12 +386,14 @@ export class Node {
         try {
           let handlerFunc: EventListener;
           const trimmedValue = String(value).trim();
+          const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent };
+          console.log("DEBUG", this, context);
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             const fn = new Function('return ' + trimmedValue)();
-            handlerFunc = ((event: Event) => fn(event, { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() })) as EventListener;
+            handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
           } else {
             const fn = new Function('event', 'context', trimmedValue);
-            handlerFunc = ((event: Event) => fn(event, { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() })) as EventListener;
+            handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
           }
           const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
           el.addEventListener(eventName, handlerFunc);
@@ -518,7 +520,7 @@ export class Node {
         for (const child of childrenToRemove) {
           child.delete();
         }
-        
+
         const stylesToRemove = this.styleNodes.filter(sn => sn.isComponentInjected);
         for (const sn of stylesToRemove) {
           sn.delete();
@@ -604,37 +606,37 @@ export class Node {
     if (typeof query === 'function') {
       return query(this);
     }
-    
+
     if (query.id && this.data.css?.id !== query.id) return false;
     if (query.type && this.data.type !== query.type) return false;
-    
+
     if (query.classes && query.classes.length > 0) {
       if (!this.data.css?.classes) return false;
       const hasAllClasses = query.classes.every(c => this.data.css!.classes!.includes(c));
       if (!hasAllClasses) return false;
     }
-    
+
     if (query.props) {
       if (!this.data.props) return false;
       for (const [k, v] of Object.entries(query.props)) {
         if (this.data.props[k] !== v) return false;
       }
     }
-    
+
     if (query.style) {
       if (!this.data.css?.style) return false;
       for (const [k, v] of Object.entries(query.style)) {
         if (this.data.css.style[k] !== v) return false;
       }
     }
-    
+
     if (query.handlers) {
       if (!this.data.handlers) return false;
       for (const [k, v] of Object.entries(query.handlers)) {
         if (this.data.handlers[k] !== v) return false;
       }
     }
-    
+
     if (query.components && query.components.length > 0) {
       if (!this.data.component) return false;
       for (const compQuery of query.components) {
@@ -646,7 +648,7 @@ export class Node {
         if (!match) return false;
       }
     }
-    
+
     return true;
   }
 
@@ -683,10 +685,10 @@ export class Node {
         const trimmedValue = String(this.data.handlers[phase]).trim();
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
           const fn = new Function('return ' + trimmedValue)();
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent });
         } else {
           const fn = new Function('context', trimmedValue);
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode() });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent });
         }
       } catch (err) {
         console.error(`Failed to execute ${phase} handler on node:`, err);

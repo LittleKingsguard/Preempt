@@ -1,5 +1,5 @@
 import type { PipelineConfig } from "../types/Pipeline.js";
-import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
+import type { NodeData, ContentPayload, UserData, NodeQuery } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { StyleNode } from "./StyleNode.js";
 
@@ -14,6 +14,8 @@ export class Supervisor {
   public userData?: UserData;
   public serverApi?: any;
   public static currentStage: string = 'closed';
+  private templateData: NodeData | null = null;
+  private contentData: ContentPayload | null = null;
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -122,24 +124,28 @@ export class Supervisor {
     }
   }
 
-  public static async process(templateData: NodeData, contentData: ContentPayload, config: PipelineConfig, serverApi?: any): Promise<string | void> {
+  public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload, serverApi?: any): Promise<string | void> {
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
       return;
     }
 
     if (Supervisor.instance) {
+      if (templateData && contentData) Supervisor.instance.templateData = templateData;
+      if (contentData) Supervisor.instance.contentData = contentData;
       Supervisor.instance.pauseMonitoring();
       if (contentData.userData) Supervisor.instance.userData = contentData.userData;
       if (serverApi) Supervisor.instance.serverApi = serverApi;
-      const result = await Supervisor.instance.runPipeline(templateData, contentData);
+      const result = await Supervisor.instance.runPipeline();
       Supervisor.instance.resumeMonitoring();
       return result;
     } else {
       Supervisor.instance = new Supervisor(config);
+      if (templateData && contentData) Supervisor.instance.templateData = templateData;
+      if (contentData) Supervisor.instance.contentData = contentData;
       if (contentData.userData) Supervisor.instance.userData = contentData.userData;
       if (serverApi) Supervisor.instance.serverApi = serverApi;
-      const result = await Supervisor.instance.runPipeline(templateData, contentData);
+      const result = await Supervisor.instance.runPipeline();
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
       } else {
@@ -149,10 +155,10 @@ export class Supervisor {
     }
   }
 
-  private async runPipeline(templateData: NodeData, contentData: ContentPayload): Promise<string | void> {
+  private async runPipeline(): Promise<string | void> {
     if (this.config.runInstantiation && !this.hasInstantiated) {
       Supervisor.currentStage = 'instantiation';
-      await this.instantiate(templateData, contentData);
+      await this.instantiate();
       this.executeHandlers("afterInstantiate");
     }
 
@@ -163,7 +169,7 @@ export class Supervisor {
     if (this.config.runAssembly) {
       Supervisor.currentStage = 'assembly';
       this.executeHandlers("beforeAssembly");
-      await this.assemble(contentData);
+      await this.assemble();
       this.executeHandlers("afterAssembly");
     }
 
@@ -199,16 +205,16 @@ export class Supervisor {
     return renderResult;
   }
 
-  private async instantiate(templateData: NodeData, contentData: ContentPayload): Promise<void> {
+  private async instantiate(): Promise<void> {
     console.log("Stage: Instantiation");
     StyleNode.clear(); // Clear before re-running
     Node.clearPlacements();
     Node.nodeCounter = 0;
-    Node.globalMetadata = contentData.metadata || {};
-    this.userData = contentData.userData || contentData.metadata?.user;
+    Node.globalMetadata = this.contentData?.metadata || {};
+    this.userData = this.contentData?.userData || this.contentData?.metadata?.user;
 
-    const safeTemplateData = JSON.parse(JSON.stringify(templateData));
-    const safeContentData = JSON.parse(JSON.stringify(contentData));
+    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData));
+    const safeContentData = JSON.parse(JSON.stringify(this.contentData));
     this.rootNode = new Node(safeTemplateData);
 
     if (safeContentData.type) {
@@ -219,10 +225,19 @@ export class Supervisor {
       this.contentNodes = [];
     }
 
+    if (this.rootNode) {
+      if (this.contentData.component && this.contentData.component.length > 0) {
+        if (!this.rootNode.data.component) {
+          this.rootNode.data.component = [];
+        }
+        this.rootNode.data.component.push(...this.contentData.component);
+      }
+    }
+
     this.hasInstantiated = true;
   }
 
-  private async assemble(contentData: ContentPayload): Promise<void> {
+  private async assemble(): Promise<void> {
     console.log("Stage: Assembly");
     if (this.rootNode) {
       // [DEV-ONLY] TODO: Remove root data export logging before production
@@ -240,12 +255,6 @@ export class Supervisor {
       }
     }
     if (this.rootNode) {
-      if (contentData.component && contentData.component.length > 0) {
-        if (!this.rootNode.data.component) {
-          this.rootNode.data.component = [];
-        }
-        this.rootNode.data.component.push(...contentData.component);
-      }
 
       this.rootNode.applyComponentsTree();
       // [DEV-ONLY] TODO: Remove root data export logging before production
@@ -347,5 +356,61 @@ export class Supervisor {
     console.log("Supervisor closing. Pipeline complete.");
     Supervisor.instance = null;
     Node.globalMetadata = {};
+  }
+  // fetch content from an external source and append to contentNodes with placements. Pass component to generate nodes from raw data.
+  static async fetchContent({ url, batchLabel, query, defaultTemplate, placements }: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate: NodeData, placements: string[] }) {
+    const response = await fetch(url, { method: "GET", body: JSON.stringify(query) });
+    const data = await response.json();
+    let nodes = [];
+    if (query.format === "content") {
+      nodes = data.map((item: any) => new Node(item));
+    }
+    else {
+      const templateJSON = JSON.stringify(defaultTemplate);
+      nodes = data.map((item: any) => {
+        let node = JSON.parse(templateJSON);
+        if (!node.component) node.component = [];
+        const parseToComponent = (item: object | string) => {
+          if (typeof item === 'string') {
+            node.component.push({ reference: 'data', value: item });
+          }
+          Object.keys(item).forEach((key) => {
+            const existingComponent = node.component.find((c: any) => c.reference === key);
+            if (existingComponent) {
+              existingComponent.value = item[key];
+            }
+            else {
+              node.component.push({ reference: key, value: item[key] });
+            }
+          })
+        }
+        if (typeof item === 'object' && !Array.isArray(item)) {
+          parseToComponent(item);
+        }
+        else if (Array.isArray(item)) {
+          item.forEach((i: any) => parseToComponent(i));
+        }
+        return node;
+      })
+    }
+    nodes.forEach((node) => {
+      if (!node.data.props) node.data.props = {};
+      node.data.props.batchLabel = batchLabel;
+      if (!node.data.placement) node.data.placement = { targetPlacement: [] };
+      node.data.placement.targetPlacement.push(...placements);
+    });
+    let currentContentNodes = this.getContentNodes();
+    const oldNodes = currentContentNodes.filter((n) => n.data && n.data.props && n.data.props.batchLabel === batchLabel);
+    oldNodes.forEach((node) => currentContentNodes.splice(currentContentNodes.indexOf(node), 1));
+    currentContentNodes.push(...nodes);
+    Supervisor.process({
+      runInstantiation: false,
+      runAssembly: true,
+      runPreprocessing: true,
+      runValidation: true,
+      runRendering: true,
+      runPostprocessing: true,
+      runMonitoring: true
+    });
   }
 }

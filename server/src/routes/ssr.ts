@@ -12,6 +12,7 @@ import path from "path";
 import fs from "fs";
 import { authenticateToken } from "../middleware/auth.js";
 import { loadLibraryData } from "../utils/setupLibrary.js";
+import { pool } from "../db.js";
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ async function renderAndSendHtml(res: any, contentData: any) {
     }
   }
 
-  const htmlOutput = await Supervisor.process(contentData.template_payload, contentData.payload, serverConfig, serverApi);
+  const htmlOutput = await Supervisor.process(serverConfig, contentData.template_payload, contentData.payload, serverApi);
 
   let html = fs.readFileSync(distPath, "utf-8");
 
@@ -371,6 +372,151 @@ router.get("/setup/traefik", authenticateToken, async (req: any, res) => {
   } catch (err) {
     logger.error({ err }, "An error occurred rendering Traefik setup");
     res.status(500).send("Internal server error");
+  }
+});
+
+router.all("/revert", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).send("Forbidden: Route only available in development mode");
+  }
+
+  try {
+    logger.info("Starting /revert database rollback...");
+
+    // 1. Revert Keycloak configuration if possible
+    try {
+      const currentAdmin = process.env.KEYCLOAK_ADMIN || "admin";
+      const currentAdminPass = process.env.KEYCLOAK_ADMIN_PASSWORD || "admin";
+
+      logger.info(`Authenticating with Keycloak as ${currentAdmin} to revert credentials...`);
+      const tokenRes = await fetch('http://keycloak:8080/auth/realms/master/protocol/openid-connect/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `client_id=admin-cli&username=${currentAdmin}&password=${currentAdminPass}&grant_type=password`
+      });
+
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        const token = tokenData.access_token;
+
+        // Reset preempt-app client secret to default "secret"
+        const clientsRes = await fetch('http://keycloak:8080/auth/admin/realms/preempt/clients?clientId=preempt-app', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const clientsData = await clientsRes.json();
+        if (clientsData && clientsData.length > 0) {
+          const clientId = clientsData[0].id;
+          await fetch('http://keycloak:8080/auth/admin/realms/preempt/clients/' + clientId, {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...clientsData[0], secret: "secret" })
+          });
+          logger.info("Keycloak client secret reset to 'secret'.");
+        }
+
+        // Change master admin username back to "admin" and password back to "admin"
+        if (currentAdmin !== "admin") {
+          // Allow editing username in master realm
+          await fetch('http://keycloak:8080/auth/admin/realms/master', {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ editUsernameAllowed: true })
+          });
+
+          const usersRes = await fetch(`http://keycloak:8080/auth/admin/realms/master/users?username=${currentAdmin}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          const usersData = await usersRes.json();
+          if (usersData && usersData.length > 0) {
+            const adminUserId = usersData[0].id;
+            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
+              method: 'PUT',
+              headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: "admin",
+                credentials: [{
+                  type: "password",
+                  value: "admin",
+                  temporary: false
+                }]
+              })
+            });
+            logger.info("Keycloak master admin reverted to admin/admin.");
+          }
+
+          // Revert editUsernameAllowed
+          await fetch('http://keycloak:8080/auth/admin/realms/master', {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ editUsernameAllowed: false })
+          });
+        }
+      } else {
+        logger.error(`Failed to get Keycloak token: status ${tokenRes.status}`);
+        throw new Error(`Failed to authenticate with Keycloak (status ${tokenRes.status})`);
+      }
+    } catch (kcErr: any) {
+      logger.error({ kcErr }, "Failed to revert Keycloak configuration");
+      throw new Error(`Failed to reset Keycloak configuration: ${kcErr.message || kcErr}`);
+    }
+
+    // 2. Drop only Preempt tables
+    const dropSql = `
+      DROP TABLE IF EXISTS
+        Events, Messages, MessageLists, Comments, CommentLists, SiteSettings,
+        ComponentHandlers, ContentComponents, TemplateComponents, Components,
+        ContentHandlers, TemplateHandlers, Handlers, ContentTags, TemplateTags,
+        Tags, ContentTemplateGroups, ContentUserGroups, UserGroupMembers, UserGroups,
+        ContentUsers, Content, Templates, TemplateGroups, ChangeBatches,
+        AuthTokens, Users
+      CASCADE;
+    `;
+    logger.info("Dropping Preempt database tables...");
+    await pool.query(dropSql);
+
+    // 3. Recreate Preempt tables using schema.sql
+    logger.info("Recreating Preempt database schema from schema.sql...");
+    const schemaSql = fs.readFileSync(path.join(process.cwd(), 'schema.sql'), 'utf-8');
+    await pool.query(schemaSql);
+
+    // 5. Clean up .env file (remove setup secrets but keep postgres connection config)
+    const envPath = path.join(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      logger.info("Cleaning setup secrets from .env...");
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      const lines = envContent.split('\n');
+      const keysToRemove = ['JWT_SECRET', 'OIDC_CLIENT_SECRET', 'KEYCLOAK_ADMIN', 'KEYCLOAK_ADMIN_PASSWORD'];
+      const newLines = lines.filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        const parts = trimmed.split('=');
+        const firstPart = parts[0];
+        if (firstPart === undefined) return false;
+        const key = firstPart.trim();
+        return !keysToRemove.includes(key);
+      });
+      fs.writeFileSync(envPath, newLines.join('\n') + '\n');
+    }
+
+    cachedAdminExists = false;
+
+    logger.info("Revert sequence complete. Restarting server...");
+    res.send("Database reverted to pre-setup state successfully. The server is restarting...");
+
+    // 6. Graceful restart by terminating process (Docker restart: always will boot it back up)
+    setTimeout(() => {
+      try {
+        logger.info("Sending SIGTERM to parent process to trigger full container restart...");
+        process.kill(process.ppid, 'SIGTERM');
+      } catch (err) {
+        logger.error({ err }, "Failed to kill parent process, calling process.exit(0)");
+        process.exit(0);
+      }
+    }, 1000);
+
+  } catch (err) {
+    logger.error({ err }, "Failed to execute /revert");
+    res.status(500).send("Internal server error during database revert.");
   }
 });
 

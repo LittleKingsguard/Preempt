@@ -7,7 +7,13 @@ import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, '../../.env'), override: true });
+const envKeys = ['JWT_SECRET', 'OIDC_CLIENT_SECRET', 'KEYCLOAK_ADMIN', 'KEYCLOAK_ADMIN_PASSWORD'];
+const parsed = dotenv.config({ path: path.join(__dirname, '../../.env'), override: true }).parsed || {};
+for (const key of envKeys) {
+  if (!(key in parsed)) {
+    delete process.env[key];
+  }
+}
 
 if (!process.env.KAFKA_BROKERS) {
   logger.error('KAFKA_BROKERS environment variable is required');
