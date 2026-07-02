@@ -69,8 +69,19 @@ app.use("/api", apiRoutes);
 app.use("/api/mcp", mcpRoutes);
 app.use("/", ssrRoutes);
 
-// Serve static assets from dist
-app.use(express.static(path.join(process.cwd(), "../dist"), { index: false }));
+// Serve static assets from dist (dev‑only, no cache)
+app.use(
+  express.static(path.join(process.cwd(), "../dist"), {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+      }
+    },
+  })
+);
+
 
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

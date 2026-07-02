@@ -43,13 +43,18 @@ services:
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
+      - "--providers.docker.watch=true"
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
       - "8080:8080" # Traefik dashboard
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    labels:
+      - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, max-age=0"
+      - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Pragma=no-cache"
 
+  # Note: run `docker compose down -v` to clear Vite/tsx caches between runs
   backend:
     image: node:20-alpine
     container_name: preempt_backend
@@ -58,6 +63,7 @@ services:
     env_file:
       - ./.env
     environment:
+      TSX_DISABLE_CACHE: "1"
       OAUTH_PORT: 3002
       OIDC_ISSUER: http://localhost/auth/realms/preempt
       OIDC_CLIENT_ID: preempt-app
@@ -69,8 +75,8 @@ services:
     labels:
       # TODO: Update these Traefik rules before production readiness
       - "traefik.enable=true"
-      # backend
       - "traefik.http.routers.backend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.backend.middlewares=nocache@docker"
       - "traefik.http.routers.backend.entrypoints=web"
       - "traefik.http.routers.backend.service=backend"
       - "traefik.http.services.backend.loadbalancer.server.port=3001"
@@ -88,6 +94,7 @@ services:
       - ./src:/src
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
+    # The Vite and tsx caches are cleared when containers are removed (docker compose down).
     command: sh -c "npm install && npm run start:all"
     depends_on:
       - db

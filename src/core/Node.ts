@@ -272,6 +272,7 @@ export class Node {
     this.parent = target;
     target.hasChangedSinceRender = true;
     target.children.push(this);
+    console.log("This node was placed", target, target.parent);
   }
 
   public restorePlacement(): void {
@@ -387,7 +388,7 @@ export class Node {
           let handlerFunc: EventListener;
           const trimmedValue = String(value).trim();
           const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent };
-          console.log("DEBUG", this, context);
+          console.log("DEBUG: handler context: ", this, context);
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             const fn = new Function('return ' + trimmedValue)();
             handlerFunc = ((event: Event) => fn(event, context)) as EventListener;

@@ -127,14 +127,22 @@ export class Supervisor {
   public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload, serverApi?: any): Promise<string | void> {
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
-      return;
+      // Exit only if no contentData is provided *and* there is no existing contentData on the singleton
+      if (!contentData && !Supervisor.instance?.contentData) {
+        console.warn('process called without contentData and no existing instance content; exiting early.');
+        return;
+      }
+      // If an instance already has contentData, continue processing
     }
 
     if (Supervisor.instance) {
       if (templateData && contentData) Supervisor.instance.templateData = templateData;
       if (contentData) Supervisor.instance.contentData = contentData;
       Supervisor.instance.pauseMonitoring();
-      if (contentData.userData) Supervisor.instance.userData = contentData.userData;
+      // Safely copy userData if present
+      if (Supervisor.instance.contentData?.userData) {
+        Supervisor.instance.userData = Supervisor.instance.contentData.userData;
+      }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline();
       Supervisor.instance.resumeMonitoring();
@@ -143,7 +151,10 @@ export class Supervisor {
       Supervisor.instance = new Supervisor(config);
       if (templateData && contentData) Supervisor.instance.templateData = templateData;
       if (contentData) Supervisor.instance.contentData = contentData;
-      if (contentData.userData) Supervisor.instance.userData = contentData.userData;
+      // Safely copy userData if present
+      if (Supervisor.instance.contentData?.userData) {
+        Supervisor.instance.userData = Supervisor.instance.contentData.userData;
+      }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline();
       if (!Supervisor.instance.config.runMonitoring) {
@@ -156,6 +167,7 @@ export class Supervisor {
   }
 
   private async runPipeline(): Promise<string | void> {
+    console.log("DEBUG: pipeline stages", this.config.runInstantiation, !this.hasInstantiated);
     if (this.config.runInstantiation && !this.hasInstantiated) {
       Supervisor.currentStage = 'instantiation';
       await this.instantiate();
@@ -226,7 +238,7 @@ export class Supervisor {
     }
 
     if (this.rootNode) {
-      if (this.contentData.component && this.contentData.component.length > 0) {
+      if (this.contentData?.component && this.contentData.component.length > 0) {
         if (!this.rootNode.data.component) {
           this.rootNode.data.component = [];
         }
@@ -359,7 +371,9 @@ export class Supervisor {
   }
   // fetch content from an external source and append to contentNodes with placements. Pass component to generate nodes from raw data.
   static async fetchContent({ url, batchLabel, query, defaultTemplate, placements }: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate: NodeData, placements: string[] }) {
-    const response = await fetch(url, { method: "GET", body: JSON.stringify(query) });
+    const queryParams = new URLSearchParams(query as any).toString();
+    const queryURL = queryParams ? `${url}?${queryParams}` : url;
+    const response = await fetch(queryURL, { method: "GET" });
     const data = await response.json();
     let nodes = [];
     if (query.format === "content") {
@@ -368,35 +382,42 @@ export class Supervisor {
     else {
       const templateJSON = JSON.stringify(defaultTemplate);
       nodes = data.map((item: any) => {
-        let node = JSON.parse(templateJSON);
-        if (!node.component) node.component = [];
-        const parseToComponent = (item: object | string) => {
-          if (typeof item === 'string') {
-            node.component.push({ reference: 'data', value: item });
+        // Create a plain object from the template
+        const nodeObj: any = JSON.parse(templateJSON);
+        if (!nodeObj.component) nodeObj.component = [];
+        const parseToComponent = (itm: object | string) => {
+          if (typeof itm === 'string') {
+            nodeObj.component.push({ reference: 'data', value: itm });
+          } else {
+            Object.keys(itm).forEach((key) => {
+              const existingComponent = nodeObj.component.find((c: any) => c.reference === key);
+              if (existingComponent) {
+                existingComponent.value = (itm as any)[key];
+              } else {
+                nodeObj.component.push({ reference: key, value: (itm as any)[key] });
+              }
+            });
           }
-          Object.keys(item).forEach((key) => {
-            const existingComponent = node.component.find((c: any) => c.reference === key);
-            if (existingComponent) {
-              existingComponent.value = item[key];
-            }
-            else {
-              node.component.push({ reference: key, value: item[key] });
-            }
-          })
-        }
+        };
         if (typeof item === 'object' && !Array.isArray(item)) {
           parseToComponent(item);
-        }
-        else if (Array.isArray(item)) {
+        } else if (Array.isArray(item)) {
           item.forEach((i: any) => parseToComponent(i));
         }
-        return node;
+        // Return a proper Node instance
+        return new Node(nodeObj);
       })
     }
-    nodes.forEach((node) => {
+    nodes.forEach((node: Node) => {
       if (!node.data.props) node.data.props = {};
       node.data.props.batchLabel = batchLabel;
-      if (!node.data.placement) node.data.placement = { targetPlacement: [] };
+      if (!node.data.placement) {
+        node.data.placement = { targetPlacement: [] };
+      }
+      // Ensure targetPlacement array exists
+      if (!node.data.placement.targetPlacement) {
+        node.data.placement.targetPlacement = [];
+      }
       node.data.placement.targetPlacement.push(...placements);
     });
     let currentContentNodes = this.getContentNodes();
