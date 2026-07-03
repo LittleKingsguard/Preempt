@@ -22,10 +22,10 @@
   });
 
   const endpoints = {
-    'users-tab': { url: '/api/users?format=content', placementName: 'users-data' },
-    'handlers-tab': { url: '/api/handlers?format=content', placementName: 'handlers-data' },
-    'content-tab': { url: '/api/content?format=content', placementName: 'content-data' },
-    'settings-tab': { url: '/api/settings?format=content', placementName: 'settings-data' }
+    'users-tab': { url: '/api/users', placementName: 'users-data' },
+    'handlers-tab': { url: '/api/handlers', placementName: 'handlers-data' },
+    'content-tab': { url: '/api/content', placementName: 'content-data' },
+    'settings-tab': { url: '/api/settings', placementName: 'settings-data' }
   };
 
   const endpoint = endpoints[targetTabClass];

@@ -255,6 +255,18 @@ export class Supervisor {
       // [DEV-ONLY] TODO: Remove root data export logging before production
       console.log("Before Assembly:", this.rootNode.exportToJson());
     }
+    // Collect placement nodes from the entire node tree before processing placements
+    const collectPlacements = (node: Node) => {
+      Node.appendPlacement(node);
+      node.children.forEach(child => collectPlacements(child));
+    };
+    if (this.rootNode) {
+      collectPlacements(this.rootNode);
+    }
+    this.contentNodes.forEach(node => {
+      collectPlacements(node);
+    });
+
     for (const sourceNode of Node.sourcePlacements) {
       const targets = sourceNode.data.placement?.targetPlacement || [];
       let matchedTarget: Node | null = null;
@@ -358,6 +370,7 @@ export class Supervisor {
   }
 
   private resumeMonitoring(): void {
+    Supervisor.currentStage = 'monitoring';
     this.executeHandlers("onResume");
     this.isMonitoring = true;
     console.log("Monitoring resumed, state:", this.isMonitoring);
@@ -375,9 +388,13 @@ export class Supervisor {
     const queryURL = queryParams ? `${url}?${queryParams}` : url;
     const response = await fetch(queryURL, { method: "GET" });
     const data = await response.json();
-    let nodes = [];
+    let nodes: Node[] = [];
     if (query.format === "content") {
-      nodes = data.map((item: any) => new Node(item));
+      if (Array.isArray(data)) {
+        nodes = data.map((item: any) => new Node(item));
+      } else {
+        nodes = [new Node(data)];
+      }
     }
     else {
       const templateJSON = JSON.stringify(defaultTemplate);
@@ -420,10 +437,12 @@ export class Supervisor {
       }
       node.data.placement.targetPlacement.push(...placements);
     });
-    let currentContentNodes = this.getContentNodes();
+    let currentContentNodes = Supervisor.getContentNodes();
     const oldNodes = currentContentNodes.filter((n) => n.data && n.data.props && n.data.props.batchLabel === batchLabel);
     oldNodes.forEach((node) => currentContentNodes.splice(currentContentNodes.indexOf(node), 1));
+    console.log('Node objects to add: ', nodes);
     currentContentNodes.push(...nodes);
+    console.log('Nodes for assembly: ', currentContentNodes);
     Supervisor.process({
       runInstantiation: false,
       runAssembly: true,

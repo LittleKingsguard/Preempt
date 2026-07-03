@@ -4,7 +4,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest",
     "start:all": "concurrently -c \"cyan,magenta,yellow,blue,green\" -n \"backend,relay,email,oauth,vite\" \"tsx watch src/index.ts\" \"tsx watch src/workers/eventRelay.ts\" \"tsx watch src/workers/emailWorker.ts\" \"tsx watch src/workers/oauthWorker.ts\" \"vite build --watch\""
   },
   "keywords": [],
@@ -27,7 +27,7 @@
     "ws": "^8.18.0",
     "yaml": "^2.9.0"
   },
-  "devDependencies": {"vite": "^8.1.2",
+  "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

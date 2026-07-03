@@ -22,7 +22,7 @@ async function getDefaultHandlerComponent(event: IPreemptEvent) {
     const row = await queryFirstRow("SELECT value FROM SiteSettings WHERE key = $1", ['default-handler']);
     cachedDefaultHandler = row ? JSON.parse(row.value) : null;
     cachedDefaultHandlerTimestamp = now;
-    
+
     if (!cachedDefaultHandler) {
       cachedDefaultHandler = {
         type: 'div',
@@ -96,12 +96,12 @@ export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateI
 
   const result = await pool.query(query, params);
   let finalResult = result.rows;
-  
+
   if (criteria?.format === 'content') {
     const defaultComp = await getDefaultHandlerComponent(event);
     finalResult = compileHandlersToContent(result.rows, defaultComp) as any;
   }
-  
+
   cache.set(cacheKey, { timestamp: Date.now(), value: finalResult });
   fireAndForgetEvent(event);
   return finalResult;

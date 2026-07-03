@@ -14,12 +14,15 @@ export class Node {
   };
 
   public data: NodeData;
+
   public children: Node[] = [];
   public parent: Node | null = null;
   public element: HTMLElement | null = null;
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
   public isComponentInjected: boolean = false;
+  // Holds original node data before component injection for rewinding
+  private preInjectionState?: { originalValues: Partial<NodeData>, componentReference?: any };
   public hasChangedSinceRender: boolean = true;
 
   public static placementArray: Node[] = [];
@@ -63,8 +66,10 @@ export class Node {
       }
     }
 
-    Node.appendPlacement(this);
+
   }
+
+
 
   private resolveVersion(): void {
     const targetVersion = this.data.props?.version || Node.globalMetadata?.version;
@@ -94,6 +99,8 @@ export class Node {
   }
 
   public applyComponentsTree(): void {
+    // Rewind any prior component injection state before reapplying components
+    this.rewindPreInjectionState();
     this.applyComponents();
     for (const child of this.children) {
       child.applyComponentsTree();
@@ -101,7 +108,24 @@ export class Node {
   }
 
   private applyComponents(processedComponents: Set<any> = new Set()): void {
+    // Ensure any previous injection state is cleared before processing
+    if (processedComponents.size === 0) this.rewindPreInjectionState();
     if (!this.data.component) return;
+
+    // Capture original values before any mutation (only once)
+    if (!this.preInjectionState) {
+      this.preInjectionState = {
+        originalValues: {
+          type: this.data.type,
+          content: this.data.content,
+          css: this.data.css,
+          props: this.data.props,
+          handlers: this.data.handlers,
+          component: this.data.component
+        },
+        componentReference: null
+      };
+    }
 
     const componentsToProcess = this.data.component.filter(c => !processedComponents.has(c));
     if (componentsToProcess.length === 0) return;
@@ -188,6 +212,8 @@ export class Node {
           if (d.component) {
             this.data.component = [...(this.data.component || []), ...d.component];
             addedNew = true;
+            // Store reference to component used for seeding
+            this.preInjectionState!.componentReference = d.component;
           }
         }
         continue;
@@ -196,13 +222,12 @@ export class Node {
       if (typeof resolvedValue === "string") {
         this.applyProperty(binding.target, resolvedValue);
       } else if (binding.target === "content") {
-        if (!this.data.content) this.data.content = [];
-        if (!Array.isArray(this.data.content)) this.data.content = [this.data.content as any];
-
-        const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
-        for (const d of dataArray) {
-          (this.data.content as NodeData[]).push(d as NodeData);
-          this.children.push(new Node(d as NodeData, this, true));
+        if (Array.isArray(resolvedValue)) {
+          this.data.content = resolvedValue as NodeData[];
+          this.children = (resolvedValue as NodeData[]).map(d => new Node(d as NodeData, this, true));
+        } else {
+          this.data.content = [resolvedValue as NodeData];
+          this.children = [new Node(resolvedValue as NodeData, this, true)];
         }
         addedNew = true;
       } else {
@@ -213,6 +238,25 @@ export class Node {
     if (addedNew) {
       this.applyComponents(processedComponents);
     }
+  }
+
+  // Rewinds any prior component injection, restoring original node state.
+  private rewindPreInjectionState(): void {
+    if (!this.preInjectionState) return;
+    const orig = this.preInjectionState.originalValues;
+    if (orig.type !== undefined) this.data.type = orig.type;
+    else this.data.type = 'div';
+    if (orig.content !== undefined) this.data.content = orig.content;
+    else delete this.data.content;
+    if (orig.css !== undefined) this.data.css = orig.css;
+    else delete this.data.css;
+    if (orig.props !== undefined) this.data.props = orig.props;
+    else delete this.data.props;
+    if (orig.handlers !== undefined) this.data.handlers = orig.handlers;
+    else delete this.data.handlers;
+    if (orig.component !== undefined) this.data.component = orig.component;
+    else delete this.data.component;
+    delete this.preInjectionState;
   }
 
   private applyProperty(path: string, value: string): void {
@@ -388,7 +432,6 @@ export class Node {
           let handlerFunc: EventListener;
           const trimmedValue = String(value).trim();
           const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent };
-          console.log("DEBUG: handler context: ", this, context);
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             const fn = new Function('return ' + trimmedValue)();
             handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
