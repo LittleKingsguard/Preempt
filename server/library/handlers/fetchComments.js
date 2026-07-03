@@ -34,7 +34,7 @@ async (event, context) => {
         );
       } else {
         container.children = [];
-        container.data.content = [];
+        container.content = [];
         container.addChild({ type: "p", content: "No comments yet. Be the first to comment!" });
         container.render();
       }

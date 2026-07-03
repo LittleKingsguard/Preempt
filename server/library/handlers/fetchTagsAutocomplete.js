@@ -7,7 +7,7 @@ async (context) => {
     
     const datalistNode = context.node.findNode({ props: { id: "tags-datalist" } });
     if (datalistNode) {
-      datalistNode.data.content = tagsArray.map(t => {
+      datalistNode.content = tagsArray.map(t => {
         const val = typeof t === "object" ? (t.name || t.tag || t.id) : t;
         return { type: "option", props: { value: val } };
       });

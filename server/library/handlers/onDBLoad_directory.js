@@ -1,6 +1,6 @@
 async (event, context) => {
   try {
-    const searchParams = context.node.data.props?.search || { tags: ['blog'] };
+    const searchParams = context.node.props?.search || { tags: ['blog'] };
     
     let articles = [];
     if (context.supervisor && context.supervisor.serverApi) {
@@ -23,7 +23,7 @@ async (event, context) => {
       const listNode = context.node.findNode({ props: { id: "directory-list" } });
       if (listNode) {
         listNode.children = [];
-        listNode.data.content = [];
+        listNode.content = [];
         
         if (articles.length === 0) {
           listNode.addChild({ type: "p", content: "No articles found." });

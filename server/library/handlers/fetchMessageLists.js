@@ -27,7 +27,7 @@ async (event, context) => {
         );
       } else {
         container.children = [];
-        container.data.content = [];
+        container.content = [];
         container.addChild({ type: "p", content: "No messages yet." });
         container.render();
       }

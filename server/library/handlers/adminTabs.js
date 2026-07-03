@@ -9,12 +9,12 @@
   allTabs.forEach(tabClass => {
     const tabNode = container.findNode({ classes: [tabClass] });
     if (tabNode) {
-      if (!tabNode.data.css) tabNode.data.css = {};
-      if (!tabNode.data.css.style) tabNode.data.css.style = {};
+      if (!tabNode.css) tabNode.css = {};
+      if (!tabNode.css.style) tabNode.css.style = {};
       if (tabClass === targetTabClass) {
-        tabNode.data.css.style.display = "block";
+        tabNode.css.style.display = "block";
       } else {
-        tabNode.data.css.style.display = "none";
+        tabNode.css.style.display = "none";
       }
       tabNode.hasChangedSinceRender = true;
       tabNode.render();
@@ -31,8 +31,8 @@
   const endpoint = endpoints[targetTabClass];
   if (endpoint) {
     const tabNode = container.findNode({ classes: [targetTabClass] });
-    if (tabNode && !tabNode.data.hasFetched) {
-      tabNode.data.hasFetched = true;
+    if (tabNode && !tabNode.props.hasFetched) {
+      tabNode.props.hasFetched = true;
       context.fetchContent({
         url: endpoint.url,
         batchLabel: targetTabClass,

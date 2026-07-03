@@ -59,19 +59,6 @@ export class Supervisor {
 
   public static exportRootNode(): NodeData | null {
     if (Supervisor.instance && Supervisor.instance.rootNode) {
-      // Un-assemble content nodes temporarily for clean export
-      const removedRecords: { parent: Node, node: Node, index: number }[] = [];
-
-      for (const sourceNode of Node.sourcePlacements) {
-        if (sourceNode.parent) {
-          const index = sourceNode.parent.children.indexOf(sourceNode);
-          if (index > -1) {
-            removedRecords.push({ parent: sourceNode.parent, node: sourceNode, index });
-            sourceNode.parent.children.splice(index, 1);
-          }
-        }
-      }
-
       const exported = Supervisor.instance.rootNode.exportToJson();
 
       // Clean out dynamically injected editor components from the export
@@ -104,13 +91,6 @@ export class Supervisor {
       };
 
       cleanEditorArtifacts(exported);
-
-      // Restore content nodes
-      // Sort by index ascending to ensure splice inserts at correct positions if multiple nodes were removed from same parent
-      removedRecords.sort((a, b) => a.index - b.index);
-      for (const record of removedRecords) {
-        record.parent.children.splice(record.index, 0, record.node);
-      }
 
       return exported;
     }
@@ -174,7 +154,7 @@ export class Supervisor {
       this.executeHandlers("afterInstantiate");
     }
 
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
       this.executeHandlers("onDBLoad");
     }
 
@@ -225,26 +205,46 @@ export class Supervisor {
     Node.globalMetadata = this.contentData?.metadata || {};
     this.userData = this.contentData?.userData || this.contentData?.metadata?.user;
 
-    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData));
-    const safeContentData = JSON.parse(JSON.stringify(this.contentData));
-    this.rootNode = new Node(safeTemplateData);
+    const regenerateTree = (existingNode: Node | null, data: any): Node => {
+      if (!existingNode) {
+        return new Node(JSON.parse(JSON.stringify(data)));
+      }
+      if (existingNode.hasChangedSinceRender) {
+        return new Node(existingNode.data);
+      }
+      const newChildren = [];
+      for (let i = 0; i < existingNode.children.length; i++) {
+        const child = existingNode.children[i];
+        if (child && !child.isComponentInjected) {
+          const newChild = regenerateTree(child, child.data);
+          newChild.parent = existingNode;
+          newChildren.push(newChild);
+        }
+      }
+      existingNode.children = newChildren;
+      return existingNode;
+    };
 
+    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData));
+    if (this.contentData?.component && this.contentData.component.length > 0) {
+      if (!safeTemplateData.component) safeTemplateData.component = [];
+      safeTemplateData.component.push(...JSON.parse(JSON.stringify(this.contentData.component)));
+    }
+    
+    this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
+
+    const safeContentData = JSON.parse(JSON.stringify(this.contentData));
     if (safeContentData.type) {
-      this.contentNodes = [new Node(safeContentData as any)];
+      this.contentNodes = [regenerateTree(this.contentNodes[0] || null, safeContentData)];
     } else if (safeContentData.content && Array.isArray(safeContentData.content)) {
-      this.contentNodes = safeContentData.content.map((data: any) => new Node(data));
+      this.contentNodes = safeContentData.content.map((data: any, idx: number) => {
+        return regenerateTree(this.contentNodes[idx] || null, data);
+      });
     } else {
       this.contentNodes = [];
     }
 
-    if (this.rootNode) {
-      if (this.contentData?.component && this.contentData.component.length > 0) {
-        if (!this.rootNode.data.component) {
-          this.rootNode.data.component = [];
-        }
-        this.rootNode.data.component.push(...this.contentData.component);
-      }
-    }
+
 
     this.hasInstantiated = true;
   }
@@ -268,10 +268,10 @@ export class Supervisor {
     });
 
     for (const sourceNode of Node.sourcePlacements) {
-      const targets = sourceNode.data.placement?.targetPlacement || [];
+      const targets = sourceNode.placement?.targetPlacement || [];
       let matchedTarget: Node | null = null;
       for (const targetName of targets) {
-        matchedTarget = Node.placementArray.find(n => n.data.placement?.placementName === targetName) || null;
+        matchedTarget = Node.placementArray.find(n => n.placement?.placementName === targetName) || null;
         if (matchedTarget) break;
       }
       if (matchedTarget) {
@@ -301,7 +301,7 @@ export class Supervisor {
   private async render(): Promise<string | void> {
     console.log("Stage: Rendering");
 
-    if (typeof window === 'undefined') {
+    if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
       // SSR Context
       let cssString = "";
       for (const sNode of StyleNode.cssDefs) {

@@ -1,5 +1,5 @@
 async (event, context) => {
-  const listId = context.node.data.props.listId;
+  const listId = context.node.props.listId;
   const container = context.node.findNode({ props: { id: "thread-messages" } });
   if (!container || !listId) return;
 
@@ -30,7 +30,7 @@ async (event, context) => {
         );
       } else {
         container.children = [];
-        container.data.content = [];
+        container.content = [];
         container.addChild({ type: "p", content: "No messages in this thread yet." });
         container.render();
       }

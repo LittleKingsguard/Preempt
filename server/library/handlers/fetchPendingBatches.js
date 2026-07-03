@@ -7,7 +7,7 @@ async (event, context) => {
     if (!listNode) return;
 
     if (!res.ok) {
-      listNode.data.content = "Failed to load batches.";
+      listNode.content = "Failed to load batches.";
       listNode.hasChangedSinceRender = true;
       listNode.render();
       return;
@@ -17,7 +17,7 @@ async (event, context) => {
     const batches = data.batches || [];
 
     listNode.children = [];
-    listNode.data.content = [];
+    listNode.content = [];
 
     if (batches.length === 0) {
       listNode.addChild({ type: "p", content: "No pending batches." });

@@ -12,7 +12,7 @@ async (event, context) => {
       alert("Batch approved successfully!");
       // Re-trigger the fetch to refresh the list safely
       let container = context.node;
-      while (container && !(container.data.css?.classes || []).includes("admin-approval-container")) {
+      while (container && !(container.css?.classes || []).includes("admin-approval-container")) {
         container = container.parent;
       }
       if (container) {

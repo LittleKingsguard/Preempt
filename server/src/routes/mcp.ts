@@ -79,15 +79,15 @@ router.post("/validate-and-save", mcpAuth, async (req, res) => {
         }
 
         if (target.type === 'handler') {
-          if (!target.handlerName || !matchedNode.data.handlers || !matchedNode.data.handlers[target.handlerName]) {
+          if (!target.handlerName || !matchedNode.handlers || !matchedNode.handlers[target.handlerName]) {
             throw new Error(`Target extraction failed: Could not find handler '${target.handlerName}' on matched node`);
           }
-          validatedBody = matchedNode.data.handlers[target.handlerName];
+          validatedBody = matchedNode.handlers[target.handlerName];
         } else if (target.type === 'component') {
-          if (!target.name || !matchedNode.data.component) {
+          if (!target.name || !matchedNode.component) {
             throw new Error(`Target extraction failed: Could not find component array on matched node`);
           }
-          const comp = matchedNode.data.component.find((c: any) => c.reference === target.name);
+          const comp = matchedNode.component.find((c: any) => c.reference === target.name);
           if (!comp || !comp.value) {
             throw new Error(`Target extraction failed: Could not find component '${target.name}' with a value on matched node`);
           }

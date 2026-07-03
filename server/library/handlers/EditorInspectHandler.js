@@ -12,7 +12,7 @@
   let isComponent = false;
   let curr = node;
   while (curr) {
-    if (curr.isComponentInjected || (curr.data.component && curr.data.component.length > 0)) {
+    if (curr.isComponentInjected || (curr.component && curr.component.length > 0)) {
       isComponent = true;
       break;
     }

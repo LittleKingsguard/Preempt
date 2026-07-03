@@ -1,5 +1,5 @@
 async (event, context) => {
-  const listId = context.node.parent.parent.data.props.listId;
+  const listId = context.node.parent.parent.props.listId;
   const inputEl = document.getElementById("new-message-input");
   const body = inputEl ? inputEl.value : "";
   
@@ -17,7 +17,7 @@ async (event, context) => {
       
       // We can trigger fetchMessageThread to reload the messages
       const threadNode = context.node.parent.parent;
-      const fetchHandler = threadNode.data.component?.find(c => c.reference === "fetchMessageThread");
+      const fetchHandler = threadNode.component?.find(c => c.reference === "fetchMessageThread");
       if (fetchHandler) {
          window.location.reload(); 
       } else {

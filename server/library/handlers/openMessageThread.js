@@ -1,9 +1,9 @@
 (event, context) => {
-  const listId = context.node.data.props["data-list-id"];
+  const listId = context.node.props["data-list-id"];
   const mainContainer = context.node.parent.parent;
   
   mainContainer.children = [];
-  mainContainer.data.content = [];
+  mainContainer.content = [];
   
   mainContainer.addChild({
     type: "div",

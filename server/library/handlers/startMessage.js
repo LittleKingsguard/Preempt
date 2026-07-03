@@ -1,5 +1,5 @@
 async (event, context) => {
-  const targetUser = context.node.data.props["data-target-user"];
+  const targetUser = context.node.props["data-target-user"];
   if (!targetUser) return;
   
   try {

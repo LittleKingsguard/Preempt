@@ -6,12 +6,14 @@ export interface CssDef {
 export interface PlacementConfig {
   placementName?: string;
   targetPlacement?: string[];
+  _referencingNodes?: any[];
 }
 
 export interface ComponentBinding {
   reference: string;
   target?: string;
   value?: string | NodeData | NodeData[] | null;
+  _referencingNodes?: any[];
 }
 export interface NodeVersion {
   name?: string;

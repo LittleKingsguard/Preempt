@@ -2,15 +2,15 @@
   const modalContent = context.node.parent.findNode({ props: { id: "modal-message-container" } });
   if (!modalContent) return;
   
-  const currentDisplay = modalContent.data.css?.style?.display || "block";
+  const currentDisplay = modalContent.css?.style?.display || "block";
   
-  modalContent.data.css = modalContent.data.css || {};
-  modalContent.data.css.style = modalContent.data.css.style || {};
+  modalContent.css = modalContent.css || {};
+  modalContent.css.style = modalContent.css.style || {};
   
   if (currentDisplay === "none") {
-    modalContent.data.css.style.display = "block";
+    modalContent.css.style.display = "block";
   } else {
-    modalContent.data.css.style.display = "none";
+    modalContent.css.style.display = "none";
   }
   
   modalContent.hasChangedSinceRender = true;

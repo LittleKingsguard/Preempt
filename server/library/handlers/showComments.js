@@ -2,9 +2,9 @@
   const container = context.node.parent;
   
   // Hide the button
-  context.node.data.css = context.node.data.css || {};
-  context.node.data.css.style = context.node.data.css.style || {};
-  context.node.data.css.style.display = "none";
+  context.node.css = context.node.css || {};
+  context.node.css.style = context.node.css.style || {};
+  context.node.css.style.display = "none";
   context.node.hasChangedSinceRender = true;
 
   // Add the commentsContainer component
