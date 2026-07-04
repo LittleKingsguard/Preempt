@@ -48,7 +48,7 @@ export class Node {
   public type: string = 'div';
   public placement?: any;
   public component?: any[];
-  public content?: string;
+  public content?: string | undefined;
   public props: Record<string, any> = {};
   public handlers?: Record<string, string>;
   public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
@@ -58,7 +58,7 @@ export class Node {
   public static sourcePlacements: Node[] = [];
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
-  public static nodeCounter: number = 0;
+
   public static globalMetadata: any = {};
 
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
@@ -69,7 +69,7 @@ export class Node {
     this.resolveVersion();
 
     if (!this.data.css) this.data.css = {};
-    if (!this.data.css.id) this.data.css.id = `preempt-node-${Node.nodeCounter++}`;
+    if (!this.data.css.id) this.data.css.id = `preempt-node-${Math.random().toString(36).substring(2, 10)}`;
     if (!this.data.props) this.data.props = {};
 
     if (typeof window !== 'undefined') {
@@ -587,31 +587,6 @@ export class Node {
       }
     };
     mergeDeep(this.data, newData);
-
-    const deepClone = (val: any) => {
-      if (val === undefined) return undefined;
-      return typeof structuredClone === 'function' ? structuredClone(val) : JSON.parse(JSON.stringify(val));
-    };
-
-    if (newData.type !== undefined) this.type = newData.type;
-    if (typeof newData.content === "string") this.content = newData.content;
-    if (newData.css !== undefined) this.css = deepClone(this.data.css) || {};
-    if (newData.props !== undefined) this.props = deepClone(this.data.props) || {};
-    if (newData.handlers !== undefined) this.handlers = deepClone(this.data.handlers);
-    if (newData.component !== undefined) this.component = deepClone(this.data.component);
-    if (newData.placement !== undefined) this.placement = deepClone(this.data.placement);
-    
-    this.hasChangedSinceRender = true;
-    this.validate();
-
-    if (this.element || this.isValid) {
-      const oldElement = this.element;
-      this.render();
-      const newElement = this.element;
-      if (!oldElement && newElement && this.parent && this.parent.element) {
-        this.parent.element.appendChild(newElement);
-      }
-    }
   }
 
   public validate(bubbleErrors: boolean = false): boolean {

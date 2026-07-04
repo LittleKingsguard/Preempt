@@ -19,7 +19,7 @@ This architecture enables:
 ## The Supervisor Pipeline
 At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline to convert raw JSON data from the database into a fully reactive UI.
 
-1. **Instantiation**: The Supervisor accepts the `templateData` and `contentData` (the SSR payload). If `contentData` is itself a Node (e.g. contains a `type` property), it is instantiated entirely as the root Content Node, preserving its root-level `placement` configuration. Otherwise, it instantiates its children individually.
+1. **Instantiation**: The Supervisor accepts the `templateData` and `contentData` (an array of payloads). It aggregates `metadata` and `userData` across all payloads, then generates virtual `Node` objects from each payload's underlying `content` property.
 2. **Assembly**: It merges template and content components into the global registry, and then resolves all `targetPlacement` rules to insert content nodes into their requested template drop-zones. 
 
 The pipeline executes the following stages sequentially:
@@ -45,7 +45,7 @@ Preempt handles user state through a hybrid authentication ecosystem, blending r
    - **Local JWT Strategy**: Native user/password credentials generate cryptographically signed JWT tokens representing a user's session.
    - **OIDC/OAuth2 Integration**: Preempt seamlessly integrates with compatible identity providers (such as Keycloak) via its dedicated `oauthWorker`. It links external identity claims to local users, mapping credentials and seamlessly migrating external sessions into its native authentication state.
 
-2. **SSR Data Injection**: In the `ssr.ts` route, the `req.user` object is automatically appended to the root Content Node payload at `contentData.payload.userData` and `contentData.payload.metadata.user`. This allows frontend Handlers and Components to access the current user's state directly from the virtual DOM tree.
+2. **SSR Data Injection**: In the `ssr.ts` route, the `req.user` object is automatically appended to the primary Content Payload. This allows frontend Handlers and Components to access the current user's state directly via `context.metadata.user` or by traversing to the root node's `userData`.
 
 3. **Dynamic Routing**: The root path (`/`) dynamically resolves the content to display. If a logged-in user has a `home_page` preference set in the `Users` table, Preempt will route them to that specific `Content(id)`. Otherwise, it falls back to the server's global `default_index_content_id` setting.
 

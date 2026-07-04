@@ -142,6 +142,19 @@ const username = form.querySelector("[name=username]").value || localStorage.get
 
 This guarantees your state survives any unexpected DOM rehydrations triggered by the pipeline monitoring loop.
 
+## Fetching Data and New Content
+
+When a handler needs to load new content from an API (like loading a new tab's content or fetching dynamic JSON data), you should **always prefer `context.fetchContent()`** over standard `fetch()`.
+
+`context.fetchContent({ url, batchLabel, query, defaultTemplate, placements })` is a managed method that:
+1. Automatically retrieves the database record.
+2. Extracts its inner `payload` and securely preserves important wrapper metadata (like `author_id` or configuration data).
+3. Processes the JSON into valid virtual `Node` instances.
+4. Correctly applies target `placements` to inject the new nodes into existing template drop-zones.
+5. Automatically restarts the rendering pipeline (`Supervisor.rerun()`) to reflect the changes in the UI.
+
+Using standard `fetch()` would require you to manually handle payload parsing, metadata extraction, Node instantiation, and tree traversal to attach the nodes—all of which is error-prone.
+
 ## Accessing Current User Data
 Because the Server-Side Render pipeline injects the active user into the root payload, you can access the current user's profile and preferences (like their custom `home_page` route) in any handler by inspecting the `userData` object on the root Content Node.
 

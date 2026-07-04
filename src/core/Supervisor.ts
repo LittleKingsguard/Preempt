@@ -15,7 +15,7 @@ export class Supervisor {
   public serverApi?: any;
   public static currentStage: string = 'closed';
   private templateData: NodeData | null = null;
-  private contentData: ContentPayload | null = null;
+  public contentData: ContentPayload[] = [];
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
@@ -104,11 +104,11 @@ export class Supervisor {
     }
   }
 
-  public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload, serverApi?: any): Promise<string | void> {
+  public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
       // Exit only if no contentData is provided *and* there is no existing contentData on the singleton
-      if (!contentData && !Supervisor.instance?.contentData) {
+      if (!contentData && (!Supervisor.instance?.contentData || Supervisor.instance.contentData.length === 0)) {
         console.warn('process called without contentData and no existing instance content; exiting early.');
         return;
       }
@@ -117,11 +117,12 @@ export class Supervisor {
 
     if (Supervisor.instance) {
       if (templateData && contentData) Supervisor.instance.templateData = templateData;
-      if (contentData) Supervisor.instance.contentData = contentData;
+      if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       Supervisor.instance.pauseMonitoring();
       // Safely copy userData if present
-      if (Supervisor.instance.contentData?.userData) {
-        Supervisor.instance.userData = Supervisor.instance.contentData.userData;
+      const firstPayload = Supervisor.instance.contentData?.[0];
+      if (firstPayload?.userData) {
+        Supervisor.instance.userData = firstPayload.userData;
       }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline();
@@ -130,10 +131,11 @@ export class Supervisor {
     } else {
       Supervisor.instance = new Supervisor(config);
       if (templateData && contentData) Supervisor.instance.templateData = templateData;
-      if (contentData) Supervisor.instance.contentData = contentData;
+      if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       // Safely copy userData if present
-      if (Supervisor.instance.contentData?.userData) {
-        Supervisor.instance.userData = Supervisor.instance.contentData.userData;
+      const firstPayload = Supervisor.instance.contentData?.[0];
+      if (firstPayload?.userData) {
+        Supervisor.instance.userData = firstPayload.userData;
       }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
       const result = await Supervisor.instance.runPipeline();
@@ -144,6 +146,43 @@ export class Supervisor {
       }
       return result;
     }
+  }
+
+  public static async rerun(configOverride?: Partial<PipelineConfig>): Promise<string | void> {
+    if (!Supervisor.instance) {
+      console.error("Cannot rerun: no active Supervisor instance exists.");
+      return;
+    }
+
+    const rerunConfig: PipelineConfig = {
+      runInstantiation: true,
+      runAssembly: true,
+      runPreprocessing: true,
+      runValidation: true,
+      runRendering: true,
+      runPostprocessing: true,
+      runMonitoring: true,
+      ...configOverride
+    };
+
+    const originalConfig = Supervisor.instance.config;
+    Supervisor.instance.config = rerunConfig;
+
+    if (rerunConfig.runInstantiation) {
+      Supervisor.resetInstantiation();
+    }
+
+    Supervisor.instance.pauseMonitoring();
+    const result = await Supervisor.instance.runPipeline();
+
+    Supervisor.instance.config = originalConfig;
+    if (originalConfig.runMonitoring) {
+      Supervisor.instance.resumeMonitoring();
+    } else {
+      Supervisor.instance.close();
+    }
+
+    return result;
   }
 
   private async runPipeline(): Promise<string | void> {
@@ -201,9 +240,11 @@ export class Supervisor {
     console.log("Stage: Instantiation");
     StyleNode.clear(); // Clear before re-running
     Node.clearPlacements();
-    Node.nodeCounter = 0;
-    Node.globalMetadata = this.contentData?.metadata || {};
-    this.userData = this.contentData?.userData || this.contentData?.metadata?.user;
+
+    Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
+    
+    const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
+    this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
 
     const regenerateTree = (existingNode: Node | null, data: any): Node => {
       if (!existingNode) {
@@ -226,18 +267,23 @@ export class Supervisor {
     };
 
     const safeTemplateData = JSON.parse(JSON.stringify(this.templateData));
-    if (this.contentData?.component && this.contentData.component.length > 0) {
+    const allComponents = this.contentData.flatMap(c => c.component || []);
+    if (allComponents.length > 0) {
       if (!safeTemplateData.component) safeTemplateData.component = [];
-      safeTemplateData.component.push(...JSON.parse(JSON.stringify(this.contentData.component)));
+      safeTemplateData.component.push(...JSON.parse(JSON.stringify(allComponents)));
     }
-    
+
     this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
 
-    const safeContentData = JSON.parse(JSON.stringify(this.contentData));
-    if (safeContentData.type) {
-      this.contentNodes = [regenerateTree(this.contentNodes[0] || null, safeContentData)];
-    } else if (safeContentData.content && Array.isArray(safeContentData.content)) {
-      this.contentNodes = safeContentData.content.map((data: any, idx: number) => {
+    const allContent = this.contentData.flatMap(payload => {
+      if ((payload as any).type) return [payload as unknown as NodeData];
+      if (payload.content && Array.isArray(payload.content)) return payload.content;
+      return [];
+    });
+
+    if (allContent.length > 0) {
+      const safeContentList = JSON.parse(JSON.stringify(allContent));
+      this.contentNodes = safeContentList.map((data: any, idx: number) => {
         return regenerateTree(this.contentNodes[idx] || null, data);
       });
     } else {
@@ -251,10 +297,6 @@ export class Supervisor {
 
   private async assemble(): Promise<void> {
     console.log("Stage: Assembly");
-    if (this.rootNode) {
-      // [DEV-ONLY] TODO: Remove root data export logging before production
-      console.log("Before Assembly:", this.rootNode.exportToJson());
-    }
     // Collect placement nodes from the entire node tree before processing placements
     const collectPlacements = (node: Node) => {
       Node.appendPlacement(node);
@@ -281,8 +323,6 @@ export class Supervisor {
     if (this.rootNode) {
 
       this.rootNode.applyComponentsTree();
-      // [DEV-ONLY] TODO: Remove root data export logging before production
-      console.log("After Assembly:", this.rootNode.exportToJson());
     }
   }
 
@@ -389,12 +429,32 @@ export class Supervisor {
     const response = await fetch(queryURL, { method: "GET" });
     const data = await response.json();
     let nodes: Node[] = [];
+    let combinedMetadata: any = {};
     if (query.format === "content") {
+      const extractPayload = (obj: any) => {
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          if (obj.payload || (obj.content && !obj.type)) {
+            const { payload, content, ...rest } = obj;
+            Object.assign(combinedMetadata, rest);
+            if (obj.payload) return obj.payload;
+            return obj.content;
+          }
+        }
+        return obj;
+      };
+
+      let payloads: any[] = [];
       if (Array.isArray(data)) {
-        nodes = data.map((item: any) => new Node(item));
+        payloads = data.flatMap((item: any) => {
+          const ext = extractPayload(item);
+          return Array.isArray(ext) ? ext : [ext];
+        });
       } else {
-        nodes = [new Node(data)];
+        const ext = extractPayload(data);
+        payloads = Array.isArray(ext) ? ext : [ext];
       }
+
+      nodes = payloads.map((item: any) => new Node(item));
     }
     else {
       const templateJSON = JSON.stringify(defaultTemplate);
@@ -437,20 +497,26 @@ export class Supervisor {
       }
       node.data.placement.targetPlacement.push(...placements);
     });
-    let currentContentNodes = Supervisor.getContentNodes();
-    const oldNodes = currentContentNodes.filter((n) => n.data && n.data.props && n.data.props.batchLabel === batchLabel);
-    oldNodes.forEach((node) => currentContentNodes.splice(currentContentNodes.indexOf(node), 1));
-    console.log('Node objects to add: ', nodes);
-    currentContentNodes.push(...nodes);
-    console.log('Nodes for assembly: ', currentContentNodes);
-    Supervisor.process({
-      runInstantiation: false,
-      runAssembly: true,
-      runPreprocessing: true,
-      runValidation: true,
-      runRendering: true,
-      runPostprocessing: true,
-      runMonitoring: true
-    });
+
+    if (Supervisor.instance) {
+      if (!Supervisor.instance.contentData) {
+        Supervisor.instance.contentData = [];
+      }
+      
+      const newPayload: ContentPayload = {
+        metadata: { ...combinedMetadata, batchLabel },
+        content: nodes.map(n => n.exportToJson()) as NodeData[]
+      };
+      
+      const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === batchLabel);
+      if (existingIndex > -1) {
+        Supervisor.instance.contentData[existingIndex] = newPayload;
+      } else {
+        Supervisor.instance.contentData.push(newPayload);
+      }
+    }
+
+
+    Supervisor.rerun();
   }
 }
