@@ -139,7 +139,8 @@ router.get("/", authenticateToken, async (req: any, res) => {
       return res.status(404).send("No default index configured");
     }
     logger.info(req.user);
-    await renderContent(defaultIndexId, null, req, res);
+    const editorMode = req.query.editorMode as string || null;
+    await renderContent(defaultIndexId, editorMode, req, res);
   } catch (err) {
     logger.error({ err }, "An error occurred");
     res.status(500).send("Internal server error");

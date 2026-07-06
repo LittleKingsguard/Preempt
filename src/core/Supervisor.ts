@@ -186,7 +186,6 @@ export class Supervisor {
   }
 
   private async runPipeline(): Promise<string | void> {
-    console.log("DEBUG: pipeline stages", this.config.runInstantiation, !this.hasInstantiated);
     if (this.config.runInstantiation && !this.hasInstantiated) {
       Supervisor.currentStage = 'instantiation';
       await this.instantiate();

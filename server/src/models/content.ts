@@ -108,8 +108,9 @@ export class Content {
     if (templateId) {
       templateRow = await templateSource.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { templateSource, contentId, templateId, tagsParam, editorMode, handlerSource, componentSource } }), { id: templateId }, user);
     } else {
-      const tagsArray = tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(t => t) : [];
-      if (editorMode) tagsArray.push("editor");
+      const tagsArray = editorMode
+        ? ["editor"]
+        : (tagsParam ? tagsParam.split(',').map(t => t.trim()).filter(t => t) : []);
 
       const templates = await templateSource.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { templateSource, contentId, templateId, tagsParam, editorMode, handlerSource, componentSource } }), { list_id: contentRow.template_group_id, tags: tagsArray }, user);
       templateRow = templates && templates.length > 0 ? templates[0] : null;
@@ -156,7 +157,7 @@ export class Content {
 
     if (editorMode) {
       const hasEditorTag = await checkHasEditorTag(content.resolved_template_id);
-      
+
       if (!hasEditorTag) {
         if (!Content.defaultEditorCache) {
           Content.defaultEditorCache = await Setting.get(pgSettingSource, "defaultEditor");
@@ -177,7 +178,7 @@ export class Content {
           });
 
           if (!content.payload.component) content.payload.component = [];
-          
+
           if (defaultEditor.component) {
             content.payload.component.push(defaultEditor.component);
           }
@@ -195,22 +196,22 @@ export class Content {
 
   static async getLatest(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string; limit?: number; offset?: number } = {}, user?: any) {
     const behavior = await Setting.get(undefined, "contentReturnBehavior") || "Overlook";
-    
+
     let placeholder;
     if (behavior === "Guard") {
       if (!Content.guardPlaceholderCache) {
-         Content.guardPlaceholderCache = await Setting.get(undefined, "guardPlaceholder");
+        Content.guardPlaceholderCache = await Setting.get(undefined, "guardPlaceholder");
       }
       placeholder = Content.guardPlaceholderCache;
     }
-    
+
     const rows = await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { criteria } }), { ...criteria, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user, placeholder);
     const contents = rows.map((r: any) => new Content(r, source));
     return contents;
   }
   static async getCount(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string } = {}, user?: any) {
     const behavior = await Setting.get(undefined, "contentReturnBehavior") || "Overlook";
-    
+
     return await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { criteria } }), { ...criteria, count_only: true, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user);
   }
 
@@ -238,7 +239,7 @@ export class Content {
     if (tags && tags.length > 0) {
       Tag.addTagsToCache(tags);
     }
-    
+
     return { content };
   }
 
@@ -260,7 +261,7 @@ export class Content {
     if (tags && tags.length > 0) {
       Tag.addTagsToCache(tags);
     }
-    
+
     return { content: this };
   }
 
@@ -274,7 +275,7 @@ export class Content {
     if (!canDelete) {
       return { error: "Forbidden: You do not have permission to delete this content", status: 403 };
     }
-    
+
     try {
       const row = await this.source.delete(new PreemptEvent<any>('content.delete', { id: 'system', type: 'process' }, [], { before: { ...this, source: undefined }, after: { id: this.id } }), this.id);
       if ('error' in row) return row;
