@@ -32,6 +32,13 @@
             { "target": "type", "reference": "adminDashboardLink" }
           ]
         },
+        {
+          "type": "div",
+          "css": { "style": { "display": "none" } },
+          "component": [
+            { "target": "type", "reference": "editContentLink" }
+          ]
+        },
         { "type": "div", "placement": { "placementName": "navAdditionalLinks" } }
       ]
     },

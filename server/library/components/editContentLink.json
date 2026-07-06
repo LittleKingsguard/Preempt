@@ -1,0 +1,6 @@
+{
+  "css": { "style": { "display": "inline-block" }, "classes": ["nav-link"] },
+  "type": "a",
+  "props": { "href": "?editorMode=content" },
+  "content": "Edit Mode"
+}

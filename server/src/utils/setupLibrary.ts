@@ -112,7 +112,7 @@ export async function loadLibraryData(adminUser: any) {
         }
       }
 
-      if (compId !== undefined && name === 'adminDashboardLink') {
+      if (compId !== undefined && (name === 'adminDashboardLink' || name === 'editContentLink')) {
         await pool.query("UPDATE Components SET approved_roles = $1 WHERE id = $2", [['admin'], compId]);
       }
       
