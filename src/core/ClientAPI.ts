@@ -112,6 +112,44 @@ export class ClientAPI {
     }
   }
 
+  async modifyNode(
+    partialNode: Partial<Node>,
+    targetNode: Node,
+    next?: () => void,
+    persistent?: boolean
+  ): Promise<void> {
+    const isPersistent = persistent !== undefined ? persistent : (Supervisor.currentStage === 'closed');
+
+    if (isPersistent) {
+      const dataToMerge: any = {};
+      const dataKeys = ['type', 'content', 'css', 'props', 'handlers', 'component', 'placement', 'versions'];
+      for (const key of dataKeys) {
+        if (key in partialNode) {
+          dataToMerge[key] = (partialNode as any)[key];
+        }
+      }
+      targetNode.modify(dataToMerge);
+      targetNode.hasChangedSinceRender = true;
+
+      if (next) {
+        next();
+      } else {
+        await Supervisor.rerun();
+      }
+    } else {
+      const nodeKeys = ['type', 'content', 'css', 'props', 'handlers', 'component', 'placement', 'versions'];
+      for (const key of nodeKeys) {
+        if (key in partialNode) {
+          (targetNode as any)[key] = (partialNode as any)[key];
+        }
+      }
+      targetNode.hasChangedSinceRender = true;
+      targetNode.validate();
+      targetNode.render();
+      if (next) next();
+    }
+  }
+
   async fetchHandlers(query: any, targetNodes: Node[], next?: () => void, overwrite: boolean = true, targetEvent?: string): Promise<void> {
     try {
       const queryParams = new URLSearchParams(query as any).toString();

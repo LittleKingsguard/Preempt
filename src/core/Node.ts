@@ -694,16 +694,22 @@ export class Node {
     return results;
   }
 
-  public findNode(query: NodeQuery | ((node: Node) => boolean)): Node | null {
+  public findNode(query: NodeQuery | ((node: Node) => boolean), depth: number = 0): Node | null {
+    if (depth === 0) console.log(`[DEBUG] findNode starting query on node type '${this.type}'`);
     if (this.isMatch(query)) {
+      console.log(`[DEBUG] findNode MATCH found at node type '${this.type}' (depth ${depth}):`, this);
       return this;
     }
 
     for (const child of this.children) {
-      const found = child.findNode(query);
+      const found = child.findNode(query, depth + 1);
       if (found) return found;
     }
 
+    if (depth === 0) {
+      const queryString = typeof query === 'function' ? query.toString() : JSON.stringify(query);
+      console.log(`[DEBUG] findNode MATCH NOT FOUND for query:`, queryString);
+    }
     return null;
   }
 

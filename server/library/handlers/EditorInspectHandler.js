@@ -4,9 +4,14 @@
   if (!window.Preempt) window.Preempt = {};
   window.Preempt.inspectedNode = node;
   
-  const display = document.getElementById("editor-inspector-display");
-  if (display) {
-    display.innerText = JSON.stringify(node.data, null, 2);
+  const displayNode = context.rootNode.findNode(n => n.css && n.css.id === "editor-inspector-display");
+  if (displayNode) {
+    context.clientAPI.modifyNode(
+      { content: JSON.stringify(node.data, null, 2) },
+      displayNode,
+      undefined,
+      false
+    );
   }
 
   let isComponent = false;
@@ -19,16 +24,18 @@
     curr = curr.parent;
   }
 
-  const editorPanel = document.querySelector(".preempt-editor-panel");
-  if (editorPanel) {
+  const editorPanelNode = context.rootNode.findNode(n => n.css && n.css.classes && n.css.classes.includes("preempt-editor-panel"));
+  if (editorPanelNode) {
+    const newClasses = [...(editorPanelNode.css?.classes || [])];
     if (isComponent) {
-      editorPanel.classList.add("editor-mode-component");
-      editorPanel.classList.remove("editor-mode-content");
-      editorPanel.classList.remove("editor-mode-template");
+      if (!newClasses.includes("editor-mode-component")) newClasses.push("editor-mode-component");
+      const filtered = newClasses.filter(c => c !== "editor-mode-content" && c !== "editor-mode-template");
+      context.clientAPI.modifyNode({ css: { ...editorPanelNode.css, classes: filtered } }, editorPanelNode, undefined, false);
     } else {
-      editorPanel.classList.remove("editor-mode-component");
-      const baseMode = editorPanel.getAttribute("data-base-mode") || "editor-mode-content";
-      editorPanel.classList.add(baseMode);
+      const filtered = newClasses.filter(c => c !== "editor-mode-component");
+      const baseMode = (editorPanelNode.props && editorPanelNode.props["data-base-mode"]) ? editorPanelNode.props["data-base-mode"] : "editor-mode-content";
+      if (!filtered.includes(baseMode)) filtered.push(baseMode);
+      context.clientAPI.modifyNode({ css: { ...editorPanelNode.css, classes: filtered } }, editorPanelNode, undefined, false);
     }
   }
 }
