@@ -28,7 +28,7 @@ export class Handler {
     this.updated_at = data.updated_at || new Date();
   }
 
-  static async getAll(source: IHandlerSource = pgHandlerSource, user: any, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }) {
+  static async getAll(source: IHandlerSource = pgHandlerSource, user: any, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content'; name?: string }) {
     console.log('Handler.getAll called with ', criteria);
     const rows = await source.getAll(new PreemptEvent<any>('handler.getAll', { id: 'system', type: 'process' }), criteria);
     if (criteria?.format === 'content') return rows;

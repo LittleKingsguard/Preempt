@@ -66,7 +66,7 @@ function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): 
   };
 }
 
-export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }) {
+export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content'; name?: string }) {
   const cacheKey = criteria ? `getAll:${JSON.stringify(criteria)}` : 'getAll';
   const cached = cache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
@@ -90,8 +90,17 @@ export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateI
     orConditions.push(`EXISTS (SELECT 1 FROM ComponentHandlers cmh WHERE cmh.handler_id = Handlers.id AND cmh.component_id = ANY($${params.length}::int[]))`);
   }
 
+  const whereConditions: string[] = [];
   if (orConditions.length > 0) {
-    query += " WHERE (" + orConditions.join(" OR ") + ")";
+    whereConditions.push("(" + orConditions.join(" OR ") + ")");
+  }
+  if (criteria?.name) {
+    params.push(criteria.name);
+    whereConditions.push(`name = $${params.length}`);
+  }
+
+  if (whereConditions.length > 0) {
+    query += " WHERE " + whereConditions.join(" AND ");
   }
 
   const result = await pool.query(query, params);

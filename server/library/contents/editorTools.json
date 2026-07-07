@@ -1,0 +1,15 @@
+{
+  "tags": ["editor-tools", "structural"],
+  "payload": {
+    "type": "div",
+    "placement": { "targetPlacement": ["article"] },
+    "content": [
+      {
+        "type": "div",
+        "component": [
+          { "reference": "editor", "target": "type" }
+        ]
+      }
+    ]
+  }
+}

@@ -67,12 +67,18 @@ router.get("/", authenticateToken, async (req, res) => {
   const authErr = validateUserRoles(user, ["admin", "contributor"]);
   if (authErr) return res.status(authErr.status).json({ error: authErr.error });
 
+  const tagsParam = req.query.tags as string;
+  const criteria: any = {};
+  if (tagsParam) {
+    criteria.tags = tagsParam.split(',').map(t => t.trim()).filter(t => t);
+  }
+
   try {
     if (format === 'raw') {
-      const rows = await pgContentSource.get(new PreemptEvent('content.get', { id: 'system', type: 'process' }), {}, user);
+      const rows = await pgContentSource.get(new PreemptEvent('content.get', { id: 'system', type: 'process' }), criteria, user);
       return res.json(rows);
     }
-    const contents = await Content.getLatest(pgContentSource, {}, user);
+    const contents = await Content.getLatest(pgContentSource, criteria, user);
     res.json(contents);
   } catch (err) {
     logger.error({ err }, "An error occurred");

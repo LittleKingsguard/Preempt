@@ -1,6 +1,9 @@
 {
   "css": { "style": { "display": "inline-block" }, "classes": ["nav-link"] },
   "type": "a",
-  "props": { "href": "?editorMode=content" },
-  "content": "Edit Mode"
+  "props": { "href": "#" },
+  "content": "Edit Mode",
+  "component": [
+    { "target": "handlers.click", "reference": "enterEditMode" }
+  ]
 }

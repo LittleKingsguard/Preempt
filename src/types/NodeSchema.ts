@@ -44,6 +44,7 @@ export interface NodeData {
     cssDef?: CssDef[];
   };
   versions?: NodeVersion[];
+  node?: any;
 }
 
 export interface UserData {

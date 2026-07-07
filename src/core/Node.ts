@@ -1,6 +1,7 @@
 import type { NodeData, NodeQuery } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
+import { clientAPI } from "./ClientAPI.js";
 
 export class Node {
   private static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
@@ -63,6 +64,7 @@ export class Node {
 
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
+    Object.defineProperty(this.data, 'node', { value: this, enumerable: false, configurable: true, writable: true });
     this.parent = parent;
     this.isComponentInjected = isComponentInjected;
 
@@ -97,7 +99,8 @@ export class Node {
 
     const deepClone = (val: any) => {
       if (val === undefined) return undefined;
-      return typeof structuredClone === 'function' ? structuredClone(val) : JSON.parse(JSON.stringify(val));
+      const replacer = (k: string, v: any) => k === 'node' ? undefined : v;
+      return JSON.parse(JSON.stringify(val, replacer));
     };
 
     if (this.data.type !== undefined) this.type = this.data.type;
@@ -471,7 +474,7 @@ export class Node {
         try {
           let handlerFunc: EventListener;
           const trimmedValue = String(value).trim();
-          const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent };
+          const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             const fn = new Function('return ' + trimmedValue)();
             handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
@@ -710,10 +713,10 @@ export class Node {
         const trimmedValue = String(this.handlers[phase]).trim();
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
           const fn = new Function('return ' + trimmedValue)();
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI });
         } else {
           const fn = new Function('context', trimmedValue);
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), fetchContent: Supervisor.fetchContent });
+          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI });
         }
       } catch (err) {
         console.error(`Failed to execute ${phase} handler on node:`, err);
@@ -729,6 +732,7 @@ export class Node {
     const cleanData = (data: any) => {
       if (!data) return data;
       const d = { ...data };
+      if (d.node) delete d.node;
       if (d.css) {
         d.css = { ...d.css };
         if (d.css.id && d.css.id.startsWith("preempt-node-")) {

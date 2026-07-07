@@ -191,6 +191,8 @@ export class Content {
       await injectEditorDependencies(content.payload, content.template_payload, editorMode, hasEditorTag);
     }
 
+
+
     return { content };
   }
 

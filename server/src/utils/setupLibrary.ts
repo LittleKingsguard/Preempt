@@ -191,12 +191,18 @@ export async function loadLibraryData(adminUser: any) {
   if (fs.existsSync(contentsPath)) {
     const files = fs.readdirSync(contentsPath).filter(f => f.endsWith('.json'));
     for (const file of files) {
-      const payload = JSON.parse(fs.readFileSync(path.join(contentsPath, file), 'utf-8'));
+      const data = JSON.parse(fs.readFileSync(path.join(contentsPath, file), 'utf-8'));
+      let payload = data;
+      let tags = ['structural'];
+      if (data && typeof data === 'object' && 'payload' in data && 'tags' in data) {
+        payload = data.payload;
+        tags = data.tags;
+      }
       
-      const contRes = await Content.create(pgContentSource, adminUser, payload, null, ['structural'], [], true, null);
+      const contRes = await Content.create(pgContentSource, adminUser, payload, null, tags, [], true, null);
       if (contRes && !('error' in contRes)) {
         const content = (contRes as any).content;
-        await content.update(adminUser, payload, null, ['structural'], [], true, null);
+        await content.update(adminUser, payload, null, tags, [], true, null);
         let targetGroupName = 'navSidebar';
         if (file === 'adminDashboard.json') {
            targetGroupName = 'navSidebarWithSidebar';

@@ -33,7 +33,7 @@
     const tabNode = container.findNode({ classes: [targetTabClass] });
     if (tabNode && !tabNode.props.hasFetched) {
       tabNode.props.hasFetched = true;
-      context.fetchContent({
+      context.clientAPI.fetchContent({
         url: endpoint.url,
         batchLabel: targetTabClass,
         query: { format: "content" },

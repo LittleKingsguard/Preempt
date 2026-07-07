@@ -108,7 +108,7 @@ export interface IHandlerData {
 }
 
 export interface IHandlerSource {
-  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content' }): Promise<any[]>;
+  getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content'; name?: string }): Promise<any[]>;
   getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
   create(event: IPreemptEvent, name: string, body: string, authorId: string, isApproved: boolean): Promise<any>;
   update(event: IPreemptEvent, id: number, name: string, body: string): Promise<any | { error: string; status: number }>;

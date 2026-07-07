@@ -8,8 +8,12 @@ const router = express.Router();
 
 router.get("/", authenticateToken, async (req, res) => {
   const format = req.query.format === 'content' ? 'content' : 'raw';
+  const name = typeof req.query.name === 'string' ? req.query.name : undefined;
   try {
-    const handlers = await Handler.getAll(pgHandlerSource, (req as any).user, { format });
+    const handlers = await Handler.getAll(pgHandlerSource, (req as any).user, {
+      format,
+      ...(name ? { name } : {})
+    });
     res.json(handlers);
   } catch (err) {
     logger.error({ err }, "An error occurred");

@@ -1,8 +1,9 @@
 import { Supervisor } from './core/Supervisor'
 import { WebSocketClient } from './core/WebSocketClient'
+import { clientAPI } from './core/ClientAPI'
 import type { PipelineConfig } from './types/Pipeline'
 
-(window as any).Preempt = { Supervisor, WebSocketClient };
+(window as any).Preempt = { Supervisor, WebSocketClient, clientAPI };
 const defaultConfig: PipelineConfig = {
   runInstantiation: true,
   runAssembly: true,

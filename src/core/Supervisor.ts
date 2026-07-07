@@ -1,10 +1,10 @@
 import type { PipelineConfig } from "../types/Pipeline.js";
-import type { NodeData, ContentPayload, UserData, NodeQuery } from "../types/NodeSchema.js";
+import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { StyleNode } from "./StyleNode.js";
 
 export class Supervisor {
-  private static instance: Supervisor | null = null;
+  public static instance: Supervisor | null = null;
   private config: PipelineConfig;
   private rootNode: Node | null = null;
   private contentNodes: Node[] = [];
@@ -14,7 +14,7 @@ export class Supervisor {
   public userData?: UserData;
   public serverApi?: any;
   public static currentStage: string = 'closed';
-  private templateData: NodeData | null = null;
+  public templateData: NodeData | null = null;
   public contentData: ContentPayload[] = [];
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
@@ -245,9 +245,11 @@ export class Supervisor {
     const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
 
+    const replacer = (k: string, v: any) => k === 'node' ? undefined : v;
+
     const regenerateTree = (existingNode: Node | null, data: any): Node => {
       if (!existingNode) {
-        return new Node(JSON.parse(JSON.stringify(data)));
+        return new Node(JSON.parse(JSON.stringify(data, replacer)));
       }
       if (existingNode.hasChangedSinceRender) {
         return new Node(existingNode.data);
@@ -265,11 +267,11 @@ export class Supervisor {
       return existingNode;
     };
 
-    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData));
+    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData, replacer));
     const allComponents = this.contentData.flatMap(c => c.component || []);
     if (allComponents.length > 0) {
       if (!safeTemplateData.component) safeTemplateData.component = [];
-      safeTemplateData.component.push(...JSON.parse(JSON.stringify(allComponents)));
+      safeTemplateData.component.push(...JSON.parse(JSON.stringify(allComponents, replacer)));
     }
 
     this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
@@ -420,102 +422,5 @@ export class Supervisor {
     console.log("Supervisor closing. Pipeline complete.");
     Supervisor.instance = null;
     Node.globalMetadata = {};
-  }
-  // fetch content from an external source and append to contentNodes with placements. Pass component to generate nodes from raw data.
-  static async fetchContent({ url, batchLabel, query, defaultTemplate, placements }: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate: NodeData, placements: string[] }) {
-    const queryParams = new URLSearchParams(query as any).toString();
-    const queryURL = queryParams ? `${url}?${queryParams}` : url;
-    const response = await fetch(queryURL, { method: "GET" });
-    const data = await response.json();
-    let nodes: Node[] = [];
-    let combinedMetadata: any = {};
-    if (query.format === "content") {
-      const extractPayload = (obj: any) => {
-        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-          if (obj.payload || (obj.content && !obj.type)) {
-            const { payload, content, ...rest } = obj;
-            Object.assign(combinedMetadata, rest);
-            if (obj.payload) return obj.payload;
-            return obj.content;
-          }
-        }
-        return obj;
-      };
-
-      let payloads: any[] = [];
-      if (Array.isArray(data)) {
-        payloads = data.flatMap((item: any) => {
-          const ext = extractPayload(item);
-          return Array.isArray(ext) ? ext : [ext];
-        });
-      } else {
-        const ext = extractPayload(data);
-        payloads = Array.isArray(ext) ? ext : [ext];
-      }
-
-      nodes = payloads.map((item: any) => new Node(item));
-    }
-    else {
-      const templateJSON = JSON.stringify(defaultTemplate);
-      nodes = data.map((item: any) => {
-        // Create a plain object from the template
-        const nodeObj: any = JSON.parse(templateJSON);
-        if (!nodeObj.component) nodeObj.component = [];
-        const parseToComponent = (itm: object | string) => {
-          if (typeof itm === 'string') {
-            nodeObj.component.push({ reference: 'data', value: itm });
-          } else {
-            Object.keys(itm).forEach((key) => {
-              const existingComponent = nodeObj.component.find((c: any) => c.reference === key);
-              if (existingComponent) {
-                existingComponent.value = (itm as any)[key];
-              } else {
-                nodeObj.component.push({ reference: key, value: (itm as any)[key] });
-              }
-            });
-          }
-        };
-        if (typeof item === 'object' && !Array.isArray(item)) {
-          parseToComponent(item);
-        } else if (Array.isArray(item)) {
-          item.forEach((i: any) => parseToComponent(i));
-        }
-        // Return a proper Node instance
-        return new Node(nodeObj);
-      })
-    }
-    nodes.forEach((node: Node) => {
-      if (!node.data.props) node.data.props = {};
-      node.data.props.batchLabel = batchLabel;
-      if (!node.data.placement) {
-        node.data.placement = { targetPlacement: [] };
-      }
-      // Ensure targetPlacement array exists
-      if (!node.data.placement.targetPlacement) {
-        node.data.placement.targetPlacement = [];
-      }
-      node.data.placement.targetPlacement.push(...placements);
-    });
-
-    if (Supervisor.instance) {
-      if (!Supervisor.instance.contentData) {
-        Supervisor.instance.contentData = [];
-      }
-      
-      const newPayload: ContentPayload = {
-        metadata: { ...combinedMetadata, batchLabel },
-        content: nodes.map(n => n.exportToJson()) as NodeData[]
-      };
-      
-      const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === batchLabel);
-      if (existingIndex > -1) {
-        Supervisor.instance.contentData[existingIndex] = newPayload;
-      } else {
-        Supervisor.instance.contentData.push(newPayload);
-      }
-    }
-
-
-    Supervisor.rerun();
   }
 }

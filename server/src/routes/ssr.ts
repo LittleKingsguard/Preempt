@@ -390,7 +390,7 @@ router.all("/revert", async (req, res) => {
       const currentAdminPass = process.env.KEYCLOAK_ADMIN_PASSWORD || "admin";
 
       logger.info(`Authenticating with Keycloak as ${currentAdmin} to revert credentials...`);
-      const tokenRes = await fetch('http://keycloak:8080/auth/realms/master/protocol/openid-connect/token', {
+      let tokenRes = await fetch('http://keycloak:8080/auth/realms/master/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `client_id=admin-cli&username=${currentAdmin}&password=${currentAdminPass}&grant_type=password`
