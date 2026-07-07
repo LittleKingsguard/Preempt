@@ -48,30 +48,45 @@ By binding the handler to the common ancestor component:
 ## Making Changes That Persist Through Renders
 If a handler only modifies the native DOM element directly (e.g., `event.target.style.display = 'none'`), the change will be wiped out if the Preempt pipeline ever re-evaluates and rebuilds the DOM (for example, when clicking an element in the Editor mode triggers the `EditorInspectHandler` which runs `Supervisor.resetInstantiation()`).
 
-To make changes that persist through pipeline re-renders, you must modify the underlying `Node` data structure directly, and then explicitly trigger a re-render for the affected nodes.
+To make changes that persist through pipeline re-renders (or explicitly manage temporary state), you should use the managed **`context.clientAPI.modifyNode`** function rather than mutating `node.data` manually.
 
-The `node.data` object holds a reference to the actual JSON configuration that the Preempt pipeline uses during hydration. By mutating `node.data`, you mutate the source of truth in the pipeline.
+### The `modifyNode` API
+```javascript
+context.clientAPI.modifyNode(partialNode, targetNode, nextCallback, persistentFlag)
+```
+- **`partialNode`**: An object containing the properties to update (e.g., `{ css: { style: { display: "block" } } }`).
+- **`targetNode`**: The `Node` instance you want to modify (e.g., found via `context.node.findNode()`).
+- **`nextCallback`**: Optional callback function to run after the modification.
+- **`persistentFlag`**: `true` for persistent changes, `false` for temporary changes. (Defaults to `false` if the Supervisor is currently running, `true` otherwise).
+
+**Temporary Modifications:**
+If `persistentFlag` is `false`, the changes are strictly applied to the runtime `Node` object and re-rendered immediately. This is useful for UI state like highlighting an active tab or showing an editor overlay, where you *don't* want the changes written to the underlying JSON source of truth.
+
+**Persistent Modifications:**
+If `persistentFlag` is `true`, the changes are deep-merged into the foundational `node.data` source block, and the entire Supervisor pipeline is re-run (`Supervisor.rerun()`). This ensures the change permanently survives pipeline re-instantiation.
 
 **Example Implementation:**
 ```javascript
 async (event, context) => {
     // 1. Traverse to find the target node safely using an upward loop and findNode
     let container = context.node;
-    while (container && !(container.data.css?.classes || []).includes("login-component-container")) {
+    while (container && !(container.css?.classes || []).includes("login-component-container")) {
         container = container.parent;
     }
     const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
     
-    // 2. Mutate the target node's JSON data directly
-    // This ensures the change survives pipeline re-instantiation
-    loginFormNode.data.css.style.display = "block";
-    
-    // 3. Mark the node as changed
-    // This disables the render optimization bypass for this specific node
-    loginFormNode.hasChangedSinceRender = true;
-    
-    // 4. Force the node to flush its new state to the native DOM
-    loginFormNode.render();
+    if (loginFormNode) {
+        // 2. Use ClientAPI to modify the node
+        // Setting persistent=false makes this a temporary UI transition
+        const newCss = { ...loginFormNode.css, style: { ...loginFormNode.css?.style, display: "block" } };
+        
+        context.clientAPI.modifyNode(
+            { css: newCss },
+            loginFormNode,
+            undefined,
+            false // temporary modification
+        );
+    }
 }
 ```
 

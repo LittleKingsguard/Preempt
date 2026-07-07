@@ -34,12 +34,10 @@ Because styles are an intrinsic part of the pipeline state, you can modify them 
 
 ```javascript
 async (event, context) => {
-    // 1. Update the underlying virtual node's style
-    context.node.data.css.style.backgroundColor = "blue";
+    // Modify the node's style safely using the ClientAPI
+    const newCss = { ...context.node.css, style: { ...context.node.css?.style, backgroundColor: "blue" } };
     
-    // 2. Mark as changed and trigger a DOM flush
-    context.node.hasChangedSinceRender = true;
-    context.node.render();
+    // Set persistent=true to ensure the change survives pipeline rebuilds (hydration, reset, etc.)
+    context.clientAPI.modifyNode({ css: newCss }, context.node, undefined, true);
 }
 ```
-This ensures your changes survive pipeline rebuilds (hydration, reset, etc.) seamlessly.
