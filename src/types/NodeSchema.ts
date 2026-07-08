@@ -14,6 +14,7 @@ export interface ComponentBinding {
   target?: string;
   value?: string | NodeData | NodeData[] | null;
   _referencingNodes?: any[];
+  _instantiatedNodes?: any[];
 }
 export interface NodeVersion {
   name?: string;

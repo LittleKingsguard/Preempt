@@ -54,6 +54,7 @@
           "overflow": "auto", "maxHeight": "500px", "background": "#111", "padding": "10px", "borderRadius": "4px", "display": "flex", "flexDirection": "column", "gap": "5px"
         }
       },
+      "placement": { "placementName": "editor-inspector-display" },
       "content": [
         {
           "type": "div",
@@ -72,6 +73,18 @@
     {
       "type": "component",
       "props": { "name": "articlePublishModal" }
+    },
+    {
+      "type": "div",
+      "css": { "style": { "display": "none" } },
+      "component": [
+        { "reference": "editorInspectorComponentRow" },
+        { "reference": "editorInspectorHandlerRow" },
+        { "reference": "editorInspectorValueRow" },
+        { "reference": "editorInspectorKeyValueRow" },
+        { "reference": "editorInspectorChildRow" },
+        { "reference": "editorSelectParent" }
+      ]
     }
   ]
 }

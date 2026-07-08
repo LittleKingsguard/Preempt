@@ -15,7 +15,7 @@
     context.clientAPI.modifyNode({ content: contentVal }, node, undefined, false);
   } else if (targetId) {
     const structType = event.target.getAttribute("data-struct");
-    const containerNode = context.rootNode.findNode(n => n.css?.id === targetId);
+    const containerNode = context.rootNode.findNode({ css: { id: targetId } });
     if (!containerNode) return;
     
     const rows = containerNode.content || [];

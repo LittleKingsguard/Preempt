@@ -245,33 +245,57 @@ export class Supervisor {
     const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
 
-    const replacer = (k: string, v: any) => k === 'node' ? undefined : v;
-
-    const regenerateTree = (existingNode: Node | null, data: any): Node => {
-      if (!existingNode) {
-        return new Node(JSON.parse(JSON.stringify(data, replacer)));
-      }
-      if (existingNode.hasChangedSinceRender) {
-        return new Node(existingNode.data);
-      }
-      const newChildren = [];
-      for (let i = 0; i < existingNode.children.length; i++) {
-        const child = existingNode.children[i];
-        if (child && !child.isComponentInjected) {
-          const newChild = regenerateTree(child, child.data);
-          newChild.parent = existingNode;
-          newChildren.push(newChild);
+    const deepClone = (val: any) => {
+      if (val === undefined) return undefined;
+      const seen = new WeakSet();
+      const replacer = (k: string, v: any) => {
+        if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v)) return undefined; // Prevent cycle
+          seen.add(v);
         }
+        return v;
+      };
+      try {
+        return JSON.parse(JSON.stringify(val, replacer));
+      } catch (e) {
+        console.warn("Cycle detected during deepClone in Supervisor, falling back", e);
+        return val;
       }
-      existingNode.children = newChildren;
-      return existingNode;
     };
 
-    const safeTemplateData = JSON.parse(JSON.stringify(this.templateData, replacer));
+    const regenerateTree = (existingNode: Node | null, data: any): Node => {
+      let newNode: Node;
+      if (!existingNode) {
+        newNode = new Node(deepClone(data));
+      } else if (existingNode.hasChangedSinceRender) {
+        newNode = new Node(existingNode.data);
+      } else {
+        const newChildren = [];
+        for (let i = 0; i < existingNode.children.length; i++) {
+          const child = existingNode.children[i];
+          if (child && !child.isComponentInjected) {
+            const newChild = regenerateTree(child, child.data);
+            newChild.parent = existingNode;
+            newChildren.push(newChild);
+          }
+        }
+        existingNode.children = newChildren;
+        newNode = existingNode;
+      }
+      
+      if (newNode.component?.some(c => c.target === "type")) {
+        Node.typeComponentNodes.push(newNode);
+      }
+      
+      return newNode;
+    };
+
+    const safeTemplateData = deepClone(this.templateData);
     const allComponents = this.contentData.flatMap(c => c.component || []);
     if (allComponents.length > 0) {
       if (!safeTemplateData.component) safeTemplateData.component = [];
-      safeTemplateData.component.push(...JSON.parse(JSON.stringify(allComponents, replacer)));
+      safeTemplateData.component.push(...deepClone(allComponents));
     }
 
     this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
@@ -283,7 +307,7 @@ export class Supervisor {
     });
 
     if (allContent.length > 0) {
-      const safeContentList = JSON.parse(JSON.stringify(allContent));
+      const safeContentList = deepClone(allContent);
       this.contentNodes = safeContentList.map((data: any, idx: number) => {
         return regenerateTree(this.contentNodes[idx] || null, data);
       });
@@ -291,17 +315,31 @@ export class Supervisor {
       this.contentNodes = [];
     }
 
-
-
     this.hasInstantiated = true;
   }
 
   private async assemble(): Promise<void> {
     console.log("Stage: Assembly");
+    console.log("[DEBUG] Content nodes array at start of placement process:", this.contentNodes.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
     // Collect placement nodes from the entire node tree before processing placements
     const collectPlacements = (node: Node) => {
       Node.appendPlacement(node);
-      node.children.forEach(child => collectPlacements(child));
+      if (Array.isArray(node.data.content)) {
+        node.data.content.forEach((childData: any) => {
+          if (childData.node) collectPlacements(childData.node);
+        });
+      } else if (typeof node.data.content === "object" && node.data.content !== null) {
+        if ((node.data.content as any).node) {
+          collectPlacements((node.data.content as any).node);
+        }
+      }
+      if (node.component) {
+        node.component.forEach(binding => {
+          if (binding._instantiatedNodes) {
+            binding._instantiatedNodes.forEach((child: Node) => collectPlacements(child));
+          }
+        });
+      }
     };
     if (this.rootNode) {
       collectPlacements(this.rootNode);
@@ -310,6 +348,8 @@ export class Supervisor {
       collectPlacements(node);
     });
 
+    console.log("[DEBUG] Source placements after parsing nodes:", Node.sourcePlacements.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
+
     for (const sourceNode of Node.sourcePlacements) {
       const targets = sourceNode.placement?.targetPlacement || [];
       let matchedTarget: Node | null = null;
@@ -317,12 +357,16 @@ export class Supervisor {
         matchedTarget = Node.placementArray.find(n => n.placement?.placementName === targetName) || null;
         if (matchedTarget) break;
       }
+
       if (matchedTarget) {
         sourceNode.placeInto(matchedTarget);
+      } else {
+        console.warn(`[DEBUG] Failed to find target placement for node type '${sourceNode.type}' with id '${sourceNode.css?.id}'. Looked for targets:`, targets);
       }
     }
-    if (this.rootNode) {
 
+    
+    if (this.rootNode) {
       this.rootNode.applyComponentsTree();
     }
   }

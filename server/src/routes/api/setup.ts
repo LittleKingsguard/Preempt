@@ -94,20 +94,30 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
         if (usersData && usersData.length > 0) {
           const adminUserId = usersData[0].id;
           
-          await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
-            method: 'PUT',
-            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: tokenUser.username,
-              credentials: [{
+            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
+              method: 'PUT',
+              headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: tokenUser.username
+              })
+            });
+
+            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}/reset-password`, {
+              method: 'PUT',
+              headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
                 type: "password",
                 value: finalPostgresPassword,
                 temporary: false
-              }]
-            })
-          });
-          logger.info("Successfully updated Keycloak master admin login to new user.");
-        }
+              })
+            });
+
+            // Update process.env so subsequent requests in this process use the new credentials
+            process.env.KEYCLOAK_ADMIN = tokenUser.username;
+            process.env.KEYCLOAK_ADMIN_PASSWORD = finalPostgresPassword;
+
+            logger.info("Successfully updated Keycloak master admin login to new user.");
+          }
         
         // Revert editUsernameAllowed
         await fetch('http://keycloak:8080/auth/admin/realms/master', {

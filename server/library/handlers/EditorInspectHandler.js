@@ -121,7 +121,7 @@
   }
 
   // General & Text Content remain in the main display
-  const displayNode = context.rootNode.findNode(n => n.css && n.css.id === "editor-inspector-display");
+  const displayNode = context.rootNode.findNode({ css: { id: "editor-inspector-display" } });
   if (displayNode) {
     metadata["insp_gen_type"] = data.type || "";
     contentNodesBatch.push({
@@ -192,7 +192,7 @@
     curr = curr.parent;
   }
 
-  const editorPanelNode = context.rootNode.findNode(n => n.css && n.css.classes && n.css.classes.includes("preempt-editor-panel"));
+  const editorPanelNode = context.rootNode.findNode({ classes: ["preempt-editor-panel"] });
   if (editorPanelNode) {
     const newClasses = [...(editorPanelNode.css?.classes || [])];
     if (isComponent) {

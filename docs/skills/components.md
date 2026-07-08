@@ -24,6 +24,9 @@ A node declares a dependency on a component by referencing its name and telling 
 }
 ```
 
+> [!WARNING]
+> **Dynamic Component Dependencies:** If a component or handler is only requested dynamically by client-side javascript (for instance, a handler pushing a new component row during execution), the database seeder will NOT detect it as a dependency for the template. As a result, the server will not include it in the `/api/components` payload, and binding will fail. To fix this, you must explicitly declare the component or handler reference in the template JSON (e.g. inside a hidden container) so it is hard-linked and fetched automatically.
+
 ## Structural Components
 In addition to simple logic fragments, Components can act as entire sub-trees or structural widgets (e.g., a "LoginComponent"). By setting the `target` to `"type"` and passing a full `NodeData` JSON payload as the component's value, Preempt will deep-merge the entire structural payload into the hosting node.
 
@@ -65,3 +68,9 @@ Components are created and modified globally via the Admin API.
 2. **Editing**: Issue a `PUT` request to `/api/components/:id` with the updated payload.
 
 Because components are merged mid-pipeline, updating a component globally updates the behavior of all nodes that reference it across the entire site on the next render.
+
+## Examples in the Codebase
+For a real-world example of complex structural data injection and component-driven layouts, refer to the Editor system:
+- **`server/library/components/editor.json`**: Acts as the primary template structure for the Editor UI. It defines hidden dependencies and leverages structural components (e.g., `{ "reference": "editorInspectorComponents", "target": "type" }`) to assemble the inspector panel.
+- **`server/library/components/editorInspectorComponents.json`**: An example of a nested structural component that defines its own layout and drop-zones for child rows.
+- **`server/library/handlers/EditorInspectHandler.js`**: Demonstrates how to dynamically push component references (like `editorInspectorComponentRow`) into a node's child array during execution to build complex, data-driven interfaces on the fly.

@@ -24,8 +24,10 @@ At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage p
 
 The pipeline executes the following stages sequentially:
 1. **DB Load**: Fetches the Template, Content, Handlers, and Components from the SQL database. (SSR only)
-2. **Instantiation**: Converts the raw JSON `NodeData` into OOP `Node` instances in memory.
-3. **Assembly**: Resolves component references (deep-merging them into nodes) and places Content nodes into their respective target drop-zones within the Template.
+2. **Instantiation**: Converts the raw JSON `NodeData` into OOP `Node` instances in memory. During this stage, any Component Bindings with a non-null object or array `value` are eagerly parsed and deeply cloned into an `_instantiatedNodes` array. A cycle-safe `deepClone` (using a `WeakSet` to track references) must be used here to avoid crashing when bindings contain recursive parent/child references.
+3. **Assembly**: 
+   - **Placements**: The supervisor collects all placements across the tree, deliberately scanning into the `_instantiatedNodes` of structural components to ensure nested drop-zones are mapped correctly. Content nodes are then placed into their target drop-zones.
+   - **Bindings**: Resolves standard component references (styles, properties, handlers) by deep-merging them into nodes. For structural components, it merges the eagerly instantiated content/children directly into the target node.
 4. **Pre-Processing & Validation**: Hooks for custom data formatting and structural integrity checks.
 5. **Rendering**:
    - *Server-Side*: Generates raw HTML strings and a bundled CSS block to send to the browser.

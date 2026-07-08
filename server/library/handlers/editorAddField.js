@@ -5,7 +5,7 @@
   const addType = event.target.getAttribute("data-add-type");
   if (!targetId || !addType) return;
 
-  const containerNode = context.rootNode.findNode(n => n.css?.id === targetId);
+  const containerNode = context.rootNode.findNode({ css: { id: targetId } });
   if (!containerNode) return;
 
   const currentContent = containerNode.content || [];

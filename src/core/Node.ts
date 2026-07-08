@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ComponentBinding } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
@@ -57,6 +57,7 @@ export class Node {
 
   public static placementArray: Node[] = [];
   public static sourcePlacements: Node[] = [];
+  public static typeComponentNodes: Node[] = [];
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
 
@@ -99,8 +100,21 @@ export class Node {
 
     const deepClone = (val: any) => {
       if (val === undefined) return undefined;
-      const replacer = (k: string, v: any) => k === 'node' ? undefined : v;
-      return JSON.parse(JSON.stringify(val, replacer));
+      const seen = new WeakSet();
+      const replacer = (k: string, v: any) => {
+        if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v)) return undefined; // Prevent cycle
+          seen.add(v);
+        }
+        return v;
+      };
+      try {
+        return JSON.parse(JSON.stringify(val, replacer));
+      } catch (e) {
+        console.warn("Cycle detected during deepClone, falling back", e);
+        return val;
+      }
     };
 
     if (this.data.type !== undefined) this.type = this.data.type;
@@ -126,7 +140,22 @@ export class Node {
     if (this.versions === undefined) delete this.versions;
 
     this.resolveVersion();
-    Node.appendPlacement(this);
+
+    if (this.component) {
+      for (const binding of this.component) {
+        if (typeof binding.value === "object" && binding.value !== null) {
+          const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
+          binding._instantiatedNodes = [];
+          for (const d of dataArray) {
+            if (typeof d !== "string") {
+              const newNode = new Node(d as NodeData, this, true);
+              binding._instantiatedNodes!.push(newNode);
+              Node.typeComponentNodes.push(newNode);
+            }
+          }
+        }
+      }
+    }
   }
 
 
@@ -184,6 +213,7 @@ export class Node {
       if (!binding.target) continue;
 
       let resolvedValue: string | NodeData | NodeData[] | null = binding.value !== undefined ? binding.value : null;
+      let resolvedBinding: ComponentBinding | null = binding.value !== undefined ? binding : null;
 
       if (resolvedValue !== null) {
         if (!binding._referencingNodes) binding._referencingNodes = [];
@@ -198,6 +228,7 @@ export class Node {
           const parentBinding = currentParent.component?.find(b => b.reference === binding.reference && b.value !== null && b.value !== undefined);
           if (parentBinding) {
             resolvedValue = parentBinding.value !== undefined ? parentBinding.value : null;
+            resolvedBinding = parentBinding;
             if (!parentBinding._referencingNodes) parentBinding._referencingNodes = [];
             if (!parentBinding._referencingNodes.includes(this)) {
               parentBinding._referencingNodes.push(this);
@@ -225,7 +256,24 @@ export class Node {
 
           if (d.type) this.type = d.type;
 
-          if (d.content) {
+          if (resolvedBinding?._instantiatedNodes) {
+            const instantiatedNode = resolvedBinding._instantiatedNodes[dataArray.indexOf(d)];
+            if (instantiatedNode) {
+              for (const child of instantiatedNode.children) {
+                child.parent = this;
+                if (!this.children.includes(child)) {
+                  this.children.push(child);
+                }
+              }
+              if (instantiatedNode.content !== undefined) {
+                if (this.content !== undefined) {
+                  this.content += instantiatedNode.content;
+                } else {
+                  this.content = instantiatedNode.content;
+                }
+              }
+            }
+          } else if (d.content) {
             if (Array.isArray(d.content)) {
               d.content.forEach(childData => {
                 this.children.push(new Node(childData, this, true));
@@ -310,6 +358,7 @@ export class Node {
     }
   }
 
+
   public static appendPlacement(node: Node): void {
     if (node.placement?.placementName) {
       Node.placementArray.push(node);
@@ -322,7 +371,10 @@ export class Node {
   public static clearPlacements(): void {
     Node.placementArray = [];
     Node.sourcePlacements = [];
+    Node.typeComponentNodes = [];
   }
+
+
 
   public placeInto(target: Node): void {
     if (target === this) {
@@ -355,7 +407,7 @@ export class Node {
       }
     }
 
-    console.log("This node was placed", target, target.parent);
+    console.log("This node was placed", this, target);
   }
 
   public restorePlacement(): void {
@@ -521,8 +573,8 @@ export class Node {
 
         if (!oldElement || !shouldReuse) {
           el.addEventListener('input', (event: Event) => {
-             const target = event.target as HTMLInputElement;
-             Node.globalMetadata[inputKey] = target.value;
+            const target = event.target as HTMLInputElement;
+            Node.globalMetadata[inputKey] = target.value;
           });
         }
       }
@@ -715,9 +767,9 @@ export class Node {
   }
 
   public findNode(query: NodeQuery | ((node: Node) => boolean), depth: number = 0): Node | null {
-    if (depth === 0) console.log(`[DEBUG] findNode starting query on node type '${this.type}'`);
+    if (depth === 0) console.log(`[DEBUG] findNode starting query on node type '${this.type}' with id '${this.css?.id || this.data.css?.id || "none"}'`);
     if (this.isMatch(query)) {
-      console.log(`[DEBUG] findNode MATCH found at node type '${this.type}' (depth ${depth}):`, this);
+      console.log(`[DEBUG] findNode MATCH found at node type '${this.type}' with id '${this.css?.id || this.data.css?.id || "none"}' (depth ${depth}):`, this);
       return this;
     }
 

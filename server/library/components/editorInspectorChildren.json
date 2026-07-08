@@ -6,7 +6,7 @@
     {
       "type": "div",
       "content": [
-        { "type": "div", "css": { "id": "inspector-children-fields", "classes": ["fields-container"] }, "component": [{"reference": "fieldsContent", "target": "content"}] }
+        { "type": "div", "css": { "id": "inspector-children-fields", "classes": ["fields-container"] }, "placement": { "placementName": "inspector-children-fields" } }
       ]
     }
   ]

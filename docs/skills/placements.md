@@ -34,3 +34,8 @@ When defining a `Content` payload, the root array elements must indicate where t
 3. **Reparenting**: Content nodes with a matching `targetPlacement` string are disconnected from their temporary container and reparented directly as children of the matching target node via `node.placeInto()`.
 
 If a content node fails to find a matching target placement, it is essentially orphaned and will not be rendered to the final DOM unless dynamically modified by a later handler.
+
+## Examples in the Codebase
+For a real-world example of complex placement assembly, refer to the Editor system:
+- **`server/library/components/editor.json`**: Defines root placement drop-zones for the editor interface, such as `editor-inspector-display`.
+- **`server/library/handlers/EditorInspectHandler.js`**: Demonstrates dynamic placement assembly. The handler generates content nodes on the fly with specific `targetPlacement` arrays (e.g., targeting `inspector-components-panel`) and pushes them into a temporary payload via `clientAPI.addContentNodes()`. When the Supervisor reruns the pipeline, it effortlessly routes these dynamically generated nodes into the deeply nested structural components defined in `editor.json`.

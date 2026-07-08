@@ -434,14 +434,23 @@ router.all("/revert", async (req, res) => {
               method: 'PUT',
               headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                username: "admin",
-                credentials: [{
-                  type: "password",
-                  value: "admin",
-                  temporary: false
-                }]
+                username: "admin"
               })
             });
+
+            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}/reset-password`, {
+              method: 'PUT',
+              headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: "password",
+                value: "admin",
+                temporary: false
+              })
+            });
+
+            // Revert process.env so subsequent requests use the default credentials
+            process.env.KEYCLOAK_ADMIN = "admin";
+            process.env.KEYCLOAK_ADMIN_PASSWORD = "admin";
             logger.info("Keycloak master admin reverted to admin/admin.");
           }
 
