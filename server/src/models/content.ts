@@ -1,6 +1,5 @@
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
-import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Tag } from "./tag.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgContentSource } from "../sources/contentSource.js";
@@ -155,41 +154,7 @@ export class Content {
     await populateContentHandlers(content.payload, content.id, content.resolved_template_id, user, handlerSource, componentSource);
     await populateContentComponents(content.payload, content.id, content.resolved_template_id, user, componentSource);
 
-    if (editorMode) {
-      const hasEditorTag = await checkHasEditorTag(content.resolved_template_id);
 
-      if (!hasEditorTag) {
-        if (!Content.defaultEditorCache) {
-          Content.defaultEditorCache = await Setting.get(pgSettingSource, "defaultEditor");
-        }
-        const defaultEditor = Content.defaultEditorCache;
-        if (defaultEditor) {
-          const basePayload = content.template_payload || content.payload;
-          if (!basePayload.content) basePayload.content = [];
-          if (!Array.isArray(basePayload.content)) {
-            basePayload.content = [basePayload.content];
-          }
-          basePayload.content.push({
-            type: "div",
-            component: [
-              { reference: "PreemptEditor", target: "type" },
-              { reference: "editorMode", target: "props.mode", value: editorMode }
-            ]
-          });
-
-          if (!content.payload.component) content.payload.component = [];
-
-          if (defaultEditor.component) {
-            content.payload.component.push(defaultEditor.component);
-          }
-          if (defaultEditor.handlers) {
-            content.payload.component.push(...defaultEditor.handlers);
-          }
-        }
-      }
-
-      await injectEditorDependencies(content.payload, content.template_payload, editorMode, hasEditorTag);
-    }
 
 
 

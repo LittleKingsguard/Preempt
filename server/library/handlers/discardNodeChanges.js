@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: discardNodeChanges");
+  console.log("Executing handler: discardNodeChanges", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const display = document.getElementById("editor-inspector-display");
   if (!display) return;
   if (window.Preempt && window.Preempt.inspectedNode) {

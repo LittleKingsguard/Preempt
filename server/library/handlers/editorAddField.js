@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: editorAddField");
+  console.log("Executing handler: editorAddField", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.stopPropagation();
   const targetId = event.target.getAttribute("data-target-id");
   const addType = event.target.getAttribute("data-add-type");

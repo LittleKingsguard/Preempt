@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: openMessageThread");
+  console.log("Executing handler: openMessageThread", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const listId = context.node.props["data-list-id"];
   const mainContainer = context.node.parent.parent;
   

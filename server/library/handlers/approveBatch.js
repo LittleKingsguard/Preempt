@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: approveBatch");
+  console.log("Executing handler: approveBatch", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.preventDefault();
   const batchId = event.target.getAttribute('data-id');
   if (!batchId) return;

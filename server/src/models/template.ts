@@ -1,7 +1,6 @@
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { Tag } from "./tag.js";
 import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
-import { checkHasEditorTag, injectEditorDependencies } from "../utils/editorUtils.js";
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgTemplateSource } from "../sources/templateSource.js";
@@ -50,10 +49,7 @@ export class Template {
     await populateTemplateHandlers(template.payload, template.id, user, handlerSource, componentSource);
     await populateTemplateComponents(template.payload, template.id, user, componentSource);
 
-    if (editorMode) {
-      const hasEditorTag = await checkHasEditorTag(template.id);
-      await injectEditorDependencies(template.payload, null, editorMode, hasEditorTag);
-    }
+
 
     return { template };
   }

@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: editorUpdateNodeProp");
+  console.log("Executing handler: editorUpdateNodeProp", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const node = window.Preempt.inspectedNode;
   if (!node) return;
 

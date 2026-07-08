@@ -4,6 +4,7 @@
     "type": "div",
     "css": { "classes": ["preempt-editor-wrapper"] },
     "placement": { "targetPlacement": ["article"] },
+    "handlers": { "click": "(event) => { event.stopPropagation(); }" },
     "content": [
       {
         "type": "div",

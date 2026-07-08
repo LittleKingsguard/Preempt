@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: commitArticlePublish");
+  console.log("Executing handler: commitArticlePublish", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   let payload;
   const display = document.getElementById("editor-inspector-display");
   if (display && window.Preempt && window.Preempt.inspectedNode) {

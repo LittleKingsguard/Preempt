@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: fetchPendingBatches");
+  console.log("Executing handler: fetchPendingBatches", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   if (typeof window === 'undefined') return;
 
   try {

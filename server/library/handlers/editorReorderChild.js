@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: editorReorderChild");
+  console.log("Executing handler: editorReorderChild", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.stopPropagation();
   const node = window.Preempt.inspectedNode;
   if (!node || !node.data || !Array.isArray(node.data.content)) return;

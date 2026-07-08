@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: EditorInspectHandler");
+  console.log("Executing handler: EditorInspectHandler", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.stopPropagation();
   let node = context.node;
   if (!window.Preempt) window.Preempt = {};

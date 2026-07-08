@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: postComment");
+  console.log("Executing handler: postComment", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const commentListId = window.Preempt?.contentData?.metadata?.comment_list_id;
   if (!commentListId) return alert("Error: No comment list associated with this content.");
 

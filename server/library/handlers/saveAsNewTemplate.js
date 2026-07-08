@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: saveAsNewTemplate");
+  console.log("Executing handler: saveAsNewTemplate", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const display = document.getElementById("editor-inspector-display");
   if (!display) return alert("No inspector found");
   

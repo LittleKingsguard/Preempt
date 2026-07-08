@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: showComments");
+  console.log("Executing handler: showComments", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const container = context.node.parent;
   
   // Hide the button

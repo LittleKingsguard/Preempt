@@ -1,5 +1,5 @@
 async (context) => {
-  console.log("Executing handler: fetchTagsAutocomplete");
+  console.log("Executing handler: fetchTagsAutocomplete", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   if (typeof window === 'undefined') return; // Only fetch tags client-side
   try {
     const res = await fetch("/api/tags");

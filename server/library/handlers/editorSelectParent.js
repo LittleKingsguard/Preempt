@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: editorSelectParent");
+  console.log("Executing handler: editorSelectParent", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.stopPropagation();
   const node = window.Preempt.inspectedNode;
   if (node && node.parent) {

@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: startMessage");
+  console.log("Executing handler: startMessage", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const targetUser = context.node.props["data-target-user"];
   if (!targetUser) return;
   

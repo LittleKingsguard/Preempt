@@ -1,5 +1,5 @@
 (event, context) => {
-  console.log("Executing handler: toggleMessageModal");
+  console.log("Executing handler: toggleMessageModal", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const modalContent = context.node.parent.findNode({ props: { id: "modal-message-container" } });
   if (!modalContent) return;
   

@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: enterEditMode");
+  console.log("Executing handler: enterEditMode", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.preventDefault();
 
   // Find the editorTools content ID by query tag

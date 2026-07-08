@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: fetchComments");
+  console.log("Executing handler: fetchComments", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const commentListId = window.Preempt?.contentData?.metadata?.comment_list_id;
   if (!commentListId) return;
 

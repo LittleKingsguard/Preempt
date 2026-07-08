@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: onDBLoad_directory");
+  console.log("Executing handler: onDBLoad_directory", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   try {
     const searchParams = context.node.props?.search || { tags: ['blog'] };
     

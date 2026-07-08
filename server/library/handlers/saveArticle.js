@@ -1,5 +1,5 @@
 async (event, context) => {
-  console.log("Executing handler: saveArticle");
+  console.log("Executing handler: saveArticle", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const zone = document.getElementById("article-editor-zone");
   const contentHtml = zone ? zone.innerHTML : "";
   try {
