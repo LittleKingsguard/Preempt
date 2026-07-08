@@ -1,0 +1,10 @@
+{
+  "type": "div",
+  "css": { "classes": ["inspector-field-row"] },
+  "content": [
+    { "type": "span", "css": { "classes": ["inspector-label"] }, "component": [{"reference": "labelRef", "target": "content"}] },
+    { "type": "button", "content": "Up", "props": { "data-direction": "-1" }, "css": { "classes": ["editor-btn"] }, "component": [{"reference": "idxRef", "target": "props.data-child-index"}, {"target": "handlers.click", "reference": "editorReorderChild"}] },
+    { "type": "button", "content": "Down", "props": { "data-direction": "1" }, "css": { "classes": ["editor-btn"] }, "component": [{"reference": "idxRef", "target": "props.data-child-index"}, {"target": "handlers.click", "reference": "editorReorderChild"}] },
+    { "type": "button", "content": "Inspect", "css": { "classes": ["editor-btn", "editor-btn-primary"] }, "component": [{"reference": "idxRef", "target": "props.data-child-index"}, {"target": "handlers.click", "reference": "editorSelectChild"}] }
+  ]
+}

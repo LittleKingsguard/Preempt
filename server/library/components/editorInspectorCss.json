@@ -6,7 +6,7 @@
     {
       "type": "div",
       "content": [
-        { "type": "div", "css": { "id": "inspector-css-fields", "classes": ["fields-container"] }, "content": [] },
+        { "type": "div", "css": { "id": "inspector-css-fields", "classes": ["fields-container"] }, "placement": { "placementName": "inspector-css-fields" } },
         {
           "type": "div",
           "content": [
@@ -15,7 +15,7 @@
           ]
         },
         { "type": "h4", "content": "Classes" },
-        { "type": "div", "css": { "id": "inspector-css-classes-fields", "classes": ["fields-container"] }, "content": [] },
+        { "type": "div", "css": { "id": "inspector-css-classes-fields", "classes": ["fields-container"] }, "placement": { "placementName": "inspector-css-classes-fields" } },
         {
           "type": "div",
           "content": [

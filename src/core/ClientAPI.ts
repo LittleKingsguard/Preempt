@@ -150,6 +150,30 @@ export class ClientAPI {
     }
   }
 
+  async addContentNodes(nodes: any | any[], batchId: string, next?: () => void): Promise<void> {
+    const nodeArray = Array.isArray(nodes) ? nodes : [nodes];
+    if (Supervisor.instance) {
+      if (!Supervisor.instance.contentData) Supervisor.instance.contentData = [];
+      const newPayload: ContentPayload = {
+        metadata: { batchLabel: batchId },
+        content: nodeArray,
+        component: []
+      };
+      const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === batchId);
+      if (existingIndex > -1) {
+        Supervisor.instance.contentData[existingIndex] = newPayload;
+      } else {
+        Supervisor.instance.contentData.push(newPayload);
+      }
+    }
+
+    if (next) {
+      next();
+    } else {
+      await Supervisor.rerun();
+    }
+  }
+
   async fetchHandlers(query: any, targetNodes: Node[], next?: () => void, overwrite: boolean = true, targetEvent?: string): Promise<void> {
     try {
       const queryParams = new URLSearchParams(query as any).toString();

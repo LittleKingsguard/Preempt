@@ -6,7 +6,7 @@
     {
       "type": "div",
       "content": [
-        { "type": "div", "css": { "id": "inspector-placements-fields", "classes": ["fields-container"] }, "content": [] },
+        { "type": "div", "css": { "id": "inspector-placements-fields", "classes": ["fields-container"] }, "placement": { "placementName": "inspector-placements-fields" } },
         {
           "type": "div",
           "content": [

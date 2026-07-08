@@ -1,0 +1,8 @@
+{
+  "type": "div",
+  "css": { "classes": ["inspector-field-row"] },
+  "content": [
+    { "type": "input", "props": { "placeholder": "event", "data-array-key": "event" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "evtRef", "target": "props.inputKey"}] },
+    { "type": "input", "props": { "placeholder": "reference", "data-array-key": "reference" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "refRef", "target": "props.inputKey"}] }
+  ]
+}
