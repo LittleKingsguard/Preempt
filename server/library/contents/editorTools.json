@@ -2,6 +2,7 @@
   "tags": ["editor-tools", "structural"],
   "payload": {
     "type": "div",
+    "css": { "classes": ["preempt-editor-wrapper"] },
     "placement": { "targetPlacement": ["article"] },
     "content": [
       {

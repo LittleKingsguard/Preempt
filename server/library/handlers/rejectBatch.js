@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: rejectBatch");
   event.preventDefault();
   const batchId = event.target.getAttribute('data-id');
   if (!batchId) return;

@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: fetchMessageLists");
   const container = context.node.findNode({ props: { id: "message-lists" } });
   if (!container) return;
 

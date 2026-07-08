@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: discardNodeChanges");
   const display = document.getElementById("editor-inspector-display");
   if (!display) return;
   if (window.Preempt && window.Preempt.inspectedNode) {

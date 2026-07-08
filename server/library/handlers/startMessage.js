@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: startMessage");
   const targetUser = context.node.props["data-target-user"];
   if (!targetUser) return;
   

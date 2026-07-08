@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: enterEditMode");
   event.preventDefault();
 
   // Find the editorTools content ID by query tag
@@ -21,8 +22,20 @@ async (event, context) => {
           if (!nodeData) return;
           const node = nodeData.node;
           if (node) {
-            if (node.component && node.component.some(c => c.reference === "PreemptEditor" || c.reference === "editor")) return;
-            if (node.data?.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor")) return;
+            let isEditorNode = false;
+            let curr = node;
+            while (curr) {
+              if (curr.data?.props?.batchLabel === "editor-tools" || 
+                  curr.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
+                  curr.data?.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
+                  curr.css?.classes?.includes("preempt-editor-panel") ||
+                  curr.css?.id === "editor-inspector-display") {
+                isEditorNode = true;
+                break;
+              }
+              curr = curr.parent;
+            }
+            if (isEditorNode) return;
 
             const hasClickHandler = node.handlers?.click || node.handlers?.onclick;
             const hasComponentClickHandler = node.component?.some(c => c.target === "handlers.click" || c.target === "handlers.onclick");

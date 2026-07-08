@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: saveArticle");
   const zone = document.getElementById("article-editor-zone");
   const contentHtml = zone ? zone.innerHTML : "";
   try {

@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: saveAsNewComponent");
   const display = document.getElementById("editor-inspector-display");
   if (!display) return alert("No inspector found");
   

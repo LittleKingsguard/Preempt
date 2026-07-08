@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: backToInbox");
   const mainContainer = context.node.parent.parent;
   mainContainer.children = [];
   mainContainer.content = [];

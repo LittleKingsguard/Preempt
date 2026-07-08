@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: ToggleUserDropdown");
   let container = context.node;
   // Traverse up to the component root container safely
   while (container && !(container.css?.classes || []).includes("user-auth-dropdown")) {

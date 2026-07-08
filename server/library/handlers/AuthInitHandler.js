@@ -1,4 +1,5 @@
 (context) => {
+  console.log("Executing handler: AuthInitHandler");
   const node = context.node;
   const supervisor = context.supervisor;
   

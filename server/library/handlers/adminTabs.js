@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: adminTabs");
   console.log("DEBUG", context);
   const targetTabClass = event.target.getAttribute("data-tab");
   if (!targetTabClass) return;

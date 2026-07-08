@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: saveAsNewContent");
   let container = context.node;
   while (container && !(container.css?.classes || []).includes("preempt-editor-panel")) {
       container = container.parent;

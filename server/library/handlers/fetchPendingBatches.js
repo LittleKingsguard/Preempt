@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: fetchPendingBatches");
   if (typeof window === 'undefined') return;
 
   try {

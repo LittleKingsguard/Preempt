@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: fetchMessageThread");
   const listId = context.node.props.listId;
   const container = context.node.findNode({ props: { id: "thread-messages" } });
   if (!container || !listId) return;

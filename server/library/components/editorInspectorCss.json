@@ -1,0 +1,29 @@
+{
+  "type": "details",
+  "css": { "classes": ["inspector-details"] },
+  "content": [
+    { "type": "summary", "content": "CSS", "css": { "classes": ["inspector-summary"] } },
+    {
+      "type": "div",
+      "content": [
+        { "type": "div", "css": { "id": "inspector-css-fields", "classes": ["fields-container"] }, "content": [] },
+        {
+          "type": "div",
+          "content": [
+            { "type": "button", "content": "Add Field", "props": { "data-add-type": "keyvalue", "data-target-id": "inspector-css-fields" }, "component": [{"target": "handlers.click", "reference": "editorAddField"}] },
+            { "type": "button", "content": "Update", "props": { "data-prop-path": "css.style", "data-struct": "object", "data-target-id": "inspector-css-fields" }, "component": [{"target": "handlers.click", "reference": "editorUpdateNodeProp"}] }
+          ]
+        },
+        { "type": "h4", "content": "Classes" },
+        { "type": "div", "css": { "id": "inspector-css-classes-fields", "classes": ["fields-container"] }, "content": [] },
+        {
+          "type": "div",
+          "content": [
+            { "type": "button", "content": "Add Class", "props": { "data-add-type": "value", "data-target-id": "inspector-css-classes-fields" }, "component": [{"target": "handlers.click", "reference": "editorAddField"}] },
+            { "type": "button", "content": "Update", "props": { "data-prop-path": "css.classes", "data-struct": "array_of_strings", "data-target-id": "inspector-css-classes-fields" }, "component": [{"target": "handlers.click", "reference": "editorUpdateNodeProp"}] }
+          ]
+        }
+      ]
+    }
+  ]
+}

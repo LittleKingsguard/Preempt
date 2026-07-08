@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: toggleCommentsButton");
   if (!window.Preempt || !window.Preempt.contentData) return;
   const commentsAllowed = window.Preempt.contentData.props && window.Preempt.contentData.props.commentsAllowed;
   

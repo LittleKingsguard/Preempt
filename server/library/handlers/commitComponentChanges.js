@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: commitComponentChanges");
   const display = document.getElementById("editor-inspector-display");
   if (!display) return alert("No inspector found");
   

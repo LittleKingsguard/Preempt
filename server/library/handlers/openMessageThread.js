@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: openMessageThread");
   const listId = context.node.props["data-list-id"];
   const mainContainer = context.node.parent.parent;
   

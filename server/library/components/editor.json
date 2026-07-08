@@ -23,7 +23,12 @@
       { "selector": ".editor-mode-template .btn-save-content", "styles": { "display": "none" } },
       { "selector": ".editor-mode-template .btn-save-component", "styles": { "display": "none" } },
       { "selector": ".editor-mode-component .btn-save-content", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-component .btn-save-template", "styles": { "display": "none" } }
+      { "selector": ".editor-mode-component .btn-save-template", "styles": { "display": "none" } },
+      { "selector": ".inspector-details", "styles": { "background": "#333", "padding": "5px", "borderRadius": "4px", "marginBottom": "5px" } },
+      { "selector": ".inspector-summary", "styles": { "cursor": "pointer", "fontWeight": "bold", "color": "#ccc", "userSelect": "none" } },
+      { "selector": ".inspector-field-row", "styles": { "display": "flex", "gap": "5px", "marginTop": "5px", "alignItems": "center" } },
+      { "selector": ".inspector-input", "styles": { "flex": "1", "background": "#222", "color": "#fff", "border": "1px solid #555", "padding": "3px 5px", "borderRadius": "3px", "fontFamily": "monospace", "minWidth": "0" } },
+      { "selector": ".inspector-label", "styles": { "width": "80px", "fontSize": "11px", "color": "#aaa", "overflow": "hidden", "textOverflow": "ellipsis" } }
     ]
   },
   "content": [
@@ -41,16 +46,27 @@
       ]
     },
     {
-      "type": "pre",
+      "type": "div",
       "css": {
         "id": "editor-inspector-display",
         "style": {
-          "color": "#0f0", "width": "350px", "margin": "0", "fontSize": "11px",
-          "overflow": "auto", "maxHeight": "300px", "background": "#000", "padding": "10px", "borderRadius": "4px"
+          "color": "#fff", "width": "400px", "margin": "0", "fontSize": "12px",
+          "overflow": "auto", "maxHeight": "500px", "background": "#111", "padding": "10px", "borderRadius": "4px", "display": "flex", "flexDirection": "column", "gap": "5px"
         }
       },
-      "component": [
-        {"target": "content", "reference": "inspectedNodeData", "value": ""}
+      "content": [
+        {
+          "type": "div",
+          "css": { "id": "inspector-components-panel", "classes": ["inspector-panel-wrapper"], "style": { "display": "flex", "flexDirection": "column", "gap": "5px" } },
+          "content": [
+            { "type": "div", "component": [{ "reference": "editorInspectorProps", "target": "type" }] },
+            { "type": "div", "component": [{ "reference": "editorInspectorCss", "target": "type" }] },
+            { "type": "div", "component": [{ "reference": "editorInspectorChildren", "target": "type" }] },
+            { "type": "div", "component": [{ "reference": "editorInspectorComponents", "target": "type" }] },
+            { "type": "div", "component": [{ "reference": "editorInspectorHandlers", "target": "type" }] },
+            { "type": "div", "component": [{ "reference": "editorInspectorPlacements", "target": "type" }] }
+          ]
+        }
       ]
     },
     {

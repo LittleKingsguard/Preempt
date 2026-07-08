@@ -17,7 +17,8 @@ export async function injectEditorDependencies(targetPayload: any, templatePaylo
   // The layout data processed here is always loaded from JSON stored in the database, which strictly prevents circular/recursive references.
   const injectInspectHandlers = (node: any) => {
     if (!node || typeof node !== 'object') return;
-    if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor")) return;
+    if (node.component && node.component.some((c: any) => c.reference === "PreemptEditor" || c.reference === "editor")) return;
+    if (node.css?.classes?.includes("preempt-editor-wrapper")) return;
     
     const hasClickHandler = node.handlers?.click || node.handlers?.onclick;
     const hasComponentClickHandler = node.component?.some((c: any) => c.target === "handlers.click" || c.target === "handlers.onclick");

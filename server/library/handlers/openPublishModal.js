@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: openPublishModal");
   let container = context.node;
   while (container && !(container.css?.classes || []).includes("article-creator-panel") && !(container.css?.classes || []).includes("preempt-editor-panel")) {
       container = container.parent;

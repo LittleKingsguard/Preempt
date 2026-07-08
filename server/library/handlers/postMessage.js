@@ -1,4 +1,5 @@
 async (event, context) => {
+  console.log("Executing handler: postMessage");
   const listId = context.node.parent.parent.props.listId;
   const inputEl = document.getElementById("new-message-input");
   const body = inputEl ? inputEl.value : "";

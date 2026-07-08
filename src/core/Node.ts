@@ -508,6 +508,26 @@ export class Node {
       }
     }
 
+    if (["input", "textarea", "select"].includes(targetTag)) {
+      const inputEl = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      const inputKey = this.props?.inputKey || this.css?.id || this.data.css?.id;
+      if (inputKey) {
+        if (Node.globalMetadata[inputKey] !== undefined) {
+          inputEl.value = Node.globalMetadata[inputKey];
+        } else if (this.content !== undefined && typeof this.content === "string") {
+          inputEl.value = this.content;
+          Node.globalMetadata[inputKey] = this.content;
+        }
+
+        if (!oldElement || !shouldReuse) {
+          el.addEventListener('input', (event: Event) => {
+             const target = event.target as HTMLInputElement;
+             Node.globalMetadata[inputKey] = target.value;
+          });
+        }
+      }
+    }
+
     const activeChildElements = new Set<HTMLElement>();
     for (const child of this.children) {
       child.render();

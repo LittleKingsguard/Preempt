@@ -1,4 +1,5 @@
 (event, context) => {
+  console.log("Executing handler: closePublishModal");
   let container = context.node;
   while (container && !(container.css?.classes || []).includes("article-creator-panel")) {
       container = container.parent;
