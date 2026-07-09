@@ -99,7 +99,7 @@ export class ClientAPI {
       };
       const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === options.batchLabel);
       if (existingIndex > -1) {
-        Supervisor.instance.contentData[existingIndex] = newPayload;
+        this.replacePayload(Supervisor.instance, existingIndex, newPayload);
       } else {
         Supervisor.instance.contentData.push(newPayload);
       }
@@ -161,7 +161,7 @@ export class ClientAPI {
       };
       const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === batchId);
       if (existingIndex > -1) {
-        Supervisor.instance.contentData[existingIndex] = newPayload;
+        this.replacePayload(Supervisor.instance, existingIndex, newPayload);
       } else {
         Supervisor.instance.contentData.push(newPayload);
       }
@@ -253,6 +253,36 @@ export class ClientAPI {
     } else {
       await Supervisor.rerun();
     }
+  }
+
+  private replacePayload(instance: any, existingIndex: number, newPayload: ContentPayload) {
+    const oldPayload = instance.contentData[existingIndex];
+    const oldLen = (oldPayload as any).type ? 1 : (Array.isArray(oldPayload.content) ? oldPayload.content.length : 0);
+    const newLen = (newPayload as any).type ? 1 : (Array.isArray(newPayload.content) ? newPayload.content.length : 0);
+    
+    let startIndex = 0;
+    for (let i = 0; i < existingIndex; i++) {
+      const p = instance.contentData[i];
+      startIndex += (p as any).type ? 1 : (Array.isArray(p.content) ? p.content.length : 0);
+    }
+
+    if (instance.contentNodes) {
+      for (let i = startIndex; i < startIndex + oldLen; i++) {
+        const oldNode = instance.contentNodes[i];
+        if (oldNode) {
+          if (oldNode.element) oldNode.element.remove();
+          if (oldNode.parent) {
+            const idx = oldNode.parent.children.indexOf(oldNode);
+            if (idx > -1) oldNode.parent.children.splice(idx, 1);
+          }
+        }
+      }
+
+      const newNodes = new Array(newLen).fill(null);
+      instance.contentNodes.splice(startIndex, oldLen, ...newNodes);
+    }
+
+    instance.contentData[existingIndex] = newPayload;
   }
 }
 

@@ -83,7 +83,7 @@
         { "reference": "editorInspectorValueRow" },
         { "reference": "editorInspectorKeyValueRow" },
         { "reference": "editorInspectorChildRow" },
-        { "reference": "editorSelectParent" }
+        { "reference": "editorSelectParent", "target": "handlers.click" }
       ]
     }
   ]

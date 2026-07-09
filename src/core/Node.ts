@@ -60,6 +60,8 @@ export class Node {
   public static typeComponentNodes: Node[] = [];
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
+  public wasPlaced: boolean = false;
+  private _attachedListeners: { eventName: string, handlerFunc: EventListener }[] = [];
 
   public static globalMetadata: any = {};
 
@@ -339,22 +341,29 @@ export class Node {
 
 
   private applyProperty(path: string, value: string): void {
-    this.hasChangedSinceRender = true;
+    let changed = false;
     if (path === "content") {
+      if (this.content !== value) changed = true;
       this.content = value;
     } else if (path.startsWith("props.")) {
       const propName = path.substring(6);
       if (!this.props) this.props = {};
+      if (this.props[propName] !== value) changed = true;
       this.props[propName] = value;
     } else if (path.startsWith("handlers.")) {
       const handlerName = path.substring(9);
       if (!this.handlers) this.handlers = {};
+      if (this.handlers[handlerName] !== value) changed = true;
       this.handlers[handlerName] = value;
     } else if (path.startsWith("css.style.")) {
       const styleName = path.substring(10);
       if (!this.css) this.css = {};
       if (!this.css.style) this.css.style = {};
+      if (this.css.style[styleName] !== value) changed = true;
       this.css.style[styleName] = value;
+    }
+    if (changed) {
+      this.hasChangedSinceRender = true;
     }
   }
 
@@ -397,6 +406,7 @@ export class Node {
       }
     }
     this.parent = target;
+    this.wasPlaced = true;
     target.hasChangedSinceRender = true;
     target.children.push(this);
 
@@ -411,26 +421,40 @@ export class Node {
   }
 
   public restorePlacement(): void {
-    if (this.originalParent && this.originalIndex > -1) {
-      if (this.parent) {
-        this.parent.hasChangedSinceRender = true;
-        const index = this.parent.children.indexOf(this);
-        if (index > -1) {
-          this.parent.children.splice(index, 1);
-        }
-        if (this.parent.placement && this.parent.placement._referencingNodes) {
-          const refIndex = this.parent.placement._referencingNodes.indexOf(this);
-          if (refIndex > -1) {
-            this.parent.placement._referencingNodes.splice(refIndex, 1);
-          }
+    if (!this.wasPlaced) return;
+
+    if (this.parent) {
+      this.parent.hasChangedSinceRender = true;
+      const index = this.parent.children.indexOf(this);
+      if (index > -1) {
+        this.parent.children.splice(index, 1);
+      }
+      if (this.parent.placement && this.parent.placement._referencingNodes) {
+        const refIndex = this.parent.placement._referencingNodes.indexOf(this);
+        if (refIndex > -1) {
+          this.parent.placement._referencingNodes.splice(refIndex, 1);
         }
       }
+    }
+
+    if (this.originalParent && this.originalIndex > -1) {
       this.parent = this.originalParent;
       this.parent.hasChangedSinceRender = true;
       this.parent.children.splice(this.originalIndex, 0, this);
-      this.originalParent = null;
-      this.originalIndex = -1;
+    } else {
+      this.parent = null;
     }
+
+    this.originalParent = null;
+    this.originalIndex = -1;
+    this.wasPlaced = false;
+  }
+
+  public static restoreAllPlacements(): void {
+    for (const node of Node.sourcePlacements) {
+      node.restorePlacement();
+    }
+    Node.clearPlacements();
   }
 
   public renderToString(): string {
@@ -521,6 +545,13 @@ export class Node {
       }
     }
 
+    if (shouldReuse && el) {
+      for (const listener of this._attachedListeners) {
+        el.removeEventListener(listener.eventName, listener.handlerFunc);
+      }
+    }
+    this._attachedListeners = [];
+
     if (this.handlers) {
       for (const [key, value] of Object.entries(this.handlers)) {
         try {
@@ -536,6 +567,7 @@ export class Node {
           }
           const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
           el.addEventListener(eventName, handlerFunc);
+          this._attachedListeners.push({ eventName, handlerFunc });
         } catch (err) {
           console.error(`Failed to parse handler for event ${key}:`, err);
         }
@@ -767,9 +799,7 @@ export class Node {
   }
 
   public findNode(query: NodeQuery | ((node: Node) => boolean), depth: number = 0): Node | null {
-    if (depth === 0) console.log(`[DEBUG] findNode starting query on node type '${this.type}' with id '${this.css?.id || this.data.css?.id || "none"}'`);
     if (this.isMatch(query)) {
-      console.log(`[DEBUG] findNode MATCH found at node type '${this.type}' with id '${this.css?.id || this.data.css?.id || "none"}' (depth ${depth}):`, this);
       return this;
     }
 
@@ -778,10 +808,6 @@ export class Node {
       if (found) return found;
     }
 
-    if (depth === 0) {
-      const queryString = typeof query === 'function' ? query.toString() : JSON.stringify(query);
-      console.log(`[DEBUG] findNode MATCH NOT FOUND for query:`, queryString);
-    }
     return null;
   }
 

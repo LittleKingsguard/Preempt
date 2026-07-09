@@ -238,7 +238,7 @@ export class Supervisor {
   private async instantiate(): Promise<void> {
     console.log("Stage: Instantiation");
     StyleNode.clear(); // Clear before re-running
-    Node.clearPlacements();
+    Node.restoreAllPlacements();
 
     Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
     
@@ -435,8 +435,10 @@ export class Supervisor {
     }
 
     this.contentNodes.forEach(node => {
-      if (!this.rootNode || !this.rootNode.findNode(n => n === node)) {
-        node.executeHandlers(phase, { supervisor: this });
+      if (node) {
+        if (!this.rootNode || !this.rootNode.findNode(n => n === node)) {
+          node.executeHandlers(phase, { supervisor: this });
+        }
       }
     });
   }
