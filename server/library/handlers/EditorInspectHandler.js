@@ -53,7 +53,8 @@
       placement: { targetPlacement: ["inspector-css-classes-fields"] },
       component: [
         { reference: "editorInspectorValueRow", target: "type" },
-        { reference: "valRef", value: vKey }
+        { reference: "valRef", value: vKey },
+        { reference: "valVal", value: cls }
       ]
     });
   });
@@ -70,7 +71,9 @@
       component: [
         { reference: "editorInspectorComponentRow", target: "type" },
         { reference: "tarRef", value: tarKey },
-        { reference: "refRef", value: refKey }
+        { reference: "tarVal", value: comp.target || "" },
+        { reference: "refRef", value: refKey },
+        { reference: "refVal", value: comp.reference || "" }
       ]
     });
   });
@@ -87,7 +90,9 @@
       component: [
         { reference: "editorInspectorHandlerRow", target: "type" },
         { reference: "evtRef", value: evtKey },
-        { reference: "refRef", value: refKey }
+        { reference: "evtVal", value: key },
+        { reference: "refRef", value: refKey },
+        { reference: "refVal", value: data.handlers[key] }
       ]
     });
   });
@@ -101,7 +106,8 @@
       placement: { targetPlacement: ["inspector-placements-fields"] },
       component: [
         { reference: "editorInspectorValueRow", target: "type" },
-        { reference: "valRef", value: vKey }
+        { reference: "valRef", value: vKey },
+        { reference: "valVal", value: place }
       ]
     });
   });

@@ -2,7 +2,7 @@
   "type": "div",
   "css": { "classes": ["inspector-field-row"] },
   "content": [
-    { "type": "input", "props": { "placeholder": "target", "data-array-key": "target" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "tarRef", "target": "props.inputKey"}] },
-    { "type": "input", "props": { "placeholder": "reference", "data-array-key": "reference" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "refRef", "target": "props.inputKey"}] }
+    { "type": "input", "props": { "placeholder": "target", "data-array-key": "target" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "tarRef", "target": "props.inputKey"}, {"reference": "tarVal", "target": "content"}] },
+    { "type": "input", "props": { "placeholder": "reference", "data-array-key": "reference" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "refRef", "target": "props.inputKey"}, {"reference": "refVal", "target": "content"}] }
   ]
 }
