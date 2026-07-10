@@ -511,8 +511,12 @@ router.all("/revert", async (req, res) => {
     cachedAdminExists = false;
 
     logger.info("Revert sequence complete. Restarting server...");
-    res.send("Database reverted to pre-setup state successfully. The server is restarting...");
-
+    res.send(`
+      <div>Database reverted to pre-setup state successfully. The server is restarting...</div>
+      <br />
+      <a href="/">Return to Homepage</a>
+    `);
+    
     // 6. Graceful restart by terminating process (Docker restart: always will boot it back up)
     setTimeout(() => {
       try {

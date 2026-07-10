@@ -1,7 +1,6 @@
 (event, context) => {
   console.log("Executing handler: EditorPopulateInspector", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
-  let node = context.node;
-  if (!node) node = window.Preempt?.inspectedNode;
+  let node = window.Preempt?.inspectedNode || context.node;
   if (!node) return;
   
   const data = node.data;
@@ -10,41 +9,45 @@
   let contentNodesBatch = [];
 
   // Populate Props
-  const propsKeys = Object.keys(data.props || {});
+  const propsKeys = Object.keys(node.props || {});
   propsKeys.forEach((key, index) => {
     const kKey = `insp_props_${index}_k`;
     const vKey = `insp_props_${index}_v`;
     metadata[kKey] = key;
-    metadata[vKey] = typeof data.props[key] === "object" ? JSON.stringify(data.props[key]) : data.props[key];
+    metadata[vKey] = typeof node.props[key] === "object" ? JSON.stringify(node.props[key]) : node.props[key];
     contentNodesBatch.push({
       placement: { targetPlacement: ["inspector-props-fields"] },
       component: [
         { reference: "editorInspectorKeyValueRow", target: "type" },
         { reference: "keyRef", value: kKey },
-        { reference: "valRef", value: vKey }
+        { reference: "valRef", value: vKey },
+        { reference: "keyVal", value: key },
+        { reference: "valVal", value: metadata[vKey] }
       ]
     });
   });
 
   // Populate CSS Style
-  const cssKeys = Object.keys(data.css?.style || {});
+  const cssKeys = Object.keys(node.css?.style || {});
   cssKeys.forEach((key, index) => {
     const kKey = `insp_css_${index}_k`;
     const vKey = `insp_css_${index}_v`;
     metadata[kKey] = key;
-    metadata[vKey] = typeof data.css.style[key] === "object" ? JSON.stringify(data.css.style[key]) : data.css.style[key];
+    metadata[vKey] = typeof node.css?.style?.[key] === "object" ? JSON.stringify(node.css.style[key]) : node.css?.style?.[key];
     contentNodesBatch.push({
       placement: { targetPlacement: ["inspector-css-fields"] },
       component: [
         { reference: "editorInspectorKeyValueRow", target: "type" },
         { reference: "keyRef", value: kKey },
-        { reference: "valRef", value: vKey }
+        { reference: "valRef", value: vKey },
+        { reference: "keyVal", value: key },
+        { reference: "valVal", value: metadata[vKey] }
       ]
     });
   });
 
   // Populate CSS Classes
-  const classes = data.css?.classes || [];
+  const classes = node.css?.classes || [];
   classes.forEach((cls, index) => {
     const vKey = `insp_class_${index}_v`;
     metadata[vKey] = cls;
@@ -61,20 +64,107 @@
   // Populate Components
   const comps = data.component || [];
   comps.forEach((comp, index) => {
-    const refKey = `insp_comp_${index}_ref`;
-    const tarKey = `insp_comp_${index}_tar`;
-    metadata[refKey] = comp.reference || "";
-    metadata[tarKey] = comp.target || "";
-    contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-components-fields"] },
-      component: [
-        { reference: "editorInspectorComponentRow", target: "type" },
-        { reference: "tarRef", value: tarKey },
-        { reference: "tarVal", value: comp.target || "" },
-        { reference: "refRef", value: refKey },
-        { reference: "refVal", value: comp.reference || "" }
-      ]
-    });
+    if (comp.value !== undefined) {
+      // It's a definition
+      const activeBinding = node.component?.find(b => b.reference === comp.reference);
+      const referencingNodes = activeBinding?._referencingNodes || [];
+      const isNodeDef = activeBinding?._instantiatedNodes && activeBinding._instantiatedNodes.length > 0;
+      
+      let mainContent = [];
+      if (isNodeDef) {
+        const defNode = activeBinding?._instantiatedNodes?.[0];
+        if (defNode) {
+          mainContent.push({
+            type: "button",
+            content: "Inspect Component Node",
+            props: { "data-target-ref": comp.reference, "data-source-id": node.css?.id || "" },
+            component: [{target: "handlers.click", reference: "editorSelectNode"}],
+            css: { classes: ["editor-btn", "editor-btn-primary"] }
+          });
+        } else {
+           mainContent.push({ type: "label", content: "Node not instantiated", css: { classes: ["inspector-label"], style: { color: "#d9534f" } } });
+        }
+      } else {
+        if (typeof comp.value === 'object' && comp.value !== null) {
+          mainContent.push({
+            type: "div", css: { classes: ["inspector-field-row"], style: { flexDirection: "column", alignItems: "flex-start", gap: "5px", padding: "10px", background: "#222", borderRadius: "5px" } },
+            content: [
+              { type: "label", content: "Component Definition (Not Instantiated Here)", css: { classes: ["inspector-label"], style: { color: "#5bc0de" } } },
+              { type: "label", content: `Type: ${comp.value.type || 'N/A'}`, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc" } } },
+              { type: "label", content: `Children: ${Array.isArray(comp.value.content) ? comp.value.content.length : (comp.value.content ? 1 : 0)}`, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc" } } }
+            ]
+          });
+        } else {
+          const valStr = String(comp.value);
+          mainContent.push({
+            type: "div", css: { classes: ["inspector-field-row"] },
+            content: [
+              { type: "label", content: "Value", css: { classes: ["inspector-label"] } },
+              { type: "label", content: valStr, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc", wordBreak: "break-all" } } }
+            ]
+          });
+        }
+      }
+
+      contentNodesBatch.push({
+        type: "details",
+        props: { open: "true" },
+        css: { classes: ["inspector-details"] },
+        placement: { targetPlacement: ["inspector-components-fields"] },
+        content: [
+          { type: "summary", content: `Def: ${comp.reference}`, css: { classes: ["inspector-summary"] } },
+          {
+            type: "div", css: { style: { display: "flex", flexDirection: "column", gap: "5px", padding: "5px" } },
+            content: [
+              ...mainContent,
+              ...(referencingNodes.length > 0 ? [
+                { type: "label", content: "Referencing Nodes:", css: { classes: ["inspector-label"], style: { marginTop: "5px" } } },
+                ...referencingNodes.map(refNode => ({
+                  type: "button",
+                  content: `Select Node: ${refNode.type} ${refNode.css?.id ? '#' + refNode.css.id : ''}`,
+                  props: { "data-target-id": refNode.css?.id || "" },
+                  component: [{target: "handlers.click", reference: "editorSelectNode"}],
+                  css: { classes: ["editor-btn"] }
+                }))
+              ] : [])
+            ]
+          }
+        ]
+      });
+    } else {
+      // It's a reference
+      let defNode = null;
+      let currParent = node.parent;
+      while (currParent) {
+        if (currParent.component?.some(b => b.reference === comp.reference && b.value !== undefined && b.value !== null)) {
+          defNode = currParent;
+          break;
+        }
+        currParent = currParent.parent;
+      }
+      
+      const contentRow = [
+        { type: "label", content: `Ref: ${comp.reference}`, css: { classes: ["inspector-label"], style: { width: "auto", flex: "1" } } }
+      ];
+      
+      if (defNode) {
+        contentRow.push({
+          type: "button",
+          content: "Select Def",
+          props: { "data-target-id": defNode.css?.id || "" },
+          component: [{target: "handlers.click", reference: "editorSelectNode"}],
+          css: { classes: ["editor-btn", "editor-btn-primary"] }
+        });
+      } else {
+        contentRow.push({ type: "label", content: "Def Not Found", css: { classes: ["inspector-label"], style: { color: "#d9534f", width: "auto" } } });
+      }
+
+      contentNodesBatch.push({
+        type: "div", css: { classes: ["inspector-field-row"], style: { padding: "5px", background: "#333", borderRadius: "4px" } },
+        placement: { targetPlacement: ["inspector-components-fields"] },
+        content: contentRow
+      });
+    }
   });
 
   // Populate Handlers
@@ -99,7 +189,7 @@
   });
 
   // Populate Placements
-  const places = data.placement?.targetPlacement || [];
+  const places = node.placement?.targetPlacement || [];
   places.forEach((place, index) => {
     const vKey = `insp_place_${index}_v`;
     metadata[vKey] = place;
@@ -114,13 +204,13 @@
   });
 
   // Populate Children
-  if (Array.isArray(node.content)) {
-    node.content.forEach((child, idx) => {
+  if (node.children && node.children.length > 0) {
+    node.children.forEach((child, idx) => {
       contentNodesBatch.push({
         placement: { targetPlacement: ["inspector-children-fields"] },
         component: [
           { reference: "editorInspectorChildRow", target: "type" },
-          { reference: "labelRef", value: `${idx}: ${child.data?.type || 'text'}` },
+          { reference: "labelRef", value: `${idx}: ${child.type || child.data?.type || 'text'}` },
           { reference: "idxRef", value: idx }
         ]
       });

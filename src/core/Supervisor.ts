@@ -100,8 +100,8 @@ export class Supervisor {
   public static resetInstantiation(): void {
     if (Supervisor.instance) {
       Supervisor.instance.hasInstantiated = false;
-      Node.globalMetadata = {};
     }
+    Node.idCollisions.clear();
   }
 
   public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
@@ -241,7 +241,7 @@ export class Supervisor {
     Node.restoreAllPlacements();
 
     Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
-    
+
     const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
 
@@ -283,11 +283,11 @@ export class Supervisor {
         existingNode.children = newChildren;
         newNode = existingNode;
       }
-      
+
       if (newNode.component?.some(c => c.target === "type")) {
         Node.typeComponentNodes.push(newNode);
       }
-      
+
       return newNode;
     };
 
@@ -323,6 +323,12 @@ export class Supervisor {
 
   private async assemble(): Promise<void> {
     console.log("Stage: Assembly");
+
+    if (this.rootNode) this.rootNode.clearTrackingArrays();
+    for (const c of this.contentNodes) {
+      if (c) c.clearTrackingArrays();
+    }
+
     console.log("[DEBUG] Content nodes array at start of placement process:", this.contentNodes.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
     // Collect placement nodes from the entire node tree before processing placements
     const collectPlacements = (node: Node) => {
@@ -368,7 +374,7 @@ export class Supervisor {
       }
     }
 
-    
+
     if (this.rootNode) {
       this.rootNode.applyComponentsTree();
     }

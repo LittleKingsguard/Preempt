@@ -20,6 +20,8 @@ export interface ComponentBinding {
   value?: string | HandlerDef | NodeData | NodeData[] | null;
   _referencingNodes?: any[];
   _instantiatedNodes?: any[];
+  _clonedChildren?: any[];
+  _appendedContent?: string;
 }
 export interface NodeVersion {
   name?: string;

@@ -45,7 +45,7 @@
     {
       "type": "div",
       "component": [
-        {"target": "content", "reference": "userAuthComponent"}
+        {"target": "type", "reference": "userAuthComponent"}
       ]
     }
   ]

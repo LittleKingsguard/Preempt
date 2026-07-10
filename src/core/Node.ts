@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery, ComponentBinding, HandlerDef } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, HandlerDef, ComponentBinding } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
@@ -65,6 +65,51 @@ export class Node {
 
   public static globalMetadata: any = {};
 
+  private static deepClone(val: any) {
+    if (val === undefined) return undefined;
+    const seen = new WeakSet();
+    const replacer = (k: string, v: any) => {
+      if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+      if (typeof v === "object" && v !== null) {
+        if (seen.has(v)) return undefined; // Prevent cycle
+        seen.add(v);
+      }
+      return v;
+    };
+    try {
+      return JSON.parse(JSON.stringify(val, replacer));
+    } catch (e) {
+      console.warn("Cycle detected during deepClone, falling back", e);
+      return val;
+    }
+  }
+
+  public static idCollisions = new Map<string, number>();
+
+  public static generateObjectHash(obj: any): string {
+    const replacer = (k: string, v: any) => {
+      if (k === 'node' || k === 'css' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+      return v;
+    };
+    const str = JSON.stringify(obj, replacer) || "";
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash |= 0; // Convert to 32bit integer
+    }
+    
+    const baseId = `preempt-node-${Math.abs(hash).toString(36)}`;
+    let count = Node.idCollisions.get(baseId) || 0;
+    count++;
+    Node.idCollisions.set(baseId, count);
+    
+    if (count > 1) {
+      return `${baseId}-${count}`;
+    }
+    return baseId;
+  }
+
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
     Object.defineProperty(this.data, 'node', { value: this, enumerable: false, configurable: true, writable: true });
@@ -74,7 +119,9 @@ export class Node {
     this.resolveVersion();
 
     if (!this.data.css) this.data.css = {};
-    if (!this.data.css.id) this.data.css.id = `preempt-node-${Math.random().toString(36).substring(2, 10)}`;
+    if (!this.data.css.id) {
+      this.data.css.id = Node.generateObjectHash(this.data);
+    }
     if (!this.data.props) this.data.props = {};
 
     if (typeof window !== 'undefined') {
@@ -93,31 +140,12 @@ export class Node {
     if (data.content) {
       if (Array.isArray(data.content)) {
         data.content.forEach(childData => {
-          this.children.push(new Node(childData, this));
+          this.children.push(new Node(childData, this, isComponentInjected));
         });
       } else if (typeof data.content === "object" && data.content !== null) {
-        this.children.push(new Node(data.content, this));
+        this.children.push(new Node(data.content, this, isComponentInjected));
       }
     }
-
-    const deepClone = (val: any) => {
-      if (val === undefined) return undefined;
-      const seen = new WeakSet();
-      const replacer = (k: string, v: any) => {
-        if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
-        if (typeof v === "object" && v !== null) {
-          if (seen.has(v)) return undefined; // Prevent cycle
-          seen.add(v);
-        }
-        return v;
-      };
-      try {
-        return JSON.parse(JSON.stringify(val, replacer));
-      } catch (e) {
-        console.warn("Cycle detected during deepClone, falling back", e);
-        return val;
-      }
-    };
 
     if (this.data.type !== undefined) this.type = this.data.type;
     else this.type = 'div';
@@ -126,13 +154,13 @@ export class Node {
       this.content = this.data.content;
     }
 
-    this.css = deepClone(this.data.css) || {};
-    this.props = deepClone(this.data.props) || {};
+    this.css = Node.deepClone(this.data.css) || {};
+    this.props = Node.deepClone(this.data.props) || {};
 
-    this.handlers = deepClone(this.data.handlers);
+    this.handlers = Node.deepClone(this.data.handlers);
     if (this.handlers === undefined) delete this.handlers;
 
-    this.component = deepClone(this.data.component);
+    this.component = Node.deepClone(this.data.component);
     if (this.component === undefined) {
       delete this.component;
     } else {
@@ -148,10 +176,10 @@ export class Node {
       });
     }
 
-    this.placement = deepClone(this.data.placement);
+    this.placement = Node.deepClone(this.data.placement);
     if (this.placement === undefined) delete this.placement;
 
-    this.versions = deepClone(this.data.versions);
+    this.versions = Node.deepClone(this.data.versions);
     if (this.versions === undefined) delete this.versions;
 
     this.resolveVersion();
@@ -199,6 +227,20 @@ export class Node {
       if (matchedVersion.css !== undefined) {
         this.css = matchedVersion.css;
       }
+    }
+  }
+
+  public clearTrackingArrays(): void {
+    if (this.placement && this.placement._referencingNodes) {
+      this.placement._referencingNodes = [];
+    }
+    if (this.component) {
+      for (const c of this.component) {
+        if (c._referencingNodes) c._referencingNodes = [];
+      }
+    }
+    for (const child of this.children) {
+      child.clearTrackingArrays();
     }
   }
 
@@ -263,6 +305,16 @@ export class Node {
 
       if (binding.target === "type") {
         const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
+
+        if (binding._clonedChildren) {
+          this.children = this.children.filter(c => !binding._clonedChildren!.includes(c));
+        }
+        binding._clonedChildren = [];
+        if (binding._appendedContent && this.content !== undefined && typeof this.content === 'string') {
+          this.content = this.content.replace(binding._appendedContent, "");
+        }
+        binding._appendedContent = "";
+
         for (const d of dataArray) {
           if (typeof d === "string") {
             this.type = d;
@@ -274,10 +326,22 @@ export class Node {
           if (resolvedBinding?._instantiatedNodes) {
             const instantiatedNode = resolvedBinding._instantiatedNodes[dataArray.indexOf(d)];
             if (instantiatedNode) {
+              const deepCloneNode = (nodeToClone: Node, parentNode: Node): Node => {
+                const cloned = new Node(Node.deepClone(nodeToClone.data), parentNode, true);
+                cloned.children = [];
+                if (nodeToClone.children) {
+                  for (const c of nodeToClone.children) {
+                    cloned.children.push(deepCloneNode(c, cloned));
+                  }
+                }
+                return cloned;
+              };
+
               for (const child of instantiatedNode.children) {
-                child.parent = this;
-                if (!this.children.includes(child)) {
-                  this.children.push(child);
+                const clonedChild = deepCloneNode(child, this);
+                if (!this.children.includes(clonedChild)) {
+                  this.children.push(clonedChild);
+                  binding._clonedChildren.push(clonedChild);
                 }
               }
               if (instantiatedNode.content !== undefined) {
@@ -286,21 +350,27 @@ export class Node {
                 } else {
                   this.content = instantiatedNode.content;
                 }
+                binding._appendedContent += instantiatedNode.content as string;
               }
             }
           } else if (d.content) {
             if (Array.isArray(d.content)) {
               d.content.forEach(childData => {
-                this.children.push(new Node(childData, this, true));
+                const newChild = new Node(childData, this, true);
+                this.children.push(newChild);
+                binding._clonedChildren!.push(newChild);
               });
             } else if (typeof d.content === "object" && d.content !== null) {
-              this.children.push(new Node(d.content, this, true));
+              const newChild = new Node(d.content, this, true);
+              this.children.push(newChild);
+              binding._clonedChildren!.push(newChild);
             } else if (typeof d.content === "string") {
               if (this.content !== undefined) {
                 this.content += d.content;
               } else {
                 this.content = d.content;
               }
+              binding._appendedContent += d.content;
             }
           }
 
@@ -335,10 +405,18 @@ export class Node {
       } else if (binding.target === "content") {
         if (Array.isArray(resolvedValue)) {
           this.content = undefined;
-          this.children = (resolvedValue as NodeData[]).map(d => new Node(d as NodeData, this, true));
+          if (!binding._instantiatedNodes || binding._instantiatedNodes.length !== (resolvedValue as NodeData[]).length) {
+            binding._instantiatedNodes = (resolvedValue as NodeData[]).map(d => new Node(d as NodeData, this, true));
+          }
+          this.children = binding._instantiatedNodes;
         } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
           this.content = undefined;
-          this.children = [new Node(resolvedValue as NodeData, this, true)];
+          let instantiatedNode = binding._instantiatedNodes?.[0];
+          if (!instantiatedNode) {
+            instantiatedNode = new Node(resolvedValue as NodeData, this, true);
+            binding._instantiatedNodes = [instantiatedNode];
+          }
+          this.children = [instantiatedNode];
         } else {
           this.content = String(resolvedValue);
           this.children = [];

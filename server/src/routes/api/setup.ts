@@ -94,15 +94,22 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
         if (usersData && usersData.length > 0) {
           const adminUserId = usersData[0].id;
           
-            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
+            const fullUserRes = await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
+              headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const fullUser = await fullUserRes.json();
+            fullUser.username = tokenUser.username;
+            
+            const putRes = await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}`, {
               method: 'PUT',
               headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                username: tokenUser.username
-              })
+              body: JSON.stringify(fullUser)
             });
+            if (!putRes.ok) {
+              logger.error(`Failed to update Keycloak admin username: ${await putRes.text()}`);
+            }
 
-            await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}/reset-password`, {
+            const passRes = await fetch(`http://keycloak:8080/auth/admin/realms/master/users/${adminUserId}/reset-password`, {
               method: 'PUT',
               headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -111,6 +118,9 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
                 temporary: false
               })
             });
+            if (!passRes.ok) {
+              logger.error(`Failed to reset Keycloak admin password: ${await passRes.text()}`);
+            }
 
             // Update process.env so subsequent requests in this process use the new credentials
             process.env.KEYCLOAK_ADMIN = tokenUser.username;
