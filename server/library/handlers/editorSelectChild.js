@@ -7,7 +7,10 @@
       const childNode = node.content[idx];
       if (childNode) {
           window.Preempt.inspectedNode = childNode;
-          context.clientAPI.modifyNode({}, childNode, undefined, false);
+          const populator = context.clientAPI.getHandler("EditorPopulateInspector");
+          if (populator) {
+            populator(event, { ...context, node: childNode });
+          }
       }
   }
 }

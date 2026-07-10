@@ -3,6 +3,27 @@ import { Node } from "./Node.js";
 import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
 
 export class ClientAPI {
+  public handlers: { [key: string]: Function } = {};
+
+  constructor() {}
+
+  public getHandler(key: string): Function | undefined {
+    return this.handlers[key];
+  }
+
+  public compileHandler(name: string, body: string): Function | undefined {
+    try {
+      const trimmedValue = body.trim();
+      if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+        return new Function('return ' + trimmedValue)();
+      } else {
+        return new Function('event', 'context', trimmedValue);
+      }
+    } catch (err) {
+      console.error(`Failed to compile handler ${name}`, err);
+    }
+  }
+
   async fetchContent(
     options: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate?: NodeData, placements: string[] },
     next?: () => void
@@ -220,25 +241,29 @@ export class ClientAPI {
           if (targetEvent) {
             if (overwrite || node.data.handlers![targetEvent] === undefined) {
               console.log(`Inserting handler ${h.name} for explicit event ${targetEvent} into node`, node.data);
-              node.data.handlers![targetEvent] = h.body;
+              node.data.handlers![targetEvent] = { name: h.name, body: h.body };
               node.hasChangedSinceRender = true;
+              if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
           } else {
             // Put raw handler body in data.handlers under its name
             if (overwrite || node.data.handlers![h.name] === undefined) {
               console.log(`Inserting handler ${h.name} into node`, node.data);
-              node.data.handlers![h.name] = h.body;
+              node.data.handlers![h.name] = { name: h.name, body: h.body };
               node.hasChangedSinceRender = true;
+              if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
 
             // If the node has a component reference matching the handler's name, map it to the target event
             const eventBinding = node.component?.find((c: any) => c.reference === h.name && c.target?.startsWith("handlers."));
             if (eventBinding) {
+              eventBinding.value = { name: h.name, body: h.body };
               const eventName = eventBinding.target.substring(9);
               if (overwrite || node.data.handlers![eventName] === undefined) {
                 console.log(`Inserting handler ${h.name} for event ${eventName} into node`, node.data);
-                node.data.handlers![eventName] = h.body;
+                node.data.handlers![eventName] = { name: h.name, body: h.body };
                 node.hasChangedSinceRender = true;
+                if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
               }
             }
           }

@@ -14,8 +14,12 @@ async (event, context) => {
   // Add the afterAssembly handler to templateData so it automatically runs on every rerun
   if (window.Preempt.Supervisor.instance && window.Preempt.Supervisor.instance.templateData) {
     const td = window.Preempt.Supervisor.instance.templateData;
+    td.component = td.component || [];
+    if (!td.component.some(c => c.reference === "EditorPopulateInspector")) {
+      td.component.push({ reference: "EditorPopulateInspector", target: "handlers.dynamic" });
+    }
     td.handlers = td.handlers || {};
-    td.handlers.afterAssembly = `(context) => {
+    td.handlers.afterAssembly = `(event, context) => {
       const root = context.rootNode;
       if (root && root.data) {
         const injectInspect = (nodeData) => {
@@ -91,7 +95,9 @@ async (event, context) => {
     }
 
     await context.clientAPI.fetchHandlers({ name: "EditorInspectHandler" }, targetNodes, async () => {
-      await window.Preempt.Supervisor.rerun();
+      await context.clientAPI.fetchHandlers({ name: "EditorPopulateInspector" }, [root], async () => {
+        await window.Preempt.Supervisor.rerun();
+      }, false);
     }, false, "click");
   });
 }

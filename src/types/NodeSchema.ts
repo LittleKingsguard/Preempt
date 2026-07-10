@@ -9,10 +9,15 @@ export interface PlacementConfig {
   _referencingNodes?: any[];
 }
 
+export interface HandlerDef {
+  name: string;
+  body: string;
+}
+
 export interface ComponentBinding {
   reference: string;
   target?: string;
-  value?: string | NodeData | NodeData[] | null;
+  value?: string | HandlerDef | NodeData | NodeData[] | null;
   _referencingNodes?: any[];
   _instantiatedNodes?: any[];
 }
@@ -37,7 +42,7 @@ export interface NodeData {
   component?: ComponentBinding[];
   content?: string | NodeData | NodeData[];
   props?: Record<string, any>;
-  handlers?: Record<string, string>;
+  handlers?: Record<string, string | HandlerDef>;
   css?: {
     id?: string;
     classes?: string[];

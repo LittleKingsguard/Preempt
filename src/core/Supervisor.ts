@@ -298,6 +298,9 @@ export class Supervisor {
       safeTemplateData.component.push(...deepClone(allComponents));
     }
 
+    // Dynamic handlers are now compiled in Node.ts during component scanning.
+    // Legacy target === "handlers.dynamic" logic is intentionally removed.
+
     this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
 
     const allContent = this.contentData.flatMap(payload => {

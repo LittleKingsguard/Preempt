@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery, ComponentBinding } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ComponentBinding, HandlerDef } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
@@ -51,7 +51,7 @@ export class Node {
   public component?: any[];
   public content?: string | undefined;
   public props: Record<string, any> = {};
-  public handlers?: Record<string, string>;
+  public handlers?: Record<string, string | HandlerDef>;
   public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
   public versions?: any[];
 
@@ -133,7 +133,20 @@ export class Node {
     if (this.handlers === undefined) delete this.handlers;
 
     this.component = deepClone(this.data.component);
-    if (this.component === undefined) delete this.component;
+    if (this.component === undefined) {
+      delete this.component;
+    } else {
+      this.component.forEach((binding: any) => {
+        const isHandler = typeof binding.value === 'object' && binding.value !== null && 'body' in binding.value;
+        if (isHandler) {
+          const handlerName = binding.value.name || binding.reference;
+          if (!clientAPI.handlers[handlerName]) {
+            const compiled = clientAPI.compileHandler(handlerName, binding.value.body);
+            if (compiled) clientAPI.handlers[handlerName] = compiled;
+          }
+        }
+      });
+    }
 
     this.placement = deepClone(this.data.placement);
     if (this.placement === undefined) delete this.placement;
@@ -317,6 +330,8 @@ export class Node {
 
       if (typeof resolvedValue === "string") {
         this.applyProperty(binding.target, resolvedValue);
+      } else if (typeof resolvedValue === "object" && resolvedValue !== null && binding.target.startsWith("handlers.")) {
+        this.applyProperty(binding.target, resolvedValue as unknown as string | HandlerDef);
       } else if (binding.target === "content") {
         if (Array.isArray(resolvedValue)) {
           this.content = undefined;
@@ -340,27 +355,27 @@ export class Node {
   }
 
 
-  private applyProperty(path: string, value: string): void {
+  private applyProperty(path: string, value: string | HandlerDef): void {
     let changed = false;
     if (path === "content") {
-      if (this.content !== value) changed = true;
-      this.content = value;
+      if (this.content !== (value as string)) changed = true;
+      this.content = value as string;
     } else if (path.startsWith("props.")) {
       const propName = path.substring(6);
       if (!this.props) this.props = {};
-      if (this.props[propName] !== value) changed = true;
-      this.props[propName] = value;
+      if (this.props[propName] !== (value as string)) changed = true;
+      this.props[propName] = value as string;
     } else if (path.startsWith("handlers.")) {
       const handlerName = path.substring(9);
       if (!this.handlers) this.handlers = {};
       if (this.handlers[handlerName] !== value) changed = true;
-      this.handlers[handlerName] = value;
+      this.handlers[handlerName] = value as string | HandlerDef;
     } else if (path.startsWith("css.style.")) {
       const styleName = path.substring(10);
       if (!this.css) this.css = {};
       if (!this.css.style) this.css.style = {};
-      if (this.css.style[styleName] !== value) changed = true;
-      this.css.style[styleName] = value;
+      if (this.css.style[styleName] !== (value as string)) changed = true;
+      this.css.style[styleName] = value as string;
     }
     if (changed) {
       this.hasChangedSinceRender = true;
@@ -556,14 +571,26 @@ export class Node {
       for (const [key, value] of Object.entries(this.handlers)) {
         try {
           let handlerFunc: EventListener;
-          const trimmedValue = String(value).trim();
+          const handlerObj = value as any;
           const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
-          if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-            const fn = new Function('return ' + trimmedValue)();
-            handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
+
+          let fn: Function | undefined;
+          if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
+            fn = clientAPI.handlers[handlerObj.name];
+          }
+
+          if (fn) {
+            handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
           } else {
-            const fn = new Function('event', 'context', trimmedValue);
-            handlerFunc = ((event: Event) => fn(event, context)) as EventListener;
+            const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
+            const trimmedValue = handlerBody.trim();
+            if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+              fn = new Function('return ' + trimmedValue)();
+              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
+            } else {
+              fn = new Function('event', 'context', trimmedValue);
+              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
+            }
           }
           const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
           el.addEventListener(eventName, handlerFunc);
@@ -814,13 +841,26 @@ export class Node {
   public executeHandlers(phase: string, context: any): void {
     if (this.handlers && this.handlers[phase]) {
       try {
-        const trimmedValue = String(this.handlers[phase]).trim();
-        if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-          const fn = new Function('return ' + trimmedValue)();
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI });
+        const handlerObj = this.handlers[phase] as any;
+        const fullContext = { ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
+
+        let fn: Function | undefined;
+        if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
+          fn = clientAPI.handlers[handlerObj.name];
+        }
+
+        if (fn) {
+          fn(null, fullContext);
         } else {
-          const fn = new Function('context', trimmedValue);
-          fn({ ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI });
+          const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
+          const trimmedValue = handlerBody.trim();
+          if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
+            fn = new Function('return ' + trimmedValue)();
+            fn!(null, fullContext);
+          } else {
+            fn = new Function('event', 'context', trimmedValue);
+            fn!(null, fullContext);
+          }
         }
       } catch (err) {
         console.error(`Failed to execute ${phase} handler on node:`, err);

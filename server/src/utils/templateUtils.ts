@@ -50,7 +50,7 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
       if (!validateUserRoles(user, h.approved_roles || [], h.author_id)) {
         payload.component.push({
           reference: h.name,
-          value: h.body
+          value: { name: h.name, body: h.body }
         });
       }
     });

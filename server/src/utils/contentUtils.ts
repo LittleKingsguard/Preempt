@@ -55,7 +55,7 @@ export async function populateContentHandlers(contentPayload: any, contentId: nu
   if (handlers.size > 0) {
     if (!contentPayload.component) contentPayload.component = [];
     for (const [name, body] of handlers.entries()) {
-      contentPayload.component.push({ reference: name, value: body });
+      contentPayload.component.push({ reference: name, value: { name, body } });
     }
   }
 }
