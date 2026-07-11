@@ -298,6 +298,8 @@ export class Supervisor {
       safeTemplateData.component.push(...deepClone(allComponents));
     }
 
+    console.log("[DEBUG] safeTemplateData being used for rootNode:", JSON.stringify(safeTemplateData).substring(0, 500));
+
     // Dynamic handlers are now compiled in Node.ts during component scanning.
     // Legacy target === "handlers.dynamic" logic is intentionally removed.
 
@@ -358,6 +360,7 @@ export class Supervisor {
     });
 
     console.log("[DEBUG] Source placements after parsing nodes:", Node.sourcePlacements.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
+    console.log("[DEBUG] Target placements available:", Node.placementArray.map(n => ({ type: n.type, id: n.css?.id, placementName: n.placement?.placementName })));
 
     for (const sourceNode of Node.sourcePlacements) {
       const targets = sourceNode.placement?.targetPlacement || [];

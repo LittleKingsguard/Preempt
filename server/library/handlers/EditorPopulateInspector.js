@@ -211,7 +211,7 @@
         component: [
           { reference: "editorInspectorChildRow", target: "type" },
           { reference: "labelRef", value: `${idx}: ${child.type || child.data?.type || 'text'}` },
-          { reference: "idxRef", value: idx }
+          { reference: "idxRef", value: String(idx) }
         ]
       });
     });

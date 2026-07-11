@@ -139,11 +139,17 @@ export class Node {
 
     if (data.content) {
       if (Array.isArray(data.content)) {
+        const newContentArray: any[] = [];
         data.content.forEach(childData => {
-          this.children.push(new Node(childData, this, isComponentInjected));
+          const clonedChild = Node.deepClone(childData);
+          newContentArray.push(clonedChild);
+          this.children.push(new Node(clonedChild, this, isComponentInjected));
         });
+        data.content = newContentArray;
       } else if (typeof data.content === "object" && data.content !== null) {
-        this.children.push(new Node(data.content, this, isComponentInjected));
+        const clonedChild = Node.deepClone(data.content);
+        data.content = clonedChild;
+        this.children.push(new Node(clonedChild, this, isComponentInjected));
       }
     }
 
@@ -191,7 +197,7 @@ export class Node {
           binding._instantiatedNodes = [];
           for (const d of dataArray) {
             if (typeof d !== "string") {
-              const newNode = new Node(d as NodeData, this, true);
+              const newNode = new Node(Node.deepClone(d), this, true);
               binding._instantiatedNodes!.push(newNode);
               Node.typeComponentNodes.push(newNode);
             }
@@ -326,19 +332,23 @@ export class Node {
           if (resolvedBinding?._instantiatedNodes) {
             const instantiatedNode = resolvedBinding._instantiatedNodes[dataArray.indexOf(d)];
             if (instantiatedNode) {
-              const deepCloneNode = (nodeToClone: Node, parentNode: Node): Node => {
-                const cloned = new Node(Node.deepClone(nodeToClone.data), parentNode, true);
+              const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
+                const clonedData = Node.deepClone(node.data);
+                if (clonedData.css && clonedData.css.id && clonedData.css.id.startsWith("preempt-node-")) {
+                  delete clonedData.css.id;
+                }
+                const cloned = new Node(clonedData, newParent, true);
                 cloned.children = [];
-                if (nodeToClone.children) {
-                  for (const c of nodeToClone.children) {
-                    cloned.children.push(deepCloneNode(c, cloned));
+                if (node.children) {
+                  for (const child of node.children) {
+                    cloned.children.push(deepCloneInstantiated(child, cloned));
                   }
                 }
                 return cloned;
               };
 
               for (const child of instantiatedNode.children) {
-                const clonedChild = deepCloneNode(child, this);
+                const clonedChild = deepCloneInstantiated(child, this);
                 if (!this.children.includes(clonedChild)) {
                   this.children.push(clonedChild);
                   binding._clonedChildren.push(clonedChild);
@@ -356,12 +366,12 @@ export class Node {
           } else if (d.content) {
             if (Array.isArray(d.content)) {
               d.content.forEach(childData => {
-                const newChild = new Node(childData, this, true);
+                const newChild = new Node(Node.deepClone(childData), this, true);
                 this.children.push(newChild);
                 binding._clonedChildren!.push(newChild);
               });
             } else if (typeof d.content === "object" && d.content !== null) {
-              const newChild = new Node(d.content, this, true);
+              const newChild = new Node(Node.deepClone(d.content), this, true);
               this.children.push(newChild);
               binding._clonedChildren!.push(newChild);
             } else if (typeof d.content === "string") {
