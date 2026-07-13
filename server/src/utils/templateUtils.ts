@@ -72,6 +72,11 @@ export async function populateTemplateComponents(payload: any, templateId: numbe
           reference: c.name,
           value: c.payload
         });
+      } else {
+        payload.component.push({
+          reference: c.name,
+          value: { type: "div", css: { style: { display: "none" } } }
+        });
       }
     });
   }

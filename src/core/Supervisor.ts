@@ -291,7 +291,41 @@ export class Supervisor {
       return newNode;
     };
 
-    const safeTemplateData = deepClone(this.templateData);
+    let templateDataToUse = this.templateData;
+    if (Array.isArray(templateDataToUse) && templateDataToUse.length > 0) {
+      if (!templateDataToUse[0].props) templateDataToUse[0].props = {};
+      templateDataToUse[0].props.batchLabel = templateDataToUse[0].props.batchLabel || 'default-template-batch';
+      
+      const extraContent = templateDataToUse.slice(1).map(nodeData => {
+        if (!nodeData.props) nodeData.props = {};
+        nodeData.props.batchLabel = nodeData.props.batchLabel || 'default-template-batch';
+        return nodeData;
+      });
+      
+      if (extraContent.length > 0) {
+        this.contentData.push({
+          metadata: { batchLabel: 'default-template-batch' },
+          content: extraContent
+        });
+      }
+      templateDataToUse = templateDataToUse[0];
+    }
+
+    this.contentData.forEach((payload, idx) => {
+      if (!payload.metadata) payload.metadata = {};
+      if (!payload.metadata.batchLabel) payload.metadata.batchLabel = `default-content-batch-${idx}`;
+      if (Array.isArray(payload.content)) {
+        payload.content.forEach((c: any) => {
+          if (!c.props) c.props = {};
+          c.props.batchLabel = c.props.batchLabel || payload.metadata!.batchLabel;
+        });
+      } else if (payload.content) {
+        if (!(payload.content as any).props) (payload.content as any).props = {};
+        (payload.content as any).props.batchLabel = (payload.content as any).props.batchLabel || payload.metadata!.batchLabel;
+      }
+    });
+
+    const safeTemplateData = deepClone(templateDataToUse);
     const allComponents = this.contentData.flatMap(c => c.component || []);
     if (allComponents.length > 0) {
       if (!safeTemplateData.component) safeTemplateData.component = [];
@@ -335,14 +369,12 @@ export class Supervisor {
     // Collect placement nodes from the entire node tree before processing placements
     const collectPlacements = (node: Node) => {
       Node.appendPlacement(node);
-      if (Array.isArray(node.data.content)) {
-        node.data.content.forEach((childData: any) => {
-          if (childData.node) collectPlacements(childData.node);
+      if (node.children) {
+        node.children.forEach(child => {
+          if (!child.isComponentInjected) {
+            collectPlacements(child);
+          }
         });
-      } else if (typeof node.data.content === "object" && node.data.content !== null) {
-        if ((node.data.content as any).node) {
-          collectPlacements((node.data.content as any).node);
-        }
       }
       if (node.component) {
         node.component.forEach(binding => {

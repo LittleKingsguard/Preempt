@@ -22,47 +22,48 @@ async (event, context) => {
     td.handlers.afterAssembly = `(event, context) => {
       const root = context.rootNode;
       if (root && root.data) {
-        const injectInspect = (nodeData) => {
-          if (!nodeData) return;
-          const node = nodeData.node;
-          if (node) {
-            let isEditorNode = false;
-            let curr = node;
-            while (curr) {
-              if (curr.data?.props?.batchLabel === "editor-tools" || 
-                  curr.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
-                  curr.data?.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
-                  curr.css?.classes?.includes("preempt-editor-panel") ||
-                  curr.css?.id === "editor-inspector-display") {
-                isEditorNode = true;
-                break;
-              }
-              curr = curr.parent;
+        const injectInspect = (node) => {
+          if (!node) return;
+          let isEditorNode = false;
+          let curr = node;
+          while (curr) {
+            if (curr.data?.props?.batchLabel === "editor-tools" || 
+                curr.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
+                curr.data?.component?.some(c => c.reference === "PreemptEditor" || c.reference === "editor") ||
+                curr.css?.classes?.includes("preempt-editor-panel") ||
+                curr.css?.id === "editor-inspector-display") {
+              isEditorNode = true;
+              break;
             }
-            if (isEditorNode) return;
-
+            curr = curr.parent;
+          }
+          
+          if (!isEditorNode) {
             const hasClickHandler = node.handlers?.click || node.handlers?.onclick;
             const hasComponentClickHandler = node.component?.some(c => c.target === "handlers.click" || c.target === "handlers.onclick");
 
             if (!hasClickHandler && !hasComponentClickHandler) {
-              if (!node.data) node.data = {};
-              if (!node.data.component) node.data.component = [];
+              if (!node.component) node.component = [];
               const binding = { reference: "EditorInspectHandler", target: "handlers.click" };
-              if (!node.data.component.some(c => c.reference === "EditorInspectHandler")) {
-                node.data.component.push(binding);
+              if (!node.component.some(c => c.reference === "EditorInspectHandler")) {
+                node.component.push(binding);
+                node.hasChangedSinceRender = true;
               }
-              node.component = node.data.component;
-              node.hasChangedSinceRender = true;
             }
           }
           
-          if (Array.isArray(nodeData.content)) {
-            nodeData.content.forEach(injectInspect);
-          } else if (typeof nodeData.content === "object" && nodeData.content !== null) {
-            injectInspect(nodeData.content);
+          if (node.children) {
+            node.children.forEach(injectInspect);
+          }
+          if (node.component) {
+            node.component.forEach(binding => {
+              if (binding._instantiatedNodes) {
+                binding._instantiatedNodes.forEach(injectInspect);
+              }
+            });
           }
         };
-        injectInspect(root.data);
+        injectInspect(root);
         root.applyComponentsTree();
       }
     }`;
@@ -78,20 +79,23 @@ async (event, context) => {
     const root = context.rootNode;
     const targetNodes = [];
     
-    const collectNodesFromData = (nodeData) => {
-      if (!nodeData) return;
-      if (nodeData.node) {
-        targetNodes.push(nodeData.node);
+    const collectNodes = (node) => {
+      if (!node) return;
+      targetNodes.push(node);
+      if (node.children) {
+        node.children.forEach(collectNodes);
       }
-      if (Array.isArray(nodeData.content)) {
-        nodeData.content.forEach(collectNodesFromData);
-      } else if (typeof nodeData.content === "object" && nodeData.content !== null) {
-        collectNodesFromData(nodeData.content);
+      if (node.component) {
+        node.component.forEach(binding => {
+          if (binding._instantiatedNodes) {
+            binding._instantiatedNodes.forEach(collectNodes);
+          }
+        });
       }
     };
     
-    if (root && root.data) {
-      collectNodesFromData(root.data);
+    if (root) {
+      collectNodes(root);
     }
 
     await context.clientAPI.fetchHandlers({ name: "EditorInspectHandler" }, targetNodes, async () => {

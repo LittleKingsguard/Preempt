@@ -52,6 +52,7 @@ export class Node {
   public content?: string | undefined;
   public props: Record<string, any> = {};
   public handlers?: Record<string, string | HandlerDef>;
+  public compiledHandlers: Record<string, Function> = {};
   public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
   public versions?: any[];
 
@@ -112,20 +113,19 @@ export class Node {
 
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
-    Object.defineProperty(this.data, 'node', { value: this, enumerable: false, configurable: true, writable: true });
     this.parent = parent;
     this.isComponentInjected = isComponentInjected;
-
     this.resolveVersion();
 
-    if (!this.data.css) this.data.css = {};
-    if (!this.data.css.id) {
-      this.data.css.id = Node.generateObjectHash(this.data);
+    this.css = Node.deepClone(this.data.css) || {};
+    if (!this.css.id) {
+      this.css.id = Node.generateObjectHash(this.data);
     }
-    if (!this.data.props) this.data.props = {};
+    
+    this.props = Node.deepClone(this.data.props) || {};
 
     if (typeof window !== 'undefined') {
-      const existingEl = document.getElementById(this.data.css.id);
+      const existingEl = document.getElementById(this.css.id);
       if (existingEl) {
         this.element = existingEl;
       }
@@ -139,17 +139,11 @@ export class Node {
 
     if (data.content) {
       if (Array.isArray(data.content)) {
-        const newContentArray: any[] = [];
         data.content.forEach(childData => {
-          const clonedChild = Node.deepClone(childData);
-          newContentArray.push(clonedChild);
-          this.children.push(new Node(clonedChild, this, isComponentInjected));
+          this.children.push(new Node(childData, this, isComponentInjected));
         });
-        data.content = newContentArray;
       } else if (typeof data.content === "object" && data.content !== null) {
-        const clonedChild = Node.deepClone(data.content);
-        data.content = clonedChild;
-        this.children.push(new Node(clonedChild, this, isComponentInjected));
+        this.children.push(new Node(data.content, this, isComponentInjected));
       }
     }
 
@@ -160,11 +154,16 @@ export class Node {
       this.content = this.data.content;
     }
 
-    this.css = Node.deepClone(this.data.css) || {};
-    this.props = Node.deepClone(this.data.props) || {};
-
     this.handlers = Node.deepClone(this.data.handlers);
-    if (this.handlers === undefined) delete this.handlers;
+    if (this.handlers === undefined) {
+      delete this.handlers;
+    } else {
+      for (const [key, value] of Object.entries(this.handlers)) {
+        const handlerBody = typeof value === 'object' && value !== null && 'body' in value ? value.body : String(value);
+        const compiled = clientAPI.compileHandler(key, handlerBody);
+        if (compiled) this.compiledHandlers[key] = compiled;
+      }
+    }
 
     this.component = Node.deepClone(this.data.component);
     if (this.component === undefined) {
@@ -174,10 +173,8 @@ export class Node {
         const isHandler = typeof binding.value === 'object' && binding.value !== null && 'body' in binding.value;
         if (isHandler) {
           const handlerName = binding.value.name || binding.reference;
-          if (!clientAPI.handlers[handlerName]) {
-            const compiled = clientAPI.compileHandler(handlerName, binding.value.body);
-            if (compiled) clientAPI.handlers[handlerName] = compiled;
-          }
+          const compiled = clientAPI.compileHandler(handlerName, binding.value.body);
+          if (compiled) this.compiledHandlers[handlerName] = compiled;
         }
       });
     }
@@ -196,8 +193,8 @@ export class Node {
           const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
           binding._instantiatedNodes = [];
           for (const d of dataArray) {
-            if (typeof d !== "string") {
-              const newNode = new Node(Node.deepClone(d), this, true);
+            if (typeof d !== "string" && !('body' in d)) {
+              const newNode = new Node(d, this, true);
               binding._instantiatedNodes!.push(newNode);
               Node.typeComponentNodes.push(newNode);
             }
@@ -205,6 +202,7 @@ export class Node {
         }
       }
     }
+    Node.appendPlacement(this);
   }
 
 
@@ -327,82 +325,60 @@ export class Node {
             continue;
           }
 
-          if (d.type) this.type = d.type;
+          const instantiatedNode = resolvedBinding?._instantiatedNodes?.[dataArray.indexOf(d)];
+          if (instantiatedNode) {
+            if (instantiatedNode.type) this.type = instantiatedNode.type;
 
-          if (resolvedBinding?._instantiatedNodes) {
-            const instantiatedNode = resolvedBinding._instantiatedNodes[dataArray.indexOf(d)];
-            if (instantiatedNode) {
-              const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
-                const clonedData = Node.deepClone(node.data);
-                if (clonedData.css && clonedData.css.id && clonedData.css.id.startsWith("preempt-node-")) {
-                  delete clonedData.css.id;
-                }
-                const cloned = new Node(clonedData, newParent, true);
-                cloned.children = [];
-                if (node.children) {
-                  for (const child of node.children) {
-                    cloned.children.push(deepCloneInstantiated(child, cloned));
-                  }
-                }
-                return cloned;
-              };
+            const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
+              const cloned = new Node(node.data, newParent, true);
+              cloned.type = node.type;
+              cloned.content = node.content;
+              cloned.css = Node.deepClone(node.css) || {};
+              cloned.props = Node.deepClone(node.props) || {};
+              cloned.handlers = Node.deepClone(node.handlers);
+              cloned.compiledHandlers = { ...node.compiledHandlers };
+              cloned.component = Node.deepClone(node.component);
+              cloned.children = [];
+              for (const child of node.children) {
+                cloned.children.push(deepCloneInstantiated(child, cloned));
+              }
+              return cloned;
+            };
 
-              for (const child of instantiatedNode.children) {
-                const clonedChild = deepCloneInstantiated(child, this);
-                if (!this.children.includes(clonedChild)) {
-                  this.children.push(clonedChild);
-                  binding._clonedChildren.push(clonedChild);
-                }
-              }
-              if (instantiatedNode.content !== undefined) {
-                if (this.content !== undefined) {
-                  this.content += instantiatedNode.content;
-                } else {
-                  this.content = instantiatedNode.content;
-                }
-                binding._appendedContent += instantiatedNode.content as string;
-              }
+            for (const child of instantiatedNode.children) {
+              const clonedChild = deepCloneInstantiated(child, this);
+              this.children.push(clonedChild);
+              binding._clonedChildren!.push(clonedChild);
             }
-          } else if (d.content) {
-            if (Array.isArray(d.content)) {
-              d.content.forEach(childData => {
-                const newChild = new Node(Node.deepClone(childData), this, true);
-                this.children.push(newChild);
-                binding._clonedChildren!.push(newChild);
-              });
-            } else if (typeof d.content === "object" && d.content !== null) {
-              const newChild = new Node(Node.deepClone(d.content), this, true);
-              this.children.push(newChild);
-              binding._clonedChildren!.push(newChild);
-            } else if (typeof d.content === "string") {
+
+            if (instantiatedNode.content !== undefined) {
               if (this.content !== undefined) {
-                this.content += d.content;
+                this.content += instantiatedNode.content as string;
               } else {
-                this.content = d.content;
+                this.content = instantiatedNode.content as string;
               }
-              binding._appendedContent += d.content;
+              binding._appendedContent += instantiatedNode.content as string;
             }
-          }
 
-          if (d.css) {
-            if (!this.css) this.css = {};
-            if (d.css.style) this.css.style = { ...this.css.style, ...d.css.style };
-            if (d.css.classes) this.css.classes = [...new Set([...(this.css.classes || []), ...d.css.classes])];
-            if (d.css.cssDef) {
-              this.css.cssDef = [...(this.css.cssDef || []), ...d.css.cssDef];
-              for (const def of d.css.cssDef) {
-                this.styleNodes.push(new StyleNode(def, this, true));
+            if (instantiatedNode.css) {
+              if (!this.css) this.css = {};
+              if (instantiatedNode.css.style) this.css.style = { ...this.css.style, ...instantiatedNode.css.style };
+              if (instantiatedNode.css.classes) this.css.classes = [...new Set([...(this.css.classes || []), ...instantiatedNode.css.classes])];
+              if (instantiatedNode.css.cssDef) {
+                this.css.cssDef = [...(this.css.cssDef || []), ...instantiatedNode.css.cssDef];
+                for (const def of instantiatedNode.css.cssDef) {
+                  this.styleNodes.push(new StyleNode(def, this, true));
+                }
               }
             }
-          }
 
-          if (d.props) this.props = { ...this.props, ...d.props };
-          if (d.handlers) this.handlers = { ...this.handlers, ...d.handlers };
-          if (d.component) {
-            this.component = [...(this.component || []), ...d.component];
-            addedNew = true;
-            // Store reference to component used for seeding
-            // Removed preInjectionState
+            if (instantiatedNode.props) this.props = { ...this.props, ...instantiatedNode.props };
+            if (instantiatedNode.handlers) this.handlers = { ...this.handlers, ...instantiatedNode.handlers };
+            if (instantiatedNode.compiledHandlers) this.compiledHandlers = { ...this.compiledHandlers, ...instantiatedNode.compiledHandlers };
+            if (instantiatedNode.component) {
+              this.component = [...(this.component || []), ...instantiatedNode.component];
+              addedNew = true;
+            }
           }
         }
         continue;
@@ -576,7 +552,8 @@ export class Node {
     if (this.handlers) {
       for (const [key, value] of Object.entries(this.handlers)) {
         const eventName = key.startsWith('on') ? key.toLowerCase() : `on${key.toLowerCase()}`;
-        const trimmedValue = String(value).trim();
+        const handlerBody = typeof value === 'object' && value !== null && 'body' in value ? (value as any).body : String(value);
+        const trimmedValue = String(handlerBody).trim();
         let jsCode = trimmedValue;
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
           jsCode = `(${trimmedValue})(event, { node: null, metadata: null, rootNode: null })`;
@@ -664,7 +641,9 @@ export class Node {
 
           let fn: Function | undefined;
           if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-            fn = clientAPI.handlers[handlerObj.name];
+            fn = clientAPI.getHandler(handlerObj.name, this);
+          } else {
+            fn = clientAPI.getHandler(key, this);
           }
 
           if (fn) {
@@ -934,18 +913,31 @@ export class Node {
 
         let fn: Function | undefined;
         if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-          fn = clientAPI.handlers[handlerObj.name];
+          fn = clientAPI.getHandler(handlerObj.name, this);
+        } else {
+          fn = clientAPI.getHandler(phase, this);
         }
 
         if (fn) {
-          fn(null, fullContext);
+          if (fn.length === 1) {
+            fn(fullContext);
+          } else {
+            fn(null, fullContext);
+          }
         } else {
           const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
           const trimmedValue = handlerBody.trim();
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             fn = new Function('return ' + trimmedValue)();
-            fn!(null, fullContext);
+            if (fn!.length === 1) {
+              console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (args=1). Body: ${trimmedValue.substring(0, 50)}`);
+              fn!(fullContext);
+            } else {
+              console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (args=2). Body: ${trimmedValue.substring(0, 50)}`);
+              fn!(null, fullContext);
+            }
           } else {
+            console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (raw string). Body: ${trimmedValue.substring(0, 50)}`);
             fn = new Function('event', 'context', trimmedValue);
             fn!(null, fullContext);
           }

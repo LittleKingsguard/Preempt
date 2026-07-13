@@ -7,8 +7,32 @@ export class ClientAPI {
 
   constructor() {}
 
-  public getHandler(key: string): Function | undefined {
-    return this.handlers[key];
+  public getHandler(key: string, contextNode?: Node): Function | undefined {
+    let current: Node | null | undefined = contextNode;
+    while (current) {
+      if (current.compiledHandlers && current.compiledHandlers[key]) {
+        return current.compiledHandlers[key];
+      }
+      
+      const componentBinding = current.component?.find(c => c.reference === key);
+      if (componentBinding && typeof componentBinding.value === 'object' && componentBinding.value !== null && 'body' in componentBinding.value) {
+        const compiled = this.compileHandler(key, componentBinding.value.body as string);
+        if (compiled) {
+          if (!current.compiledHandlers) current.compiledHandlers = {};
+          current.compiledHandlers[key] = compiled;
+          return compiled;
+        }
+      }
+      
+      current = current.parent;
+    }
+    
+    if (this.handlers[key]) {
+      return this.handlers[key];
+    }
+    
+    console.error(`Handler ${key} not found in tree.`);
+    return undefined;
   }
 
   public compileHandler(name: string, body: string): Function | undefined {
@@ -91,6 +115,9 @@ export class ClientAPI {
     nodes.forEach((node: Node) => {
       if (!node.data.props) node.data.props = {};
       node.data.props.batchLabel = options.batchLabel;
+      if (!node.props) node.props = {};
+      node.props.batchLabel = options.batchLabel;
+      
       if (!node.data.placement) {
         node.data.placement = { targetPlacement: [] };
       }
@@ -98,6 +125,10 @@ export class ClientAPI {
         node.data.placement.targetPlacement = [];
       }
       node.data.placement.targetPlacement.push(...options.placements);
+      
+      if (!node.placement) node.placement = { targetPlacement: [] };
+      if (!node.placement.targetPlacement) node.placement.targetPlacement = [];
+      node.placement.targetPlacement.push(...options.placements);
     });
 
     if (Supervisor.instance) {
@@ -113,6 +144,9 @@ export class ClientAPI {
           allComponents.push(...n.data.component);
         }
       });
+      if (combinedMetadata.template && combinedMetadata.template.component) {
+        allComponents.push(...combinedMetadata.template.component);
+      }
       const newPayload: ContentPayload = {
         metadata: { ...combinedMetadata, batchLabel: options.batchLabel },
         content: nodes.map(n => n.exportToJson()) as NodeData[],
