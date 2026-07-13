@@ -2,9 +2,9 @@
   console.log("Executing handler: editorSelectChild", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   event.stopPropagation();
   const node = window.Preempt.inspectedNode;
-  if (node && Array.isArray(node.content)) {
+  if (node && Array.isArray(node.children)) {
       const idx = parseInt(event.target.getAttribute("data-child-index"));
-      const childNode = node.content[idx];
+      const childNode = node.children[idx];
       if (childNode) {
           window.Preempt.inspectedNode = childNode;
           const populator = context.clientAPI.getHandler("EditorPopulateInspector");
