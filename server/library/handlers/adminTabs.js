@@ -10,15 +10,11 @@
   allTabs.forEach(tabClass => {
     const tabNode = container.findNode({ classes: [tabClass] });
     if (tabNode) {
-      if (!tabNode.css) tabNode.css = {};
-      if (!tabNode.css.style) tabNode.css.style = {};
       if (tabClass === targetTabClass) {
-        tabNode.css.style.display = "block";
+        context.clientAPI.modifyNode({ css: { style: { display: "block" } } }, tabNode, () => { }, true);
       } else {
-        tabNode.css.style.display = "none";
+        context.clientAPI.modifyNode({ css: { style: { display: "none" } } }, tabNode, () => { }, true);
       }
-      tabNode.hasChangedSinceRender = true;
-      tabNode.render();
     }
   });
 
@@ -30,18 +26,37 @@
   };
 
   const endpoint = endpoints[targetTabClass];
+  let needsFetch = false;
   if (endpoint) {
     const tabNode = container.findNode({ classes: [targetTabClass] });
     if (tabNode && !tabNode.props.hasFetched) {
-      tabNode.props.hasFetched = true;
-      context.clientAPI.fetchContent({
-        url: endpoint.url,
-        batchLabel: targetTabClass,
-        query: { format: "content" },
-        defaultTemplate: {},
-        placements: [endpoint.placementName]
-      });
+      needsFetch = true;
     }
   }
-}
 
+  allTabs.forEach((tabClass, index) => {
+    const tabNode = container.findNode({ classes: [tabClass] });
+    if (tabNode) {
+      const isLast = (index === allTabs.length - 1) && !needsFetch;
+      const nextCb = isLast ? undefined : () => { };
+
+      if (tabClass === targetTabClass) {
+        context.clientAPI.modifyNode({ css: { style: { display: "block" } } }, tabNode, nextCb, true);
+      } else {
+        context.clientAPI.modifyNode({ css: { style: { display: "none" } } }, tabNode, nextCb, true);
+      }
+    }
+  });
+
+  if (needsFetch) {
+    const tabNode = container.findNode({ classes: [targetTabClass] });
+    context.clientAPI.modifyNode({ props: { hasFetched: true } }, tabNode, () => { }, true);
+    context.clientAPI.fetchContent({
+      url: endpoint.url,
+      batchLabel: targetTabClass,
+      query: { format: "content" },
+      defaultTemplate: {},
+      placements: [endpoint.placementName]
+    });
+  }
+}

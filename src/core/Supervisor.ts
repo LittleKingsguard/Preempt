@@ -295,13 +295,13 @@ export class Supervisor {
     if (Array.isArray(templateDataToUse) && templateDataToUse.length > 0) {
       if (!templateDataToUse[0].props) templateDataToUse[0].props = {};
       templateDataToUse[0].props.batchLabel = templateDataToUse[0].props.batchLabel || 'default-template-batch';
-      
+
       const extraContent = templateDataToUse.slice(1).map(nodeData => {
         if (!nodeData.props) nodeData.props = {};
         nodeData.props.batchLabel = nodeData.props.batchLabel || 'default-template-batch';
         return nodeData;
       });
-      
+
       if (extraContent.length > 0) {
         this.contentData.push({
           metadata: { batchLabel: 'default-template-batch' },
@@ -409,10 +409,22 @@ export class Supervisor {
       }
     }
 
-
     if (this.rootNode) {
       this.rootNode.applyComponentsTree();
     }
+
+    /* for (const targetNode of Node.placementArray) {
+      if (!targetNode.children || targetNode.children.length === 0) {
+        const displayIfEmpty = targetNode.props?.displayIfEmpty;
+        if (displayIfEmpty === false || displayIfEmpty === null || displayIfEmpty === undefined || displayIfEmpty === "false") {
+          if (!targetNode.css) targetNode.css = {};
+          if (!targetNode.css.style) targetNode.css.style = {};
+          targetNode.css.style.display = "none";
+        } else {
+          targetNode.addChild(displayIfEmpty);
+        }
+      }
+    } */
   }
 
   private async preProcess(): Promise<void> {

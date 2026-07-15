@@ -32,12 +32,16 @@ async function getDefaultSettingComponent(event: IPreemptEvent) {
 
 function compileSettingsToContent(settingRows: any[], defaultSettingComp: any): IContentData {
   const payload = settingRows.map(row => {
+    let displayValue = row.value;
+    if (typeof displayValue === 'object' && displayValue !== null) {
+      displayValue = JSON.stringify(displayValue);
+    }
     return {
       ...defaultSettingComp,
       placement: { targetPlacement: [`setting-${row.key}`, "settings"] },
       component: [
         { reference: 'settingKey', value: row.key },
-        { reference: 'settingValue', value: row.value }
+        { reference: 'settingValue', value: displayValue }
       ]
     };
   });

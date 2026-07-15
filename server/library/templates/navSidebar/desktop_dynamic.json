@@ -1,9 +1,15 @@
 {
   "type": "div",
   "component": [
-    { "reference": "userAuthComponent" },
-    { "reference": "articleTitle" },
-    { "reference": "articleSubtitle" }
+    {
+      "reference": "userAuthComponent"
+    },
+    {
+      "reference": "articleTitle"
+    },
+    {
+      "reference": "articleSubtitle"
+    }
   ],
   "css": {
     "classes": [
@@ -139,6 +145,63 @@
           "reference": "footer"
         }
       ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "adminDashboardLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "adminLinks"
+        ]
+      }
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "editContentLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "contributorLinks"
+        ]
+      }
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "createArticleLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "contributorLinks"
+        ]
+      }
     }
   ]
 }

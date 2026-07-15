@@ -153,6 +153,63 @@
           "reference": "footer"
         }
       ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "adminDashboardLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "adminLinks"
+        ]
+      }
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "editContentLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "contributorLinks"
+        ]
+      }
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "createArticleLink"
+        }
+      ],
+      "placement": {
+        "targetPlacement": [
+          "contributorLinks"
+        ]
+      }
     }
   ]
 }

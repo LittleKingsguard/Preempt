@@ -248,8 +248,13 @@ export class Node {
     }
   }
 
+
+
   public applyComponentsTree(): void {
-    this.applyComponents();
+    if (this.hasChangedSinceRender) {
+      this.applyComponents();
+    }
+
     for (const child of this.children) {
       child.applyComponentsTree();
     }
@@ -257,6 +262,22 @@ export class Node {
 
   private applyComponents(processedComponents: Set<any> = new Set()): void {
     if (!this.component) return;
+
+    const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
+      const cloned = new Node(node.data, newParent, true);
+      cloned.type = node.type;
+      cloned.content = node.content;
+      cloned.css = Node.deepClone(node.css) || {};
+      cloned.props = Node.deepClone(node.props) || {};
+      cloned.handlers = Node.deepClone(node.handlers);
+      cloned.compiledHandlers = { ...node.compiledHandlers };
+      cloned.component = Node.deepClone(node.component);
+      cloned.children = [];
+      for (const child of node.children) {
+        cloned.children.push(deepCloneInstantiated(child, cloned));
+      }
+      return cloned;
+    };
 
     const componentsToProcess = this.component.filter(c => !processedComponents.has(c));
     if (componentsToProcess.length === 0) return;
@@ -329,22 +350,6 @@ export class Node {
           if (instantiatedNode) {
             if (instantiatedNode.type) this.type = instantiatedNode.type;
 
-            const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
-              const cloned = new Node(node.data, newParent, true);
-              cloned.type = node.type;
-              cloned.content = node.content;
-              cloned.css = Node.deepClone(node.css) || {};
-              cloned.props = Node.deepClone(node.props) || {};
-              cloned.handlers = Node.deepClone(node.handlers);
-              cloned.compiledHandlers = { ...node.compiledHandlers };
-              cloned.component = Node.deepClone(node.component);
-              cloned.children = [];
-              for (const child of node.children) {
-                cloned.children.push(deepCloneInstantiated(child, cloned));
-              }
-              return cloned;
-            };
-
             for (const child of instantiatedNode.children) {
               const clonedChild = deepCloneInstantiated(child, this);
               this.children.push(clonedChild);
@@ -373,8 +378,13 @@ export class Node {
             }
 
             if (instantiatedNode.props) this.props = { ...this.props, ...instantiatedNode.props };
-            if (instantiatedNode.handlers) this.handlers = { ...this.handlers, ...instantiatedNode.handlers };
-            if (instantiatedNode.compiledHandlers) this.compiledHandlers = { ...this.compiledHandlers, ...instantiatedNode.compiledHandlers };
+            if (instantiatedNode.handlers) {
+              if (!this.handlers) this.handlers = {};
+              this.handlers = { ...this.handlers, ...instantiatedNode.handlers };
+            }
+            if (instantiatedNode.compiledHandlers) {
+              this.compiledHandlers = { ...instantiatedNode.compiledHandlers };
+            }
             if (instantiatedNode.component) {
               this.component = [...(this.component || []), ...instantiatedNode.component];
               addedNew = true;
@@ -391,18 +401,23 @@ export class Node {
       } else if (binding.target === "content") {
         if (Array.isArray(resolvedValue)) {
           this.content = undefined;
-          if (!binding._instantiatedNodes || binding._instantiatedNodes.length !== (resolvedValue as NodeData[]).length) {
-            binding._instantiatedNodes = (resolvedValue as NodeData[]).map(d => new Node(d as NodeData, this, true));
+          this.children = [];
+          for (let i = 0; i < resolvedValue.length; i++) {
+            const instantiatedNode = resolvedBinding?._instantiatedNodes?.[i];
+            if (instantiatedNode) {
+              this.children.push(deepCloneInstantiated(instantiatedNode, this));
+            } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
+              this.children.push(new Node(resolvedValue[i] as NodeData, this, true));
+            }
           }
-          this.children = binding._instantiatedNodes;
         } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
           this.content = undefined;
-          let instantiatedNode = binding._instantiatedNodes?.[0];
-          if (!instantiatedNode) {
-            instantiatedNode = new Node(resolvedValue as NodeData, this, true);
-            binding._instantiatedNodes = [instantiatedNode];
+          let instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
+          if (instantiatedNode) {
+            this.children = [deepCloneInstantiated(instantiatedNode, this)];
+          } else {
+            this.children = [new Node(resolvedValue as NodeData, this, true)];
           }
-          this.children = [instantiatedNode];
         } else {
           this.content = String(resolvedValue);
           this.children = [];

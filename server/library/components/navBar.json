@@ -25,21 +25,10 @@
       "content": [
         { "type": "a", "props": { "href": "/" }, "content": "Home", "css": { "classes": ["nav-link"] } },
         { "type": "a", "props": { "href": "/directory" }, "content": "Directory", "css": { "classes": ["nav-link"] } },
-        {
-          "type": "div",
-          "css": { "style": { "display": "none" } },
-          "component": [
-            { "target": "type", "reference": "adminDashboardLink" }
-          ]
-        },
-        {
-          "type": "div",
-          "css": { "style": { "display": "none" } },
-          "component": [
-            { "target": "type", "reference": "editContentLink" }
-          ]
-        },
-        { "type": "div", "placement": { "placementName": "navAdditionalLinks" } }
+        { "type": "div", "placement": { "placementName": "adminLinks" }, "css": { "style": { "display": "contents" } } },
+        { "type": "div", "placement": { "placementName": "authorLinks" }, "css": { "style": { "display": "contents" } } },
+        { "type": "div", "placement": { "placementName": "contributorLinks" }, "css": { "style": { "display": "contents" } } },
+        { "type": "div", "placement": { "placementName": "navAdditionalLinks" }, "css": { "style": { "display": "contents" } } }
       ]
     },
     {

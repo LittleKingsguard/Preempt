@@ -71,7 +71,6 @@ async function renderAndSendHtml(res: any, contentData: any) {
   const headersInject = ((contentData as any).headers || "") + "\n" + payloadScript;
   html = html.replace("<!-- HEADERS_INJECT -->", headersInject);
   html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput || ""}</div>`);
-  html = html.replace(/(\/assets\/index-[a-zA-Z0-9_-]+\.js)/g, `$1?t=${Date.now()}`);
 
   res.send(html);
 }

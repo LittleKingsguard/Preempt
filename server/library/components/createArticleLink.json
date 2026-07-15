@@ -1,0 +1,9 @@
+{
+  "type": "a",
+  "props": { "href": "/create-article" },
+  "content": "Create Article",
+  "css": {
+    "classes": ["nav-link"],
+    "style": { "display": "inline-block" }
+  }
+}

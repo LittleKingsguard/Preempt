@@ -112,8 +112,11 @@ export async function loadLibraryData(adminUser: any) {
         }
       }
 
-      if (compId !== undefined && (name === 'adminDashboardLink' || name === 'editContentLink')) {
+      if (compId !== undefined && name === 'adminDashboardLink') {
         await pool.query("UPDATE Components SET approved_roles = $1 WHERE id = $2", [['admin'], compId]);
+      }
+      if (compId !== undefined && (name === 'editContentLink' || name === 'createArticleLink')) {
+        await pool.query("UPDATE Components SET approved_roles = $1 WHERE id = $2", [['admin', 'contributor'], compId]);
       }
       
       if (compId !== undefined && refs.handlers.length > 0) {
@@ -233,6 +236,24 @@ export async function loadLibraryData(adminUser: any) {
         // If it's the homepage, set it as the default index content
         if (file === 'homepage.json') {
            await pool.query("INSERT INTO SiteSettings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", ['default_index_content_id', JSON.stringify({id: content.id})]);
+        }
+        
+        const aliasMappings: Record<string, string> = {
+          'articleCreation.json': '/create-article',
+          'directory.json': '/directory',
+          'userProfile.json': '/profile',
+          'messageInbox.json': '/inbox'
+        };
+
+        if (aliasMappings[file]) {
+          const aliasPath = aliasMappings[file];
+          const row = await pool.query("SELECT value FROM SiteSettings WHERE key = 'page_aliases'");
+          let aliases: any = {};
+          if (row.rows.length > 0) {
+            try { aliases = JSON.parse(row.rows[0].value); } catch(e) {}
+          }
+          aliases[aliasPath] = content.id;
+          await pool.query("INSERT INTO SiteSettings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", ['page_aliases', JSON.stringify(aliases)]);
         }
       }
     }

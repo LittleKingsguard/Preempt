@@ -25,6 +25,7 @@
       "css": { "classes": ["dropdown-menu"] },
       "content": [
         { "type": "a", "props": { "href": "/profile" }, "content": "Profile", "css": { "classes": ["dropdown-link"] } },
+        { "type": "a", "props": { "href": "/inbox" }, "content": "Messages", "css": { "classes": ["dropdown-link"] } },
         { "type": "button", "content": "Logout", "css": { "classes": ["dropdown-btn-danger"] }, "component": [{"target": "handlers.click", "reference": "LogoutHandler"}] }
       ]
     }
