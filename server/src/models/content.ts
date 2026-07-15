@@ -173,7 +173,13 @@ export class Content {
     }
 
     const rows = await source.get(new PreemptEvent<any>('content.get', { id: 'system', type: 'process' }, [], { before: null, after: { criteria } }), { ...criteria, hide_pattern: behavior as 'Overlook' | 'Paywall' | 'Guard' }, user, placeholder);
-    const contents = rows.map((r: any) => new Content(r, source));
+    const contents = [];
+    for (const r of rows) {
+      const c = new Content(r, source);
+      await populateContentHandlers(c.payload, c.id, c.resolved_template_id, user, pgHandlerSource, pgComponentSource);
+      await populateContentComponents(c.payload, c.id, c.resolved_template_id, user, pgComponentSource);
+      contents.push(c);
+    }
     return contents;
   }
   static async getCount(source: IContentSource = pgContentSource, criteria: { tags?: string[]; author?: string } = {}, user?: any) {

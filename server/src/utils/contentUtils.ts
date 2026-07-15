@@ -44,11 +44,15 @@ export async function populateContentHandlers(contentPayload: any, contentId: nu
   templateHandlerRows.forEach((h: any) => {
     if (!validateUserRoles(user, h.approved_roles || [], h.author_id)) {
       handlers.set(h.name, h.body);
+    } else {
+      handlers.set(h.name, "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');");
     }
   });
   contentHandlerRows.forEach((h: any) => {
     if (!validateUserRoles(user, h.approved_roles || [], h.author_id)) {
       handlers.set(h.name, h.body);
+    } else {
+      handlers.set(h.name, "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');");
     }
   });
 
@@ -72,11 +76,15 @@ export async function populateContentComponents(contentPayload: any, contentId: 
   templateComponentRows.forEach((c: any) => {
     if (!validateUserRoles(user, c.approved_roles || [], c.author_id)) {
       components.set(c.name, c.payload);
+    } else {
+      components.set(c.name, { type: "div", css: { style: { display: "none" } } });
     }
   });
   contentComponentRows.forEach((c: any) => {
     if (!validateUserRoles(user, c.approved_roles || [], c.author_id)) {
       components.set(c.name, c.payload);
+    } else {
+      components.set(c.name, { type: "div", css: { style: { display: "none" } } });
     }
   });
 

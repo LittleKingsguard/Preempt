@@ -111,6 +111,19 @@ export class Node {
     return baseId;
   }
 
+  public setComponents(components: ComponentBinding[] | undefined): void {
+    if (components === undefined) {
+      delete this.component;
+    } else {
+      const filtered = components.filter(c => c !== null);
+      if (filtered.length > 0) {
+        this.component = filtered;
+      } else {
+        delete this.component;
+      }
+    }
+  }
+
   constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
     this.data = data;
     this.parent = parent;
@@ -165,10 +178,8 @@ export class Node {
       }
     }
 
-    this.component = Node.deepClone(this.data.component);
-    if (this.component === undefined) {
-      delete this.component;
-    } else {
+    this.setComponents(Node.deepClone(this.data.component));
+    if (this.component) {
       this.component.forEach((binding: any) => {
         const isHandler = typeof binding.value === 'object' && binding.value !== null && 'body' in binding.value;
         if (isHandler) {
@@ -189,6 +200,7 @@ export class Node {
 
     if (this.component) {
       for (const binding of this.component) {
+        if (binding === null) continue;
         if (typeof binding.value === "object" && binding.value !== null) {
           const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
           binding._instantiatedNodes = [];
@@ -226,7 +238,7 @@ export class Node {
         this.props = matchedVersion.props;
       }
       if (matchedVersion.component !== undefined) {
-        this.component = matchedVersion.component;
+        this.setComponents(matchedVersion.component);
       }
       if (matchedVersion.css !== undefined) {
         this.css = matchedVersion.css;
@@ -271,7 +283,7 @@ export class Node {
       cloned.props = Node.deepClone(node.props) || {};
       cloned.handlers = Node.deepClone(node.handlers);
       cloned.compiledHandlers = { ...node.compiledHandlers };
-      cloned.component = Node.deepClone(node.component);
+      cloned.setComponents(Node.deepClone(node.component));
       cloned.children = [];
       for (const child of node.children) {
         cloned.children.push(deepCloneInstantiated(child, cloned));
@@ -322,6 +334,15 @@ export class Node {
       }
 
       if (resolvedValue === null) {
+        let root = this as any;
+        let chain = [];
+        while (root.parent) {
+          chain.push(root.type + (root.css?.id ? '#' + root.css.id : ''));
+          root = root.parent;
+        }
+        chain.push(root.type);
+        console.error(`[DEBUG] Root node components:`, root.component?.map((c: any) => c.reference));
+        console.error(`[DEBUG] Current node chain:`, chain.reverse().join(' -> '));
         console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
         continue;
       }
@@ -386,7 +407,7 @@ export class Node {
               this.compiledHandlers = { ...instantiatedNode.compiledHandlers };
             }
             if (instantiatedNode.component) {
-              this.component = [...(this.component || []), ...instantiatedNode.component];
+              this.setComponents([...(this.component || []), ...instantiatedNode.component]);
               addedNew = true;
             }
           }

@@ -533,6 +533,66 @@ router.all("/revert", async (req, res) => {
   }
 });
 
+router.all("/sync", authenticateToken, async (req: any, res) => {
+  const tokenUser = req.user;
+  if (!tokenUser) {
+    return res.status(401).send("Unauthorized: Please log in first.");
+  }
+  const dbUser: any = await User.getByUsername(pgUserSource, tokenUser.username);
+  if (!dbUser || dbUser.error || (!dbUser.is_admin && !dbUser.is_contributor)) {
+    return res.status(403).send("Forbidden: Must be admin or contributor to sync library.");
+  }
+
+  try {
+    logger.info("Starting /sync database wipe and rebuild...");
+
+    // 1. Temporarily drop the Users.home_page constraint to prevent CASCADE from truncating Users
+    await pool.query("ALTER TABLE Users DROP CONSTRAINT fk_user_home_page;");
+    await pool.query("UPDATE Users SET home_page = NULL;");
+
+    // 2. Truncate all Preempt library/content tables
+    const truncateSql = `
+      TRUNCATE TABLE
+        Events, Messages, MessageLists, Comments, CommentLists,
+        ComponentHandlers, ContentComponents, TemplateComponents, Components,
+        ContentHandlers, TemplateHandlers, Handlers, ContentTags, TemplateTags,
+        Tags, ContentTemplateGroups, ContentUserGroups, UserGroupMembers, UserGroups,
+        ContentUsers, Content, Templates, TemplateGroups, ChangeBatches
+      RESTART IDENTITY CASCADE;
+    `;
+    logger.info("Truncating Preempt library tables...");
+    await pool.query(truncateSql);
+
+    // 3. Restore the Users.home_page constraint
+    await pool.query("ALTER TABLE Users ADD CONSTRAINT fk_user_home_page FOREIGN KEY (home_page) REFERENCES Content(id) ON DELETE SET NULL;");
+
+    // 4. Reload Library Data
+    await loadLibraryData(dbUser);
+
+    logger.info("Sync sequence complete. Restarting server...");
+    res.send(`
+      <div>Database synced successfully. The server is restarting...</div>
+      <br />
+      <a href="/">Return to Homepage</a>
+    `);
+    
+    // 5. Graceful restart
+    setTimeout(() => {
+      try {
+        logger.info("Sending SIGTERM to parent process to trigger full container restart...");
+        process.kill(process.ppid, 'SIGTERM');
+      } catch (err) {
+        logger.error({ err }, "Failed to kill parent process, calling process.exit(0)");
+        process.exit(0);
+      }
+    }, 1000);
+
+  } catch (err) {
+    logger.error({ err }, "Failed to execute /sync");
+    res.status(500).send("Internal server error during database sync.");
+  }
+});
+
 router.get(/(.*)/, authenticateToken, async (req, res, next) => {
   try {
     const aliases = await Setting.get(pgSettingSource, 'page_aliases');

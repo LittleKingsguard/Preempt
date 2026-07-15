@@ -75,11 +75,22 @@
         const defNode = activeBinding?._instantiatedNodes?.[0];
         if (defNode) {
           mainContent.push({
-            type: "button",
-            content: "Inspect Component Node",
-            props: { "data-target-ref": comp.reference, "data-source-id": node.css?.id || "" },
-            component: [{target: "handlers.click", reference: "editorSelectNode"}],
-            css: { classes: ["editor-btn", "editor-btn-primary"] }
+            type: "div", css: { style: { display: "flex", gap: "5px" } }, content: [
+              {
+                type: "button",
+                content: "Inspect Component Node",
+                props: { "data-target-ref": comp.reference, "data-source-id": node.css?.id || "" },
+                component: [{target: "handlers.click", reference: "editorSelectNode"}],
+                css: { classes: ["editor-btn", "editor-btn-primary"] }
+              },
+              {
+                type: "button",
+                content: "Edit Details",
+                props: { "data-target-ref": comp.reference, "data-target-type": "component" },
+                component: [{target: "handlers.click", reference: "editorOpenDetailPane"}],
+                css: { classes: ["editor-btn"] }
+              }
+            ]
           });
         } else {
            mainContent.push({ type: "label", content: "Node not instantiated", css: { classes: ["inspector-label"], style: { color: "#d9534f" } } });
@@ -158,6 +169,14 @@
       } else {
         contentRow.push({ type: "label", content: "Def Not Found", css: { classes: ["inspector-label"], style: { color: "#d9534f", width: "auto" } } });
       }
+      
+      contentRow.push({
+        type: "button",
+        content: "Edit",
+        props: { "data-target-ref": comp.reference, "data-target-type": "component" },
+        component: [{target: "handlers.click", reference: "editorOpenDetailPane"}],
+        css: { classes: ["editor-btn"] }
+      });
 
       contentNodesBatch.push({
         type: "div", css: { classes: ["inspector-field-row"], style: { padding: "5px", background: "#333", borderRadius: "4px" } },
@@ -183,7 +202,8 @@
         { reference: "evtRef", value: evtKey },
         { reference: "evtVal", value: key },
         { reference: "refRef", value: refKey },
-        { reference: "refVal", value: hRef }
+        { reference: "refVal", value: hRef },
+        { reference: "btnRef", value: hRef }
       ]
     });
   });

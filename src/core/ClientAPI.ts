@@ -54,7 +54,7 @@ export class ClientAPI {
   ): Promise<void> {
     const queryParams = new URLSearchParams(options.query as any).toString();
     const queryURL = queryParams ? `${options.url}?${queryParams}` : options.url;
-    const response = await fetch(queryURL, { method: "GET" });
+    const response = await fetch(queryURL, { method: "GET", headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
     const data = await response.json();
     let nodes: Node[] = [];
     let combinedMetadata: any = {};
@@ -147,6 +147,7 @@ export class ClientAPI {
       if (combinedMetadata.template && combinedMetadata.template.component) {
         allComponents.push(...combinedMetadata.template.component);
       }
+      console.log(`[DEBUG] fetchContent gathered allComponents for batch ${options.batchLabel}:`, allComponents.map(c => c.reference));
       const newPayload: ContentPayload = {
         metadata: { ...combinedMetadata, batchLabel: options.batchLabel },
         content: nodes.map(n => n.exportToJson()) as NodeData[],

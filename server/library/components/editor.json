@@ -84,7 +84,13 @@
         { "reference": "editorInspectorKeyValueRow" },
         { "reference": "editorInspectorChildRow" },
         { "reference": "editorSelectParent", "target": "handlers.click" },
-        { "reference": "editorSelectNode", "target": "handlers.click" }
+        { "reference": "editorSelectNode", "target": "handlers.click" },
+        { "reference": "editorDetailPane" },
+        { "reference": "editorTestDetailPane", "target": "handlers.click" },
+        { "reference": "editorSaveDetailPane", "target": "handlers.click" },
+        { "reference": "editorCloseDetailPane", "target": "handlers.click" },
+        { "reference": "editorOpenDetailPane", "target": "handlers.click" },
+        { "reference": "editorUpdateNodeProp", "target": "handlers.click" }
       ]
     }
   ]

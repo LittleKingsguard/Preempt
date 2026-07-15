@@ -52,6 +52,11 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
           reference: h.name,
           value: { name: h.name, body: h.body }
         });
+      } else {
+        payload.component.push({
+          reference: h.name,
+          value: { name: h.name, body: "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');" }
+        });
       }
     });
   }

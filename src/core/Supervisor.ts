@@ -265,6 +265,10 @@ export class Supervisor {
     };
 
     const regenerateTree = (existingNode: Node | null, data: any): Node => {
+      if (existingNode && data && data.component) {
+        existingNode.data.component = deepClone(data.component);
+        existingNode.setComponents(deepClone(data.component));
+      }
       let newNode: Node;
       if (!existingNode) {
         newNode = new Node(deepClone(data));
@@ -326,7 +330,15 @@ export class Supervisor {
     });
 
     const safeTemplateData = deepClone(templateDataToUse);
-    const allComponents = this.contentData.flatMap(c => c.component || []);
+    console.log(`[DEBUG] contentData batches available:`, this.contentData.map(c => c.metadata?.batchLabel));
+    const allComponents = this.contentData.flatMap(c => {
+      const componentsFromPayload = c.component || [];
+      const componentsFromContentRoots = (Array.isArray(c.content) ? c.content : [c.content]).flatMap((node: any) => {
+        return (node?.component || []).filter((comp: any) => comp.value !== undefined && comp.value !== null);
+      });
+      return [...componentsFromPayload, ...componentsFromContentRoots];
+    });
+    console.log("[DEBUG] allComponents gathered:", allComponents.map(c => c.reference));
     if (allComponents.length > 0) {
       if (!safeTemplateData.component) safeTemplateData.component = [];
       safeTemplateData.component.push(...deepClone(allComponents));
@@ -413,18 +425,31 @@ export class Supervisor {
       this.rootNode.applyComponentsTree();
     }
 
-    /* for (const targetNode of Node.placementArray) {
-      if (!targetNode.children || targetNode.children.length === 0) {
+    for (const targetNode of Node.placementArray) {
+      const hasVisibleChildren = targetNode.children && targetNode.children.some(c => c.css?.style?.display !== 'none');
+      if (!hasVisibleChildren) {
         const displayIfEmpty = targetNode.props?.displayIfEmpty;
         if (displayIfEmpty === false || displayIfEmpty === null || displayIfEmpty === undefined || displayIfEmpty === "false") {
           if (!targetNode.css) targetNode.css = {};
           if (!targetNode.css.style) targetNode.css.style = {};
-          targetNode.css.style.display = "none";
+          if (targetNode.css.style.display !== "none") {
+            targetNode.css.style.display = "none";
+            targetNode.hasChangedSinceRender = true;
+          }
         } else {
           targetNode.addChild(displayIfEmpty);
         }
+      } else {
+        const isHiddenInState = targetNode.css?.style?.display === "none";
+        const isHiddenInDom = targetNode.element && targetNode.element.style.display === "none";
+        if (isHiddenInState || isHiddenInDom) {
+          if (!targetNode.css) targetNode.css = {};
+          if (!targetNode.css.style) targetNode.css.style = {};
+          targetNode.css.style.display = "";
+          targetNode.hasChangedSinceRender = true;
+        }
       }
-    } */
+    }
   }
 
   private async preProcess(): Promise<void> {
