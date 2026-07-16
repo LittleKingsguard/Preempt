@@ -339,17 +339,19 @@ export class Supervisor {
       return [...componentsFromPayload, ...componentsFromContentRoots];
     });
     console.log("[DEBUG] allComponents gathered:", allComponents.map(c => c.reference));
-    if (allComponents.length > 0) {
-      if (!safeTemplateData.component) safeTemplateData.component = [];
-      safeTemplateData.component.push(...deepClone(allComponents));
-    }
+    const mountPointData: NodeData = {
+      type: "div",
+      props: { id: this.mountElementId },
+      content: safeTemplateData,
+      component: deepClone(allComponents)
+    };
 
-    console.log("[DEBUG] safeTemplateData being used for rootNode:", JSON.stringify(safeTemplateData).substring(0, 500));
+    console.log("[DEBUG] mountPointData being used for rootNode:", JSON.stringify(mountPointData).substring(0, 500));
 
     // Dynamic handlers are now compiled in Node.ts during component scanning.
     // Legacy target === "handlers.dynamic" logic is intentionally removed.
 
-    this.rootNode = regenerateTree(this.rootNode, safeTemplateData);
+    this.rootNode = regenerateTree(this.rootNode, mountPointData);
 
     const allContent = this.contentData.flatMap(payload => {
       if ((payload as any).type) return [payload as unknown as NodeData];
@@ -496,10 +498,7 @@ export class Supervisor {
         const domElement = this.rootNode.render();
         const mountTarget = document.getElementById(this.mountElementId);
         if (mountTarget && domElement) {
-          if (!mountTarget.contains(domElement)) {
-            mountTarget.innerHTML = "";
-            mountTarget.appendChild(domElement);
-          }
+          mountTarget.replaceWith(domElement);
         }
       }
     }

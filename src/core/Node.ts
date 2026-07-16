@@ -115,7 +115,17 @@ export class Node {
     if (components === undefined) {
       delete this.component;
     } else {
-      const filtered = components.filter(c => c !== null);
+      let filtered = components.filter(c => c !== null);
+      const seenUntargetedRefs = new Set<string>();
+      filtered = filtered.reverse().filter(c => {
+        if (!c.target) {
+          if (seenUntargetedRefs.has(c.reference)) return false;
+          seenUntargetedRefs.add(c.reference);
+          return true;
+        }
+        return true;
+      }).reverse();
+
       if (filtered.length > 0) {
         this.component = filtered;
       } else {
@@ -130,14 +140,13 @@ export class Node {
     this.isComponentInjected = isComponentInjected;
     this.resolveVersion();
 
+    this.props = Node.deepClone(this.data.props) || {};
     this.css = Node.deepClone(this.data.css) || {};
     if (!this.css.id) {
-      this.css.id = Node.generateObjectHash(this.data);
+      this.css.id = this.props.id || Node.generateObjectHash(this.data);
     }
-    
-    this.props = Node.deepClone(this.data.props) || {};
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && this.css.id) {
       const existingEl = document.getElementById(this.css.id);
       if (existingEl) {
         this.element = existingEl;
