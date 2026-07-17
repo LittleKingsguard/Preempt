@@ -3,7 +3,7 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState, ComponentBinding, HandlerDef, NodeData } from "../../types/NodeSchema.js";
 
 export class SlotAssemblyWorker extends BaseWorker {
-  protected async processNode(node: Node, rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     // Phase 3: Slot Assembly
     // Locks all other components (content, props, handlers, css)
     
@@ -95,7 +95,7 @@ export class SlotAssemblyWorker extends BaseWorker {
     }
 
     if (Object.keys(nextState).length > 0) {
-      node.receiveNextState(nextState);
+      node.receiveNextState(nextState, 4);
     }
   }
 
