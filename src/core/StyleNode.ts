@@ -36,13 +36,6 @@ export class StyleNode {
     this.ruleIndex = sheet.insertRule(rule, sheet.cssRules.length);
   }
 
-  public renderToString(): string {
-    const styles = Object.entries(this.data.styles)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}: ${v};`)
-      .join(" ");
-    return `${this.data.selector} { ${styles} }`;
-  }
-
   public delete(): void {
     const deletedIndex = this.ruleIndex;
     const sheetRef = this.sheet;

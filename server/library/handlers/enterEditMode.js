@@ -40,14 +40,21 @@ async (event, context) => {
           
           if (!isEditorNode) {
             const hasClickHandler = node.handlers?.click || node.handlers?.onclick;
-            const hasComponentClickHandler = node.component?.some(c => c.target === "handlers.click" || c.target === "handlers.onclick");
+            const hasComponentClickHandler = node.sourceComponents ? [...Array.from(node.sourceComponents.values()), ...Array.from(node.targetComponents.values())].some(c => c.target === "handlers.click" || c.target === "handlers.onclick") : node.component?.some(c => c.target === "handlers.click" || c.target === "handlers.onclick");
 
             if (!hasClickHandler && !hasComponentClickHandler) {
-              if (!node.component) node.component = [];
               const binding = { reference: "EditorInspectHandler", target: "handlers.click" };
-              if (!node.component.some(c => c.reference === "EditorInspectHandler")) {
-                node.component.push(binding);
-                node.hasChangedSinceRender = true;
+              if (node.targetComponents) {
+                if (!Array.from(node.targetComponents.values()).some(c => c.reference === "EditorInspectHandler")) {
+                  node.targetComponents.set(binding.target, binding);
+                  node.hasChangedSinceRender = true;
+                }
+              } else {
+                if (!node.component) node.component = [];
+                if (!node.component.some(c => c.reference === "EditorInspectHandler")) {
+                  node.component.push(binding);
+                  node.hasChangedSinceRender = true;
+                }
               }
             }
           }
@@ -55,7 +62,13 @@ async (event, context) => {
           if (node.children) {
             node.children.forEach(injectInspect);
           }
-          if (node.component) {
+          if (node.sourceComponents) {
+            [...Array.from(node.sourceComponents.values()), ...Array.from(node.targetComponents.values())].forEach(binding => {
+              if (binding._instantiatedNodes) {
+                binding._instantiatedNodes.forEach(injectInspect);
+              }
+            });
+          } else if (node.component) {
             node.component.forEach(binding => {
               if (binding._instantiatedNodes) {
                 binding._instantiatedNodes.forEach(injectInspect);
@@ -85,7 +98,13 @@ async (event, context) => {
       if (node.children) {
         node.children.forEach(collectNodes);
       }
-      if (node.component) {
+      if (node.sourceComponents) {
+        [...Array.from(node.sourceComponents.values()), ...Array.from(node.targetComponents.values())].forEach(binding => {
+          if (binding._instantiatedNodes) {
+            binding._instantiatedNodes.forEach(collectNodes);
+          }
+        });
+      } else if (node.component) {
         node.component.forEach(binding => {
           if (binding._instantiatedNodes) {
             binding._instantiatedNodes.forEach(collectNodes);

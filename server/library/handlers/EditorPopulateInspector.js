@@ -66,7 +66,8 @@
   comps.forEach((comp, index) => {
     if (comp.value !== undefined) {
       // It's a definition
-      const activeBinding = node.component?.find(b => b.reference === comp.reference);
+      const allNodeComps = node.sourceComponents ? [...Array.from(node.sourceComponents.values()), ...Array.from(node.targetComponents.values())] : (node.component || []);
+      const activeBinding = allNodeComps.find(b => b.reference === comp.reference);
       const referencingNodes = activeBinding?._referencingNodes || [];
       const isNodeDef = activeBinding?._instantiatedNodes && activeBinding._instantiatedNodes.length > 0;
       
@@ -147,7 +148,8 @@
       let defNode = null;
       let currParent = node.parent;
       while (currParent) {
-        if (currParent.component?.some(b => b.reference === comp.reference && b.value !== undefined && b.value !== null)) {
+        const hasSourceComp = currParent.sourceComponents ? currParent.sourceComponents.has(comp.reference) : currParent.component?.some(b => b.reference === comp.reference && b.value !== undefined && b.value !== null);
+        if (hasSourceComp) {
           defNode = currParent;
           break;
         }
@@ -302,7 +304,8 @@
   let isComponent = false;
   let curr = node;
   while (curr) {
-    if (curr.isComponentInjected || (curr.component && curr.component.length > 0)) {
+    const hasComps = curr.sourceComponents ? (curr.sourceComponents.size > 0 || curr.targetComponents.size > 0) : (curr.component && curr.component.length > 0);
+    if (curr.isComponentInjected || hasComps) {
       isComponent = true;
       break;
     }

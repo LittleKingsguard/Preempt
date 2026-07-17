@@ -1,10 +1,10 @@
-import type { NodeData, NodeQuery, HandlerDef, ComponentBinding } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, HandlerDef, ComponentBinding, NextState, RollbackState } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
 
 export class Node {
-  private static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
+  public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
     "img": ["src", "alt"],
     "a": ["href"],
     "iframe": ["src"],
@@ -15,6 +15,7 @@ export class Node {
   };
 
   public data: NodeData;
+  public _lastValidState?: RollbackState;
 
   public children: Node[] = [];
   public parent: Node | null = null;
@@ -56,17 +57,19 @@ export class Node {
   public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
   public versions?: any[];
 
+  public sourceComponents: Map<string, any> = new Map();
+  public targetComponents: Map<string, any> = new Map();
   public static placementArray: Node[] = [];
-  public static sourcePlacements: Node[] = [];
+  public static sourcePlacements: Record<string, Node[]> = {};
   public static typeComponentNodes: Node[] = [];
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
   public wasPlaced: boolean = false;
-  private _attachedListeners: { eventName: string, handlerFunc: EventListener }[] = [];
+  public _attachedListeners: { eventName: string, handlerFunc: EventListener }[] = [];
 
   public static globalMetadata: any = {};
 
-  private static deepClone(val: any) {
+  public static deepClone(val: any): any {
     if (val === undefined) return undefined;
     const seen = new WeakSet();
     const replacer = (k: string, v: any) => {
@@ -117,13 +120,18 @@ export class Node {
     } else {
       let filtered = components.filter(c => c !== null);
       const seenUntargetedRefs = new Set<string>();
+      this.sourceComponents.clear();
+      this.targetComponents.clear();
       filtered = filtered.reverse().filter(c => {
         if (!c.target) {
           if (seenUntargetedRefs.has(c.reference)) return false;
           seenUntargetedRefs.add(c.reference);
+          this.sourceComponents.set(c.reference, c);
+          return true;
+        } else {
+          this.targetComponents.set(c.target, c);
           return true;
         }
-        return true;
       }).reverse();
 
       if (filtered.length > 0) {
@@ -146,7 +154,7 @@ export class Node {
       this.css.id = this.props.id || Node.generateObjectHash(this.data);
     }
 
-    if (typeof window !== 'undefined' && this.css.id) {
+    if (typeof window !== 'undefined' && typeof document !== 'undefined' && this.css.id) {
       const existingEl = document.getElementById(this.css.id);
       if (existingEl) {
         this.element = existingEl;
@@ -179,25 +187,10 @@ export class Node {
     this.handlers = Node.deepClone(this.data.handlers);
     if (this.handlers === undefined) {
       delete this.handlers;
-    } else {
-      for (const [key, value] of Object.entries(this.handlers)) {
-        const handlerBody = typeof value === 'object' && value !== null && 'body' in value ? value.body : String(value);
-        const compiled = clientAPI.compileHandler(key, handlerBody);
-        if (compiled) this.compiledHandlers[key] = compiled;
-      }
     }
 
     this.setComponents(Node.deepClone(this.data.component));
-    if (this.component) {
-      this.component.forEach((binding: any) => {
-        const isHandler = typeof binding.value === 'object' && binding.value !== null && 'body' in binding.value;
-        if (isHandler) {
-          const handlerName = binding.value.name || binding.reference;
-          const compiled = clientAPI.compileHandler(handlerName, binding.value.body);
-          if (compiled) this.compiledHandlers[handlerName] = compiled;
-        }
-      });
-    }
+
 
     this.placement = Node.deepClone(this.data.placement);
     if (this.placement === undefined) delete this.placement;
@@ -206,27 +199,20 @@ export class Node {
     if (this.versions === undefined) delete this.versions;
 
     this.resolveVersion();
-
-    if (this.component) {
-      for (const binding of this.component) {
-        if (binding === null) continue;
-        if (typeof binding.value === "object" && binding.value !== null) {
-          const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
-          binding._instantiatedNodes = [];
-          for (const d of dataArray) {
-            if (typeof d !== "string" && !('body' in d)) {
-              const newNode = new Node(d, this, true);
-              binding._instantiatedNodes!.push(newNode);
-              Node.typeComponentNodes.push(newNode);
-            }
-          }
-        }
-      }
-    }
-    Node.appendPlacement(this);
   }
 
-
+  public cloneInstantiated(parent: Node | null): Node {
+    const clonedData = Node.deepClone(this.data);
+    const cloned = new Node(clonedData, parent, true);
+    
+    cloned.children = [];
+    for (const child of this.children) {
+      cloned.children.push(child.cloneInstantiated(cloned));
+    }
+    
+    cloned.isComponentInjected = true;
+    return cloned;
+  }
 
   private resolveVersion(): void {
     const targetVersion = this.props?.version || Node.globalMetadata?.version;
@@ -271,515 +257,10 @@ export class Node {
 
 
 
-  public applyComponentsTree(): void {
-    if (this.hasChangedSinceRender) {
-      this.applyComponents();
-    }
+  // Removed applyComponents and applyComponentsTree to align with purely reactive data container spec
 
-    for (const child of this.children) {
-      child.applyComponentsTree();
-    }
-  }
 
-  private applyComponents(processedComponents: Set<any> = new Set()): void {
-    if (!this.component) return;
 
-    const deepCloneInstantiated = (node: Node, newParent: Node): Node => {
-      const cloned = new Node(node.data, newParent, true);
-      cloned.type = node.type;
-      cloned.content = node.content;
-      cloned.css = Node.deepClone(node.css) || {};
-      cloned.props = Node.deepClone(node.props) || {};
-      cloned.handlers = Node.deepClone(node.handlers);
-      cloned.compiledHandlers = { ...node.compiledHandlers };
-      cloned.setComponents(Node.deepClone(node.component));
-      cloned.children = [];
-      for (const child of node.children) {
-        cloned.children.push(deepCloneInstantiated(child, cloned));
-      }
-      return cloned;
-    };
-
-    const componentsToProcess = this.component.filter(c => !processedComponents.has(c));
-    if (componentsToProcess.length === 0) return;
-
-    const sortedComponents = [...componentsToProcess].sort((a, b) => {
-      if (a.target === "type" && b.target !== "type") return -1;
-      if (a.target !== "type" && b.target === "type") return 1;
-      return 0;
-    });
-
-    let addedNew = false;
-
-    for (const binding of sortedComponents) {
-      processedComponents.add(binding);
-      if (!binding.target) continue;
-
-      let resolvedValue: string | NodeData | NodeData[] | null = binding.value !== undefined ? binding.value : null;
-      let resolvedBinding: ComponentBinding | null = binding.value !== undefined ? binding : null;
-
-      if (resolvedValue !== null) {
-        if (!binding._referencingNodes) binding._referencingNodes = [];
-        if (!binding._referencingNodes.includes(this)) {
-          binding._referencingNodes.push(this);
-        }
-      }
-
-      if (resolvedValue === null) {
-        let currentParent = this.parent;
-        while (currentParent) {
-          const parentBinding = currentParent.component?.find(b => b.reference === binding.reference && b.value !== null && b.value !== undefined);
-          if (parentBinding) {
-            resolvedValue = parentBinding.value !== undefined ? parentBinding.value : null;
-            resolvedBinding = parentBinding;
-            if (!parentBinding._referencingNodes) parentBinding._referencingNodes = [];
-            if (!parentBinding._referencingNodes.includes(this)) {
-              parentBinding._referencingNodes.push(this);
-            }
-            break;
-          }
-          currentParent = currentParent.parent;
-        }
-      }
-
-      if (resolvedValue === null) {
-        let root = this as any;
-        let chain = [];
-        while (root.parent) {
-          chain.push(root.type + (root.css?.id ? '#' + root.css.id : ''));
-          root = root.parent;
-        }
-        chain.push(root.type);
-        console.error(`[DEBUG] Root node components:`, root.component?.map((c: any) => c.reference));
-        console.error(`[DEBUG] Current node chain:`, chain.reverse().join(' -> '));
-        console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
-        continue;
-      }
-
-      this.hasChangedSinceRender = true;
-
-      if (binding.target === "type") {
-        const dataArray = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue];
-
-        if (binding._clonedChildren) {
-          this.children = this.children.filter(c => !binding._clonedChildren!.includes(c));
-        }
-        binding._clonedChildren = [];
-        if (binding._appendedContent && this.content !== undefined && typeof this.content === 'string') {
-          this.content = this.content.replace(binding._appendedContent, "");
-        }
-        binding._appendedContent = "";
-
-        for (const d of dataArray) {
-          if (typeof d === "string") {
-            this.type = d;
-            continue;
-          }
-
-          const instantiatedNode = resolvedBinding?._instantiatedNodes?.[dataArray.indexOf(d)];
-          if (instantiatedNode) {
-            if (instantiatedNode.type) this.type = instantiatedNode.type;
-
-            for (const child of instantiatedNode.children) {
-              const clonedChild = deepCloneInstantiated(child, this);
-              this.children.push(clonedChild);
-              binding._clonedChildren!.push(clonedChild);
-            }
-
-            if (instantiatedNode.content !== undefined) {
-              if (this.content !== undefined) {
-                this.content += instantiatedNode.content as string;
-              } else {
-                this.content = instantiatedNode.content as string;
-              }
-              binding._appendedContent += instantiatedNode.content as string;
-            }
-
-            if (instantiatedNode.css) {
-              if (!this.css) this.css = {};
-              if (instantiatedNode.css.style) this.css.style = { ...this.css.style, ...instantiatedNode.css.style };
-              if (instantiatedNode.css.classes) this.css.classes = [...new Set([...(this.css.classes || []), ...instantiatedNode.css.classes])];
-              if (instantiatedNode.css.cssDef) {
-                this.css.cssDef = [...(this.css.cssDef || []), ...instantiatedNode.css.cssDef];
-                for (const def of instantiatedNode.css.cssDef) {
-                  this.styleNodes.push(new StyleNode(def, this, true));
-                }
-              }
-            }
-
-            if (instantiatedNode.props) this.props = { ...this.props, ...instantiatedNode.props };
-            if (instantiatedNode.handlers) {
-              if (!this.handlers) this.handlers = {};
-              this.handlers = { ...this.handlers, ...instantiatedNode.handlers };
-            }
-            if (instantiatedNode.compiledHandlers) {
-              this.compiledHandlers = { ...instantiatedNode.compiledHandlers };
-            }
-            if (instantiatedNode.component) {
-              this.setComponents([...(this.component || []), ...instantiatedNode.component]);
-              addedNew = true;
-            }
-          }
-        }
-        continue;
-      }
-
-      if (typeof resolvedValue === "string") {
-        this.applyProperty(binding.target, resolvedValue);
-      } else if (typeof resolvedValue === "object" && resolvedValue !== null && binding.target.startsWith("handlers.")) {
-        this.applyProperty(binding.target, resolvedValue as unknown as string | HandlerDef);
-      } else if (binding.target === "content") {
-        if (Array.isArray(resolvedValue)) {
-          this.content = undefined;
-          this.children = [];
-          for (let i = 0; i < resolvedValue.length; i++) {
-            const instantiatedNode = resolvedBinding?._instantiatedNodes?.[i];
-            if (instantiatedNode) {
-              this.children.push(deepCloneInstantiated(instantiatedNode, this));
-            } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
-              this.children.push(new Node(resolvedValue[i] as NodeData, this, true));
-            }
-          }
-        } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
-          this.content = undefined;
-          let instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
-          if (instantiatedNode) {
-            this.children = [deepCloneInstantiated(instantiatedNode, this)];
-          } else {
-            this.children = [new Node(resolvedValue as NodeData, this, true)];
-          }
-        } else {
-          this.content = String(resolvedValue);
-          this.children = [];
-        }
-        addedNew = true;
-      } else {
-        console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
-      }
-    }
-
-    if (addedNew) {
-      this.applyComponents(processedComponents);
-    }
-  }
-
-
-  private applyProperty(path: string, value: string | HandlerDef): void {
-    let changed = false;
-    if (path === "content") {
-      if (this.content !== (value as string)) changed = true;
-      this.content = value as string;
-    } else if (path.startsWith("props.")) {
-      const propName = path.substring(6);
-      if (!this.props) this.props = {};
-      if (this.props[propName] !== (value as string)) changed = true;
-      this.props[propName] = value as string;
-    } else if (path.startsWith("handlers.")) {
-      const handlerName = path.substring(9);
-      if (!this.handlers) this.handlers = {};
-      if (this.handlers[handlerName] !== value) changed = true;
-      this.handlers[handlerName] = value as string | HandlerDef;
-    } else if (path.startsWith("css.style.")) {
-      const styleName = path.substring(10);
-      if (!this.css) this.css = {};
-      if (!this.css.style) this.css.style = {};
-      if (this.css.style[styleName] !== (value as string)) changed = true;
-      this.css.style[styleName] = value as string;
-    }
-    if (changed) {
-      this.hasChangedSinceRender = true;
-    }
-  }
-
-
-  public static appendPlacement(node: Node): void {
-    if (node.placement?.placementName) {
-      Node.placementArray.push(node);
-    }
-    if (node.placement?.targetPlacement) {
-      Node.sourcePlacements.push(node);
-    }
-  }
-
-  public static clearPlacements(): void {
-    Node.placementArray = [];
-    Node.sourcePlacements = [];
-    Node.typeComponentNodes = [];
-  }
-
-
-
-  public placeInto(target: Node): void {
-    if (target === this) {
-      throw new Error("Cannot place node into itself");
-    }
-    let current: Node | null = target.parent;
-    while (current) {
-      if (current === this) {
-        throw new Error("Cannot place node into a descendant");
-      }
-      current = current.parent;
-    }
-
-    if (this.parent) {
-      this.parent.hasChangedSinceRender = true;
-      this.originalParent = this.parent;
-      this.originalIndex = this.parent.children.indexOf(this);
-      if (this.originalIndex > -1) {
-        this.parent.children.splice(this.originalIndex, 1);
-      }
-    }
-    this.parent = target;
-    this.wasPlaced = true;
-    target.hasChangedSinceRender = true;
-    target.children.push(this);
-
-    if (target.placement) {
-      if (!target.placement._referencingNodes) target.placement._referencingNodes = [];
-      if (!target.placement._referencingNodes.includes(this)) {
-        target.placement._referencingNodes.push(this);
-      }
-    }
-
-    console.log("This node was placed", this, target);
-  }
-
-  public restorePlacement(): void {
-    if (!this.wasPlaced) return;
-
-    if (this.parent) {
-      this.parent.hasChangedSinceRender = true;
-      const index = this.parent.children.indexOf(this);
-      if (index > -1) {
-        this.parent.children.splice(index, 1);
-      }
-      if (this.parent.placement && this.parent.placement._referencingNodes) {
-        const refIndex = this.parent.placement._referencingNodes.indexOf(this);
-        if (refIndex > -1) {
-          this.parent.placement._referencingNodes.splice(refIndex, 1);
-        }
-      }
-    }
-
-    if (this.originalParent && this.originalIndex > -1) {
-      this.parent = this.originalParent;
-      this.parent.hasChangedSinceRender = true;
-      this.parent.children.splice(this.originalIndex, 0, this);
-    } else {
-      this.parent = null;
-    }
-
-    this.originalParent = null;
-    this.originalIndex = -1;
-    this.wasPlaced = false;
-  }
-
-  public static restoreAllPlacements(): void {
-    for (const node of Node.sourcePlacements) {
-      node.restorePlacement();
-    }
-    Node.clearPlacements();
-  }
-
-  public renderToString(): string {
-    if (!this.isValid) return "";
-
-    const tag = this.type || "div";
-    let attributes = "";
-
-    if (this.props) {
-      for (const [key, value] of Object.entries(this.props)) {
-        const escapedValue = String(value).replace(/"/g, '&quot;');
-        attributes += ` ${key}="${escapedValue}"`;
-      }
-    }
-
-    if (this.handlers) {
-      for (const [key, value] of Object.entries(this.handlers)) {
-        const eventName = key.startsWith('on') ? key.toLowerCase() : `on${key.toLowerCase()}`;
-        const handlerBody = typeof value === 'object' && value !== null && 'body' in value ? (value as any).body : String(value);
-        const trimmedValue = String(handlerBody).trim();
-        let jsCode = trimmedValue;
-        if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-          jsCode = `(${trimmedValue})(event, { node: null, metadata: null, rootNode: null })`;
-        }
-        const escapedValue = jsCode.replace(/"/g, '&quot;');
-        attributes += ` ${eventName}="${escapedValue}"`;
-      }
-    }
-
-    if (this.css) {
-      if (this.css.id) attributes += ` id="${this.css.id}"`;
-      if (this.css.classes && this.css.classes.length > 0) {
-        attributes += ` class="${this.css.classes.join(" ")}"`;
-      }
-      if (this.css.style) {
-        const styleStr = Object.entries(this.css.style)
-          .map(([k, v]) => `${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}: ${v}`)
-          .join("; ");
-        if (styleStr) attributes += ` style="${styleStr}"`;
-      }
-    }
-
-    let innerHTML = "";
-    if (this.content !== undefined) {
-      innerHTML += this.content
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    }
-
-    for (const child of this.children) {
-      innerHTML += child.renderToString();
-    }
-
-    const voidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
-    if (voidElements.includes(tag.toLowerCase())) {
-      return `<${tag}${attributes}>`;
-    }
-
-    return `<${tag}${attributes}>${innerHTML}</${tag}>`;
-  }
-
-  public render(): HTMLElement | null {
-    const oldElement = this.element;
-
-    if (!this.isValid) {
-      if (oldElement) {
-        oldElement.remove();
-        this.element = null;
-      }
-      return null;
-    }
-
-    if (!this.hasChangedSinceRender && oldElement) {
-      for (const child of this.children) {
-        child.render();
-      }
-      return oldElement;
-    }
-
-    const targetTag = (this.type || "div").toLowerCase();
-    const shouldReuse = oldElement && oldElement.tagName.toLowerCase() === targetTag;
-    const el = shouldReuse ? oldElement! : document.createElement(targetTag);
-    this.element = el;
-
-    if (this.props) {
-      for (const [key, value] of Object.entries(this.props)) {
-        el.setAttribute(key, String(value));
-      }
-    }
-
-    if (shouldReuse && el) {
-      for (const listener of this._attachedListeners) {
-        el.removeEventListener(listener.eventName, listener.handlerFunc);
-      }
-    }
-    this._attachedListeners = [];
-
-    if (this.handlers) {
-      for (const [key, value] of Object.entries(this.handlers)) {
-        try {
-          let handlerFunc: EventListener;
-          const handlerObj = value as any;
-          const context = { node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
-
-          let fn: Function | undefined;
-          if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-            fn = clientAPI.getHandler(handlerObj.name, this);
-          } else {
-            fn = clientAPI.getHandler(key, this);
-          }
-
-          if (fn) {
-            handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-          } else {
-            const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
-            const trimmedValue = handlerBody.trim();
-            if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-              fn = new Function('return ' + trimmedValue)();
-              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-            } else {
-              fn = new Function('event', 'context', trimmedValue);
-              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-            }
-          }
-          const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
-          el.addEventListener(eventName, handlerFunc);
-          this._attachedListeners.push({ eventName, handlerFunc });
-        } catch (err) {
-          console.error(`Failed to parse handler for event ${key}:`, err);
-        }
-      }
-    }
-
-    if (this.css) {
-      if (this.css.id) el.id = this.css.id;
-      if (this.css.classes) {
-        el.classList.add(...this.css.classes);
-      }
-      if (this.css.style) {
-        for (const [key, value] of Object.entries(this.css.style)) {
-          (el.style as any)[key] = value;
-        }
-      }
-    }
-
-    if (this.content) {
-      if (typeof this.content === "string") {
-        el.textContent = this.content;
-      }
-    }
-
-    if (["input", "textarea", "select"].includes(targetTag)) {
-      const inputEl = el as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-      const inputKey = this.props?.inputKey || this.css?.id || this.data.css?.id;
-      if (inputKey) {
-        if (Node.globalMetadata[inputKey] !== undefined) {
-          inputEl.value = Node.globalMetadata[inputKey];
-        } else if (this.content !== undefined && typeof this.content === "string") {
-          inputEl.value = this.content;
-          Node.globalMetadata[inputKey] = this.content;
-        }
-
-        if (!oldElement || !shouldReuse) {
-          el.addEventListener('input', (event: Event) => {
-            const target = event.target as HTMLInputElement;
-            Node.globalMetadata[inputKey] = target.value;
-          });
-        }
-      }
-    }
-
-    const activeChildElements = new Set<HTMLElement>();
-    for (const child of this.children) {
-      child.render();
-      if (child.element) {
-        activeChildElements.add(child.element);
-        if (child.element.parentNode !== el) {
-          el.appendChild(child.element);
-        }
-      }
-    }
-
-    const domChildren = Array.from(el.children);
-    for (const domChild of domChildren) {
-      if (!activeChildElements.has(domChild as HTMLElement)) {
-        domChild.remove();
-      }
-    }
-
-    if (oldElement && oldElement !== el) {
-      if (oldElement.parentNode) {
-        oldElement.replaceWith(el);
-      } else {
-        oldElement.remove();
-      }
-    }
-
-    this.hasChangedSinceRender = false;
-    return el;
-  }
 
   public addChild(childDataOrNode: NodeData | Node): Node {
     let childNode: Node;
@@ -793,13 +274,6 @@ export class Node {
     this.hasChangedSinceRender = true;
     this.children.push(childNode);
 
-    if (this.element) {
-      const childEl = childNode.render();
-      if (childEl) {
-        this.element.appendChild(childEl);
-      }
-    }
-
     return childNode;
   }
 
@@ -811,6 +285,16 @@ export class Node {
         this.parent.children.splice(index, 1);
       }
     }
+    const pIndex = Node.placementArray.indexOf(this);
+    if (pIndex > -1) Node.placementArray.splice(pIndex, 1);
+    for (const key of Object.keys(Node.sourcePlacements)) {
+      if (Array.isArray((Node.sourcePlacements as any)[key])) {
+        const arr = (Node.sourcePlacements as any)[key];
+        const sIndex = arr.indexOf(this);
+        if (sIndex > -1) arr.splice(sIndex, 1);
+        if (arr.length === 0) delete (Node.sourcePlacements as any)[key];
+      }
+    }
     for (const sNode of this.styleNodes) {
       sNode.delete();
     }
@@ -820,8 +304,45 @@ export class Node {
     }
   }
 
-  public modify(newData: Partial<NodeData>): void {
-    // Modify strictly the original untouched node.data for persistence
+  public receiveNextState(nextState: NextState, explicitPhaseId?: number): void {
+    const changedKeys = Object.keys(nextState);
+    if (changedKeys.length === 0) return;
+
+    const SupervisorClass = (typeof globalThis !== 'undefined' && (globalThis as any).Supervisor) ? (globalThis as any).Supervisor : Supervisor;
+    const SupervisorInstance = SupervisorClass.instance;
+
+    let targetPhase = 5; // default to Validation
+    if (explicitPhaseId !== undefined) {
+      if (SupervisorInstance && SupervisorInstance.activeLockedPhases && SupervisorInstance.activeLockedPhases.has(explicitPhaseId)) {
+        console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
+        return;
+      }
+      targetPhase = explicitPhaseId;
+    } else {
+      for (const key of changedKeys) {
+        if (SupervisorInstance && SupervisorInstance.isPropertyLocked && SupervisorInstance.isPropertyLocked(key)) {
+           console.error(`[Node] Lock violation: Property '${key}' is currently locked by another phase for node ${this.css?.id}`);
+           return;
+        }
+        const pId = SupervisorClass.propertyToPhaseMap ? SupervisorClass.propertyToPhaseMap[key] : 5;
+        if (pId !== undefined && pId < targetPhase) {
+           targetPhase = pId;
+        }
+      }
+    }
+    
+    // Snapshot state
+    this._lastValidState = {
+      type: this.type,
+      props: Node.deepClone(this.props),
+      css: Node.deepClone(this.css),
+      handlers: Node.deepClone(this.handlers),
+      content: this.content, // shallow
+      placement: Node.deepClone(this.placement),
+      children: this.children // shallow
+    };
+
+    // Apply optimistically
     const mergeDeep = (target: any, source: any) => {
       for (const key in source) {
         if (source[key] instanceof Object && !Array.isArray(source[key]) && source[key] !== null) {
@@ -832,7 +353,29 @@ export class Node {
         }
       }
     };
-    mergeDeep(this.data, newData);
+    mergeDeep(this.data, nextState);
+    Object.assign(this, nextState);
+    this.hasChangedSinceRender = true;
+
+    const sup: any = (typeof globalThis !== 'undefined' && (globalThis as any).Supervisor) ? (globalThis as any).Supervisor : Supervisor.instance;
+    if (sup && sup.getWorkerForPhase) {
+      const worker = sup.getWorkerForPhase(targetPhase);
+      if (worker) worker.push(this, this._lastValidState);
+    }
+  }
+
+  public rollback(rollbackState?: RollbackState): void {
+    const stateToRestore = rollbackState || this._lastValidState;
+    if (stateToRestore) {
+      Object.assign(this.data, stateToRestore);
+      Object.assign(this, stateToRestore);
+      console.warn(`[Node] Rolled back to previous valid state for node ${this.css?.id}`);
+    }
+  }
+
+  public static clearPlacements(): void {
+    Node.placementArray = [];
+    Node.sourcePlacements = {};
   }
 
   public validate(bubbleErrors: boolean = false): boolean {
@@ -950,7 +493,7 @@ export class Node {
     return null;
   }
 
-  public executeHandlers(phase: string, context: any): void {
+  public executeHandlers(phase: string, context: any, recursive: boolean = true): void {
     if (this.handlers && this.handlers[phase]) {
       try {
         const handlerObj = this.handlers[phase] as any;
@@ -963,28 +506,27 @@ export class Node {
           fn = clientAPI.getHandler(phase, this);
         }
 
-        if (fn) {
-          if (fn.length === 1) {
-            fn(fullContext);
-          } else {
-            fn(null, fullContext);
-          }
-        } else {
+        if (!fn) {
           const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
           const trimmedValue = handlerBody.trim();
           if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
             fn = new Function('return ' + trimmedValue)();
-            if (fn!.length === 1) {
-              console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (args=1). Body: ${trimmedValue.substring(0, 50)}`);
-              fn!(fullContext);
-            } else {
-              console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (args=2). Body: ${trimmedValue.substring(0, 50)}`);
-              fn!(null, fullContext);
-            }
           } else {
-            console.log(`[DEBUG] Executing phase handler ${phase} on node ${this.css?.id} (raw string). Body: ${trimmedValue.substring(0, 50)}`);
             fn = new Function('event', 'context', trimmedValue);
-            fn!(null, fullContext);
+          }
+        }
+
+        if (fn) {
+          let result: any;
+          if (fn.length === 1) {
+            result = fn(fullContext);
+          } else {
+            result = fn(null, fullContext);
+          }
+          if (result && typeof result.catch === 'function') {
+            result.catch((err: any) => {
+              console.error(`Failed to execute async ${phase} handler on node:`, err);
+            });
           }
         }
       } catch (err) {
@@ -992,8 +534,10 @@ export class Node {
       }
     }
 
-    for (const child of this.children) {
-      child.executeHandlers(phase, context);
+    if (recursive) {
+      for (const child of this.children) {
+        child.executeHandlers(phase, context, recursive);
+      }
     }
   }
 

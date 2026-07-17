@@ -14,7 +14,7 @@ export class ClientAPI {
         return current.compiledHandlers[key];
       }
       
-      const componentBinding = current.component?.find(c => c.reference === key);
+      const componentBinding = current.sourceComponents.get(key);
       if (componentBinding && typeof componentBinding.value === 'object' && componentBinding.value !== null && 'body' in componentBinding.value) {
         const compiled = this.compileHandler(key, componentBinding.value.body as string);
         if (compiled) {
@@ -137,8 +137,8 @@ export class ClientAPI {
       }
       const allComponents: any[] = [];
       nodes.forEach((n: Node) => {
-        if (n.component) {
-          allComponents.push(...n.component);
+        if (n.sourceComponents.size > 0 || n.targetComponents.size > 0) {
+          allComponents.push(...Array.from(n.sourceComponents.values()), ...Array.from(n.targetComponents.values()));
         }
         if (n.data?.component) {
           allComponents.push(...n.data.component);
@@ -153,18 +153,12 @@ export class ClientAPI {
         content: nodes.map(n => n.exportToJson()) as NodeData[],
         component: allComponents
       };
-      const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === options.batchLabel);
-      if (existingIndex > -1) {
-        this.replacePayload(Supervisor.instance, existingIndex, newPayload);
-      } else {
-        Supervisor.instance.contentData.push(newPayload);
-      }
+      
+      await Supervisor.injectContent(newPayload);
     }
 
     if (next) {
       next();
-    } else {
-      await Supervisor.rerun();
     }
   }
 
@@ -172,61 +166,34 @@ export class ClientAPI {
     partialNode: Partial<Node>,
     targetNode: Node,
     next?: () => void,
-    persistent?: boolean
+    _persistent?: boolean
   ): Promise<void> {
-    const isPersistent = persistent !== undefined ? persistent : (Supervisor.currentStage === 'closed');
-
-    if (isPersistent) {
-      const dataToMerge: any = {};
-      const dataKeys = ['type', 'content', 'css', 'props', 'handlers', 'component', 'placement', 'versions'];
-      for (const key of dataKeys) {
-        if (key in partialNode) {
-          dataToMerge[key] = (partialNode as any)[key];
-        }
+    const nextState: any = {};
+    const nodeKeys = ['type', 'content', 'css', 'props', 'handlers', 'component', 'placement', 'versions'];
+    for (const key of nodeKeys) {
+      if (key in partialNode) {
+        nextState[key] = (partialNode as any)[key];
       }
-      targetNode.modify(dataToMerge);
-      targetNode.hasChangedSinceRender = true;
-
-      if (next) {
-        next();
-      } else {
-        await Supervisor.rerun();
-      }
-    } else {
-      const nodeKeys = ['type', 'content', 'css', 'props', 'handlers', 'component', 'placement', 'versions'];
-      for (const key of nodeKeys) {
-        if (key in partialNode) {
-          (targetNode as any)[key] = (partialNode as any)[key];
-        }
-      }
-      targetNode.hasChangedSinceRender = true;
-      targetNode.validate();
-      targetNode.render();
-      if (next) next();
     }
+
+    targetNode.receiveNextState(nextState);
+
+    if (next) next();
   }
 
   async addContentNodes(nodes: any | any[], batchId: string, next?: () => void): Promise<void> {
     const nodeArray = Array.isArray(nodes) ? nodes : [nodes];
     if (Supervisor.instance) {
-      if (!Supervisor.instance.contentData) Supervisor.instance.contentData = [];
       const newPayload: ContentPayload = {
         metadata: { batchLabel: batchId },
         content: nodeArray,
         component: []
       };
-      const existingIndex = Supervisor.instance.contentData.findIndex(p => p.metadata?.batchLabel === batchId);
-      if (existingIndex > -1) {
-        this.replacePayload(Supervisor.instance, existingIndex, newPayload);
-      } else {
-        Supervisor.instance.contentData.push(newPayload);
-      }
+      await Supervisor.injectContent(newPayload);
     }
 
     if (next) {
       next();
-    } else {
-      await Supervisor.rerun();
     }
   }
 
@@ -254,14 +221,13 @@ export class ClientAPI {
       // Also add handlers to the root node component list for immediate child resolution on the current root node instance
       const root = Supervisor.getRootNode();
       if (root) {
-        root.component = root.component || [];
         handlers.forEach((h: any) => {
-          if (!root.component!.some((c: any) => c.reference === h.name)) {
-            root.component!.push({ reference: h.name, value: h.body });
+          if (!root.sourceComponents.has(h.name)) {
+            root.sourceComponents.set(h.name, { reference: h.name, value: h.body });
           }
         });
-        if (!root.component!.some((c: any) => c.reference === "inspectedNodeData")) {
-          root.component!.push({ reference: "inspectedNodeData", value: "" });
+        if (!root.sourceComponents.has("inspectedNodeData")) {
+          root.sourceComponents.set("inspectedNodeData", { reference: "inspectedNodeData", value: "" });
         }
       }
 
@@ -290,7 +256,7 @@ export class ClientAPI {
             }
 
             // If the node has a component reference matching the handler's name, map it to the target event
-            const eventBinding = node.component?.find((c: any) => c.reference === h.name && c.target?.startsWith("handlers."));
+            const eventBinding = Array.from(node.targetComponents.values()).find((c: any) => c.reference === h.name && c.target?.startsWith("handlers."));
             if (eventBinding) {
               eventBinding.value = { name: h.name, body: h.body };
               const eventName = eventBinding.target.substring(9);
@@ -313,36 +279,6 @@ export class ClientAPI {
     } else {
       await Supervisor.rerun();
     }
-  }
-
-  private replacePayload(instance: any, existingIndex: number, newPayload: ContentPayload) {
-    const oldPayload = instance.contentData[existingIndex];
-    const oldLen = (oldPayload as any).type ? 1 : (Array.isArray(oldPayload.content) ? oldPayload.content.length : 0);
-    const newLen = (newPayload as any).type ? 1 : (Array.isArray(newPayload.content) ? newPayload.content.length : 0);
-    
-    let startIndex = 0;
-    for (let i = 0; i < existingIndex; i++) {
-      const p = instance.contentData[i];
-      startIndex += (p as any).type ? 1 : (Array.isArray(p.content) ? p.content.length : 0);
-    }
-
-    if (instance.contentNodes) {
-      for (let i = startIndex; i < startIndex + oldLen; i++) {
-        const oldNode = instance.contentNodes[i];
-        if (oldNode) {
-          if (oldNode.element) oldNode.element.remove();
-          if (oldNode.parent) {
-            const idx = oldNode.parent.children.indexOf(oldNode);
-            if (idx > -1) oldNode.parent.children.splice(idx, 1);
-          }
-        }
-      }
-
-      const newNodes = new Array(newLen).fill(null);
-      instance.contentNodes.splice(startIndex, oldLen, ...newNodes);
-    }
-
-    instance.contentData[existingIndex] = newPayload;
   }
 }
 

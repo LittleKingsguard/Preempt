@@ -16,7 +16,13 @@
       node.children[0].content = "Sign In";
       node.children[0].props = { href: "/api/oauth/login" };
       // Remove the dropdown toggle handler
-      if (node.children[0].component) {
+      if (node.children[0].sourceComponents) {
+        for (const [key, comp] of Array.from(node.children[0].targetComponents.entries())) {
+          if (comp.reference === "ToggleUserDropdown") {
+            node.children[0].targetComponents.delete(key);
+          }
+        }
+      } else if (node.children[0].component) {
         node.children[0].component = node.children[0].component.filter(c => c.reference !== "ToggleUserDropdown");
       }
     }

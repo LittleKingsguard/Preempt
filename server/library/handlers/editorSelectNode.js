@@ -9,7 +9,8 @@
   if (targetRef && sourceId) {
     const sourceNode = context.rootNode.findNode({ css: { id: sourceId } });
     if (sourceNode) {
-      const binding = sourceNode.component?.find(b => b.reference === targetRef);
+      const allSourceComps = sourceNode.sourceComponents ? [...Array.from(sourceNode.sourceComponents.values()), ...Array.from(sourceNode.targetComponents.values())] : (sourceNode.component || []);
+      const binding = allSourceComps.find(b => b.reference === targetRef);
       targetNode = binding?._instantiatedNodes?.[0];
     }
   } else if (targetId) {

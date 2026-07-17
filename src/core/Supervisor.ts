@@ -2,24 +2,94 @@ import type { PipelineConfig } from "../types/Pipeline.js";
 import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { StyleNode } from "./StyleNode.js";
+import { InstantiationWorker } from "./workers/InstantiationWorker.js";
+import { PlacementWorker } from "./workers/PlacementWorker.js";
+import { ComponentAssemblyWorker } from "./workers/ComponentAssemblyWorker.js";
+import { SlotAssemblyWorker } from "./workers/SlotAssemblyWorker.js";
+import { PreprocessingWorker } from "./workers/PreprocessingWorker.js";
+
+import { ValidationWorker } from "./workers/ValidationWorker.js";
+import { ClientRenderingWorker } from "./workers/ClientRenderingWorker.js";
+import { SSRRenderingWorker } from "./workers/SSRRenderingWorker.js";
+import { PostprocessingWorker } from "./workers/PostprocessingWorker.js";
 
 export class Supervisor {
   public static instance: Supervisor | null = null;
+  public static currentStage: string = 'closed';
+  
+  public static propertyToPhaseMap: Record<string, number> = {
+    'content': 0,
+    'handlers': 0,
+    'versions': 0,
+    'placement': 1,
+    'activePlacement': 1,
+    'type': 2,
+    'component': 3,
+    'props': 5,
+    'css': 5
+  };
+
+  public instantiationWorker: InstantiationWorker;
+  public placementWorker: PlacementWorker;
+  public componentAssemblyWorker: ComponentAssemblyWorker;
+  public slotAssemblyWorker: SlotAssemblyWorker;
+  public preprocessingWorker: PreprocessingWorker;
+  public validationWorker: ValidationWorker;
+  public clientRenderingWorker: ClientRenderingWorker;
+  public postprocessingWorker: PostprocessingWorker;
+
+  public activeLockedPhases: Set<number> = new Set();
+
+  public isPropertyLocked(propertyName: string): boolean {
+    const phaseId = Supervisor.propertyToPhaseMap[propertyName];
+    return phaseId !== undefined && this.activeLockedPhases.has(phaseId);
+  }
+
   private config: PipelineConfig;
-  private rootNode: Node | null = null;
-  private contentNodes: Node[] = [];
+  public rootNode: Node | null = null;
+  public contentNodes: Node[] = [];
   private isMonitoring: boolean = false;
   private mountElementId: string;
   private hasInstantiated: boolean = false;
   public userData?: UserData;
   public serverApi?: any;
-  public static currentStage: string = 'closed';
   public templateData: NodeData | null = null;
   public contentData: ContentPayload[] = [];
 
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
     this.mountElementId = mountElementId;
+    this.instantiationWorker = new InstantiationWorker(this);
+    this.placementWorker = new PlacementWorker(this);
+    this.componentAssemblyWorker = new ComponentAssemblyWorker(this);
+    this.slotAssemblyWorker = new SlotAssemblyWorker(this);
+    this.preprocessingWorker = new PreprocessingWorker(this);
+    this.validationWorker = new ValidationWorker(this);
+    this.clientRenderingWorker = new ClientRenderingWorker(this);
+    this.postprocessingWorker = new PostprocessingWorker(this);
+  }
+
+  public getWorkerForPhase(phaseId: number): any {
+    switch(phaseId) {
+      case 0: return this.instantiationWorker;
+      case 1: return this.placementWorker;
+      case 2: return this.componentAssemblyWorker;
+      case 3: return this.slotAssemblyWorker;
+      case 4: return this.preprocessingWorker;
+      case 5: return this.validationWorker;
+      case 6: return this.clientRenderingWorker;
+      case 7: return this.postprocessingWorker;
+      default: return undefined;
+    }
+  }
+
+  public static emitToPhase(node: Node, rollbackState: any, phaseId: number): void {
+    if (Supervisor.instance) {
+      const worker = Supervisor.instance.getWorkerForPhase(phaseId);
+      if (worker) {
+        worker.push(node, rollbackState);
+      }
+    }
   }
 
   public static getContentNodes(): Node[] {
@@ -30,32 +100,7 @@ export class Supervisor {
     return Supervisor.instance ? Supervisor.instance.rootNode : null;
   }
 
-  public static setContentNodes(nodes: Node[]): void {
-    if (Supervisor.instance) {
-      Supervisor.instance.contentNodes = nodes;
-    }
-  }
 
-  public static addContentNode(node: Node): void {
-    if (Supervisor.instance) {
-      Supervisor.instance.contentNodes.push(node);
-    }
-  }
-
-  public static removeContentNode(node: Node): void {
-    if (Supervisor.instance) {
-      const index = Supervisor.instance.contentNodes.indexOf(node);
-      if (index > -1) {
-        Supervisor.instance.contentNodes.splice(index, 1);
-      }
-    }
-  }
-
-  public static clearContentNodes(): void {
-    if (Supervisor.instance) {
-      Supervisor.instance.contentNodes = [];
-    }
-  }
 
   public static exportRootNode(): NodeData | null {
     if (Supervisor.instance && Supervisor.instance.rootNode) {
@@ -116,7 +161,7 @@ export class Supervisor {
     }
 
     if (Supervisor.instance) {
-      if (templateData && contentData) Supervisor.instance.templateData = templateData;
+      if (templateData) Supervisor.instance.templateData = templateData;
       if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       Supervisor.instance.pauseMonitoring();
       // Safely copy userData if present
@@ -130,7 +175,7 @@ export class Supervisor {
       return result;
     } else {
       Supervisor.instance = new Supervisor(config);
-      if (templateData && contentData) Supervisor.instance.templateData = templateData;
+      if (templateData) Supervisor.instance.templateData = templateData;
       if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       // Safely copy userData if present
       const firstPayload = Supervisor.instance.contentData?.[0];
@@ -144,7 +189,71 @@ export class Supervisor {
       } else {
         Supervisor.instance.monitor();
       }
+      if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
       return result;
+    }
+  }
+
+  public static async injectContent(payload: ContentPayload | ContentPayload[]): Promise<void> {
+    if (!Supervisor.instance) return;
+    
+    const payloads = Array.isArray(payload) ? payload : [payload];
+    
+    // Safely copy userData if present
+    const firstPayload = payloads[0];
+    if (firstPayload?.userData) {
+      Supervisor.instance.userData = firstPayload.userData;
+    }
+
+    // Merge into contentData
+    if (!Supervisor.instance.contentData) {
+      Supervisor.instance.contentData = [];
+    }
+    
+    payloads.forEach(newPayload => {
+      if (newPayload.metadata?.batchLabel) {
+         const existingIndex = Supervisor.instance!.contentData.findIndex(p => p.metadata?.batchLabel === newPayload.metadata!.batchLabel);
+         if (existingIndex > -1) {
+            Supervisor.instance!.contentData[existingIndex] = newPayload;
+            // Also replace the contentNode at that index?
+            // This is complex. We will just rebuild contentNodes for simplicity, or just push.
+            // Wait, replacePayload does this in ClientAPI.
+         } else {
+            Supervisor.instance!.contentData.push(newPayload);
+         }
+      } else {
+         Supervisor.instance!.contentData.push(newPayload);
+      }
+    });
+
+    // We need to re-evaluate the components and content roots
+    // For now, just rebuild contentNodes array from scratch
+    Supervisor.instance.contentNodes = [];
+
+    const allContent = Supervisor.instance.contentData.flatMap(p => {
+      if ((p as any).type) return [p as unknown as NodeData];
+      if (p.content && Array.isArray(p.content)) return p.content;
+      return [];
+    });
+
+    if (allContent.length > 0) {
+      allContent.forEach((data: any, idx: number) => {
+         if (Supervisor.instance?.instantiationWorker && (Supervisor.instance.instantiationWorker as any).pushRaw) {
+           const newNode = new Node(data, Supervisor.instance.rootNode);
+           if (Supervisor.instance.rootNode && !Supervisor.instance.rootNode.children.includes(newNode)) {
+             Supervisor.instance.rootNode.children.push(newNode);
+           }
+           Supervisor.instance.contentNodes[idx] = newNode;
+           (Supervisor.instance.instantiationWorker as any).pushRaw(data, newNode, () => {});
+         }
+      });
+    }
+
+    if (Supervisor.currentStage === 'monitoring') {
+      Supervisor.instance.pauseMonitoring();
+      await Supervisor.instance.runPipeline();
+      Supervisor.instance.resumeMonitoring();
+      if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
     }
   }
 
@@ -196,25 +305,21 @@ export class Supervisor {
       this.executeHandlers("onDBLoad");
     }
 
-    if (this.config.runAssembly) {
-      Supervisor.currentStage = 'assembly';
-      this.executeHandlers("beforeAssembly");
-      await this.assemble();
-      this.executeHandlers("afterAssembly");
-    }
-
-    if (this.config.runPreprocessing) {
-      Supervisor.currentStage = 'preprocessing';
-      this.executeHandlers("beforePreprocess");
-      await this.preProcess();
-      this.executeHandlers("afterPreprocess");
-    }
-
-    if (this.config.runValidation) {
-      Supervisor.currentStage = 'validation';
-      this.executeHandlers("beforeValidate");
-      await this.validate();
-      this.executeHandlers("afterValidate");
+    // Priority Queue Draining Loop
+    let queueDrained = false;
+    while (!queueDrained) {
+       queueDrained = true;
+       // Process in order 0 to 7 (except 6 which is rendering)
+       for (let phaseId = 0; phaseId <= 7; phaseId++) {
+         if (phaseId === 6) continue;
+         const worker = this.getWorkerForPhase(phaseId);
+         if (worker && worker.hasEvents()) {
+           Supervisor.currentStage = this.getStageNameForPhase(phaseId);
+           await worker.processQueue();
+           queueDrained = false; 
+           break; // Restart loop to prioritize lowest phase IDs again
+         }
+       }
     }
 
     let renderResult: string | void = undefined;
@@ -225,133 +330,55 @@ export class Supervisor {
       this.executeHandlers("afterRender");
     }
 
-    if (this.config.runPostprocessing) {
-      Supervisor.currentStage = 'postprocessing';
-      this.executeHandlers("beforePostprocess");
-      await this.postProcess();
-      this.executeHandlers("afterPostprocess");
-    }
-
     return renderResult;
   }
 
-  private async instantiate(): Promise<void> {
-    console.log("Stage: Instantiation");
-    StyleNode.clear(); // Clear before re-running
-    Node.restoreAllPlacements();
-
-    Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
-
-    const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
-    this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
-
-    const deepClone = (val: any) => {
-      if (val === undefined) return undefined;
-      const seen = new WeakSet();
-      const replacer = (k: string, v: any) => {
-        if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
-        if (typeof v === "object" && v !== null) {
-          if (seen.has(v)) return undefined; // Prevent cycle
-          seen.add(v);
-        }
-        return v;
-      };
-      try {
-        return JSON.parse(JSON.stringify(val, replacer));
-      } catch (e) {
-        console.warn("Cycle detected during deepClone in Supervisor, falling back", e);
-        return val;
-      }
-    };
-
-    const regenerateTree = (existingNode: Node | null, data: any): Node => {
-      if (existingNode && data && data.component) {
-        existingNode.data.component = deepClone(data.component);
-        existingNode.setComponents(deepClone(data.component));
-      }
-      let newNode: Node;
-      if (!existingNode) {
-        newNode = new Node(deepClone(data));
-      } else if (existingNode.hasChangedSinceRender) {
-        newNode = new Node(existingNode.data);
-      } else {
-        const newChildren = [];
-        for (let i = 0; i < existingNode.children.length; i++) {
-          const child = existingNode.children[i];
-          if (child && !child.isComponentInjected) {
-            const newChild = regenerateTree(child, child.data);
-            newChild.parent = existingNode;
-            newChildren.push(newChild);
-          }
-        }
-        existingNode.children = newChildren;
-        newNode = existingNode;
-      }
-
-      if (newNode.component?.some(c => c.target === "type")) {
-        Node.typeComponentNodes.push(newNode);
-      }
-
-      return newNode;
-    };
-
-    let templateDataToUse = this.templateData;
-    if (Array.isArray(templateDataToUse) && templateDataToUse.length > 0) {
-      if (!templateDataToUse[0].props) templateDataToUse[0].props = {};
-      templateDataToUse[0].props.batchLabel = templateDataToUse[0].props.batchLabel || 'default-template-batch';
-
-      const extraContent = templateDataToUse.slice(1).map(nodeData => {
-        if (!nodeData.props) nodeData.props = {};
-        nodeData.props.batchLabel = nodeData.props.batchLabel || 'default-template-batch';
-        return nodeData;
-      });
-
-      if (extraContent.length > 0) {
-        this.contentData.push({
-          metadata: { batchLabel: 'default-template-batch' },
-          content: extraContent
-        });
-      }
-      templateDataToUse = templateDataToUse[0];
+  private getStageNameForPhase(phaseId: number): string {
+    switch(phaseId) {
+      case 0: return 'instantiation';
+      case 1: return 'placement';
+      case 2: return 'componentAssembly';
+      case 3: return 'slotAssembly';
+      case 4: return 'preprocessing';
+      case 5: return 'validation';
+      case 6: return 'render';
+      case 7: return 'postprocessing';
+      default: return 'unknown';
     }
+  }
 
-    this.contentData.forEach((payload, idx) => {
-      if (!payload.metadata) payload.metadata = {};
-      if (!payload.metadata.batchLabel) payload.metadata.batchLabel = `default-content-batch-${idx}`;
-      if (Array.isArray(payload.content)) {
-        payload.content.forEach((c: any) => {
-          if (!c.props) c.props = {};
-          c.props.batchLabel = c.props.batchLabel || payload.metadata!.batchLabel;
+  private async instantiate(): Promise<void> {
+    await this.clearInternalState();
+    console.log("Stage: Instantiation");
+    
+    // Generate initial nodes from data
+    if (this.templateData || this.contentData.length > 0 || !this.rootNode) {
+      const allComponents = this.contentData.flatMap(c => {
+        const componentsFromPayload = c.component || [];
+        const componentsFromContentRoots = (Array.isArray(c.content) ? c.content : [c.content]).flatMap((node: any) => {
+          return (node?.component || []).filter((comp: any) => comp.value !== undefined && comp.value !== null);
         });
-      } else if (payload.content) {
-        if (!(payload.content as any).props) (payload.content as any).props = {};
-        (payload.content as any).props.batchLabel = (payload.content as any).props.batchLabel || payload.metadata!.batchLabel;
-      }
-    });
-
-    const safeTemplateData = deepClone(templateDataToUse);
-    console.log(`[DEBUG] contentData batches available:`, this.contentData.map(c => c.metadata?.batchLabel));
-    const allComponents = this.contentData.flatMap(c => {
-      const componentsFromPayload = c.component || [];
-      const componentsFromContentRoots = (Array.isArray(c.content) ? c.content : [c.content]).flatMap((node: any) => {
-        return (node?.component || []).filter((comp: any) => comp.value !== undefined && comp.value !== null);
+        return [...componentsFromPayload, ...componentsFromContentRoots];
       });
-      return [...componentsFromPayload, ...componentsFromContentRoots];
-    });
-    console.log("[DEBUG] allComponents gathered:", allComponents.map(c => c.reference));
-    const mountPointData: NodeData = {
-      type: "div",
-      props: { id: this.mountElementId },
-      content: safeTemplateData,
-      component: deepClone(allComponents)
-    };
+      const templateComponent = this.templateData?.component ? (Array.isArray(this.templateData.component) ? this.templateData.component : [this.templateData.component]) : [];
+      const combinedComponents = allComponents.length > 0 ? [...templateComponent, ...allComponents] : (templateComponent.length > 0 ? templateComponent : undefined);
 
-    console.log("[DEBUG] mountPointData being used for rootNode:", JSON.stringify(mountPointData).substring(0, 500));
-
-    // Dynamic handlers are now compiled in Node.ts during component scanning.
-    // Legacy target === "handlers.dynamic" logic is intentionally removed.
-
-    this.rootNode = regenerateTree(this.rootNode, mountPointData);
+      const mountPointData: NodeData = {
+        type: this.templateData?.type || "div",
+        props: { id: this.mountElementId, ...(this.templateData?.props || {}) },
+        content: this.templateData?.content !== undefined ? this.templateData.content : undefined,
+        component: combinedComponents,
+        css: this.templateData?.css,
+        handlers: this.templateData?.handlers,
+        placement: this.templateData?.placement,
+        versions: this.templateData?.versions,
+      };
+      if (this.instantiationWorker && (this.instantiationWorker as any).pushRaw) {
+        (this.instantiationWorker as any).pushRaw(mountPointData, this.rootNode, (node: Node) => {
+           this.rootNode = node;
+        });
+      }
+    }
 
     const allContent = this.contentData.flatMap(payload => {
       if ((payload as any).type) return [payload as unknown as NodeData];
@@ -360,152 +387,49 @@ export class Supervisor {
     });
 
     if (allContent.length > 0) {
-      const safeContentList = deepClone(allContent);
-      this.contentNodes = safeContentList.map((data: any, idx: number) => {
-        return regenerateTree(this.contentNodes[idx] || null, data);
+      allContent.forEach((data: any, idx: number) => {
+         if (this.instantiationWorker && (this.instantiationWorker as any).pushRaw) {
+           const newNode = new Node(data, this.rootNode);
+           if (this.rootNode && !this.rootNode.children.includes(newNode)) {
+             this.rootNode.children.push(newNode);
+           }
+           (this.instantiationWorker as any).pushRaw(data, newNode, (node: Node) => {
+              this.contentNodes[idx] = node;
+           });
+         }
       });
+      this.contentNodes.length = allContent.length;
     } else {
       this.contentNodes = [];
     }
 
+    
+    await this.instantiationWorker.processQueue();
     this.hasInstantiated = true;
   }
 
-  private async assemble(): Promise<void> {
-    console.log("Stage: Assembly");
-
-    if (this.rootNode) this.rootNode.clearTrackingArrays();
-    for (const c of this.contentNodes) {
-      if (c) c.clearTrackingArrays();
-    }
-
-    console.log("[DEBUG] Content nodes array at start of placement process:", this.contentNodes.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
-    // Collect placement nodes from the entire node tree before processing placements
-    const collectPlacements = (node: Node) => {
-      Node.appendPlacement(node);
-      if (node.children) {
-        node.children.forEach(child => {
-          if (!child.isComponentInjected) {
-            collectPlacements(child);
-          }
-        });
-      }
-      if (node.component) {
-        node.component.forEach(binding => {
-          if (binding._instantiatedNodes) {
-            binding._instantiatedNodes.forEach((child: Node) => collectPlacements(child));
-          }
-        });
-      }
-    };
-    if (this.rootNode) {
-      collectPlacements(this.rootNode);
-    }
-    this.contentNodes.forEach(node => {
-      collectPlacements(node);
-    });
-
-    console.log("[DEBUG] Source placements after parsing nodes:", Node.sourcePlacements.map(n => ({ type: n.type, id: n.css?.id, targetPlacement: n.placement?.targetPlacement })));
-    console.log("[DEBUG] Target placements available:", Node.placementArray.map(n => ({ type: n.type, id: n.css?.id, placementName: n.placement?.placementName })));
-
-    for (const sourceNode of Node.sourcePlacements) {
-      const targets = sourceNode.placement?.targetPlacement || [];
-      let matchedTarget: Node | null = null;
-      for (const targetName of targets) {
-        matchedTarget = Node.placementArray.find(n => n.placement?.placementName === targetName) || null;
-        if (matchedTarget) break;
-      }
-
-      if (matchedTarget) {
-        sourceNode.placeInto(matchedTarget);
-      } else {
-        console.warn(`[DEBUG] Failed to find target placement for node type '${sourceNode.type}' with id '${sourceNode.css?.id}'. Looked for targets:`, targets);
-      }
-    }
-
-    if (this.rootNode) {
-      this.rootNode.applyComponentsTree();
-    }
-
-    for (const targetNode of Node.placementArray) {
-      const hasVisibleChildren = targetNode.children && targetNode.children.some(c => c.css?.style?.display !== 'none');
-      if (!hasVisibleChildren) {
-        const displayIfEmpty = targetNode.props?.displayIfEmpty;
-        if (displayIfEmpty === false || displayIfEmpty === null || displayIfEmpty === undefined || displayIfEmpty === "false") {
-          if (!targetNode.css) targetNode.css = {};
-          if (!targetNode.css.style) targetNode.css.style = {};
-          if (targetNode.css.style.display !== "none") {
-            targetNode.css.style.display = "none";
-            targetNode.hasChangedSinceRender = true;
-          }
-        } else {
-          targetNode.addChild(displayIfEmpty);
-        }
-      } else {
-        const isHiddenInState = targetNode.css?.style?.display === "none";
-        const isHiddenInDom = targetNode.element && targetNode.element.style.display === "none";
-        if (isHiddenInState || isHiddenInDom) {
-          if (!targetNode.css) targetNode.css = {};
-          if (!targetNode.css.style) targetNode.css.style = {};
-          targetNode.css.style.display = "";
-          targetNode.hasChangedSinceRender = true;
-        }
-      }
-    }
-  }
-
-  private async preProcess(): Promise<void> {
-    console.log("Stage: Pre-processing");
-  }
-
-  private async validate(): Promise<void> {
-    console.log("Stage: Validation");
-    if (this.rootNode) {
-      const isValid = this.rootNode.validate();
-      if (!isValid) throw new Error("Validation failed");
-    }
+  private async clearInternalState(): Promise<void> {
+    StyleNode.clear();
+    PlacementWorker.restoreAllPlacements();
+    Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
+    const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
+    this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
   }
 
   private async render(): Promise<string | void> {
-    console.log("Stage: Rendering");
-
-    if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
-      // SSR Context
-      let cssString = "";
-      for (const sNode of StyleNode.cssDefs) {
-        cssString += sNode.renderToString();
-      }
-      let htmlString = "";
-      if (this.rootNode) {
-        htmlString = this.rootNode.renderToString();
-      }
-      return `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
-    } else {
-      // Client DOM Context
-      let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
-      if (styleEl) styleEl.remove();
-
-      styleEl = document.createElement("style");
-      styleEl.id = "preempt-dynamic-styles";
-      document.head.appendChild(styleEl);
-
-      const sheet = styleEl.sheet as CSSStyleSheet;
-      for (const sNode of StyleNode.cssDefs) {
-        sNode.render(sheet);
-      }
-
-      if (this.rootNode) {
-        const domElement = this.rootNode.render();
-        const mountTarget = document.getElementById(this.mountElementId);
-        if (mountTarget && domElement) {
-          mountTarget.replaceWith(domElement);
-        }
-      }
+    if (this.rootNode && (typeof window !== 'undefined' && (globalThis as any).process?.env?.IS_SSR_TEST !== 'true')) {
+       this.clientRenderingWorker.push(this.rootNode, {});
     }
-  }
+    await this.clientRenderingWorker.processQueue();
 
-  private async postProcess(): Promise<void> {
-    console.log("Stage: Post-processing");
+    if (this.rootNode && (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true')) {
+       this.executeHandlers("beforeRender");
+       let cssString = SSRRenderingWorker.renderStyleNodesToString(StyleNode.cssDefs);
+       let htmlString = SSRRenderingWorker.renderToString(this.rootNode);
+       this.executeHandlers("afterRender");
+       return `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
+    }
+    return undefined;
   }
 
   private executeHandlers(phase: string): void {
@@ -516,7 +440,7 @@ export class Supervisor {
 
     this.contentNodes.forEach(node => {
       if (node) {
-        if (!this.rootNode || !this.rootNode.findNode(n => n === node)) {
+        if (!this.rootNode || !this.rootNode.findNode((n: Node) => n === node)) {
           node.executeHandlers(phase, { supervisor: this });
         }
       }
@@ -545,8 +469,10 @@ export class Supervisor {
 
   private close(): void {
     Supervisor.currentStage = 'closed';
-    console.log("Supervisor closing. Pipeline complete.");
+    if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
     Supervisor.instance = null;
     Node.globalMetadata = {};
   }
 }
+
+(globalThis as any).Supervisor = Supervisor;

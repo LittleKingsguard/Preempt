@@ -3,6 +3,8 @@ export interface CssDef {
   styles: Record<string, string>;
 }
 
+
+
 export interface PlacementConfig {
   placementName?: string;
   targetPlacement?: string[];
@@ -81,3 +83,7 @@ export interface NodeQuery {
   components?: { target?: string; reference?: string }[];
   format?: string;
 }
+
+import type { Node } from "../core/Node.js";
+export type NextState = Partial<Node>;
+export type RollbackState = Partial<Node>;

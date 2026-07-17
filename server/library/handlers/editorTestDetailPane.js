@@ -16,7 +16,8 @@
         if (targetNode.data.handlers && targetNode.data.handlers[targetRef]) {
           targetNode.data.handlers[targetRef].body = content;
         } else {
-          const eventBinding = targetNode.component?.find(c => c.reference === targetRef && c.target?.startsWith("handlers."));
+          const allTargetComps = targetNode.sourceComponents ? [...Array.from(targetNode.sourceComponents.values()), ...Array.from(targetNode.targetComponents.values())] : (targetNode.component || []);
+          const eventBinding = allTargetComps.find(c => c.reference === targetRef && c.target?.startsWith("handlers."));
           if (eventBinding) {
              eventBinding.value = { name: targetRef, body: content };
              const eventName = eventBinding.target.substring(9);
@@ -35,7 +36,8 @@
     try {
       const payload = JSON.parse(content);
       if (targetNode) {
-        const binding = targetNode.component?.find(c => c.reference === targetRef);
+        const allTargetComps = targetNode.sourceComponents ? [...Array.from(targetNode.sourceComponents.values()), ...Array.from(targetNode.targetComponents.values())] : (targetNode.component || []);
+        const binding = allTargetComps.find(c => c.reference === targetRef);
         if (binding) {
           binding.value = payload;
           alert("Component updated locally for testing.");
