@@ -131,15 +131,14 @@ export class SlotAssemblyWorker extends BaseWorker {
       }
     } else if (path.startsWith("css.classes.")) {
       const className = path.substring(12);
-      if (!newCss.classes) newCss.classes = [];
-      const originalClasses = node.css?.classes || [];
-      const hasClass = originalClasses.includes(className);
+      if (!newCss.classes) newCss.classes = node.css?.classes ? [...node.css.classes] : [];
+      const hasClass = newCss.classes.includes(className);
       
       if (value === "true" && !hasClass) {
-        newCss.classes = [...originalClasses, className];
+        newCss.classes.push(className);
         nextState.css = newCss;
       } else if (value === "false" && hasClass) {
-        newCss.classes = originalClasses.filter(c => c !== className);
+        newCss.classes = newCss.classes.filter((c: string) => c !== className);
         nextState.css = newCss;
       }
     }

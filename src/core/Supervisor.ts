@@ -18,13 +18,15 @@ export class Supervisor {
   public static currentStage: string = 'closed';
   
   public static propertyToPhaseMap: Record<string, number> = {
-    'content': 0,
-    'handlers': 0,
-    'versions': 0,
+    'data': 0,
     'placement': 1,
     'activePlacement': 1,
     'type': 2,
     'component': 3,
+    'content': 4,
+    'children': 4,
+    'handlers': 4,
+    'versions': 4,
     'props': 5,
     'css': 5
   };
@@ -421,6 +423,10 @@ export class Supervisor {
        this.clientRenderingWorker.push(this.rootNode, {});
     }
     await this.clientRenderingWorker.processQueue();
+    
+    if (typeof window !== 'undefined' && (globalThis as any).process?.env?.IS_SSR_TEST !== 'true') {
+       ClientRenderingWorker.renderStyles();
+    }
 
     if (this.rootNode && (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true')) {
        this.executeHandlers("beforeRender");

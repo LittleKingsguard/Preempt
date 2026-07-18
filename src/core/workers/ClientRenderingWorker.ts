@@ -3,8 +3,30 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 import { clientAPI } from "../ClientAPI.js";
+import { StyleNode } from "../StyleNode.js";
 
 export class ClientRenderingWorker extends BaseWorker {
+  public static renderStyles(): void {
+    if (typeof document === 'undefined') return;
+    let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = "preempt-dynamic-styles";
+      document.head.appendChild(styleEl);
+    }
+    const sheet = styleEl.sheet;
+    if (sheet) {
+      for (const sNode of StyleNode.cssDefs) {
+        if (sNode.ruleIndex === -1) {
+          try {
+            sNode.render(sheet);
+          } catch (err) {
+            console.error("Failed to render style rule", sNode.data, err);
+          }
+        }
+      }
+    }
+  }
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     // Phase 6: Rendering
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
