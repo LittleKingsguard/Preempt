@@ -7,6 +7,20 @@ export class ClientAPI {
 
   constructor() {}
 
+  public getInitialData(): any {
+    if (typeof document !== 'undefined') {
+      const dataElement = document.getElementById('preempt-initial-data');
+      if (dataElement) {
+        try {
+          return JSON.parse(dataElement.textContent || "{}");
+        } catch (e) {
+          console.error("Failed to parse preempt-initial-data", e);
+        }
+      }
+    }
+    return null;
+  }
+
   public getHandler(key: string, contextNode?: Node): Function | undefined {
     let current: Node | null | undefined = contextNode;
     while (current) {

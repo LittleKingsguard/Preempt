@@ -16,12 +16,10 @@ const defaultConfig: PipelineConfig = {
 
 async function init() {
   try {
-    const dataElement = document.getElementById('preempt-initial-data');
-    let data;
+    let data = clientAPI.getInitialData();
     let pipelineConfig = { ...defaultConfig };
 
-    if (dataElement) {
-      data = JSON.parse(dataElement.textContent || "{}");
+    if (data) {
       if (data.clientConfig) {
         pipelineConfig = { ...pipelineConfig, ...data.clientConfig };
       }

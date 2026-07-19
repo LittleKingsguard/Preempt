@@ -27,13 +27,32 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
   }
+  public async processQueue(): Promise<void> {
+    if (this.queue.size === 0) return;
+
+    if ((this.supervisor as any).config?.runRendering !== false) {
+      (this.supervisor as any).executeHandlers("beforeRender");
+    }
+
+    await super.processQueue();
+
+    if (typeof window !== 'undefined' && (this.supervisor as any).config?.runRendering !== false) {
+      ClientRenderingWorker.renderStyles();
+      const rootNode = (this.supervisor as any).rootNode;
+      if (rootNode) {
+        ClientRenderingWorker.render(rootNode);
+      }
+    }
+
+    if ((this.supervisor as any).config?.runRendering !== false) {
+      (this.supervisor as any).executeHandlers("afterRender");
+    }
+  }
+
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     // Phase 6: Rendering
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
-    // Trigger rendering (which might update DOM)
-    if (typeof window !== 'undefined') {
-       ClientRenderingWorker.render(node);
-    }
+    // DOM rendering is deferred to processQueue to avoid duplicate client side work
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
   }
 
@@ -197,5 +216,8 @@ export class ClientRenderingWorker extends BaseWorker {
   }
 
   protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
+    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
+      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 7);
+    }
   }
 }

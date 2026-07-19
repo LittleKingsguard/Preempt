@@ -17,7 +17,7 @@ export class ValidationWorker extends BaseWorker {
 
   protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
     if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
-      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 7);
+      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 6);
     }
   }
 

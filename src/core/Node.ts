@@ -2,6 +2,7 @@ import type { NodeData, NodeQuery, HandlerDef, ComponentBinding, NextState, Roll
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
+import { PlacementWorker } from "./workers/PlacementWorker.js";
 
 export class Node {
   public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
@@ -23,29 +24,7 @@ export class Node {
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
   public isComponentInjected: boolean = false;
-  private _hasChangedSinceRender: boolean = true;
-  public get hasChangedSinceRender(): boolean {
-    return this._hasChangedSinceRender;
-  }
-  public set hasChangedSinceRender(value: boolean) {
-    this._hasChangedSinceRender = value;
-    if (value) {
-      if (this.placement && this.placement._referencingNodes) {
-        for (const ref of this.placement._referencingNodes) {
-          if (!ref.hasChangedSinceRender) ref.hasChangedSinceRender = true;
-        }
-      }
-      if (this.component) {
-        for (const comp of this.component) {
-          if (comp._referencingNodes) {
-            for (const ref of comp._referencingNodes) {
-              if (!ref.hasChangedSinceRender) ref.hasChangedSinceRender = true;
-            }
-          }
-        }
-      }
-    }
-  }
+  public hasChangedSinceRender: boolean = true;
 
   public type: string = 'div';
   public placement?: any;
@@ -102,12 +81,12 @@ export class Node {
       hash = ((hash << 5) - hash) + char;
       hash |= 0; // Convert to 32bit integer
     }
-    
+
     const baseId = `preempt-node-${Math.abs(hash).toString(36)}`;
     let count = Node.idCollisions.get(baseId) || 0;
     count++;
     Node.idCollisions.set(baseId, count);
-    
+
     if (count > 1) {
       return `${baseId}-${count}`;
     }
@@ -199,19 +178,24 @@ export class Node {
     if (this.versions === undefined) delete this.versions;
 
     this.resolveVersion();
-  }
 
-  public cloneInstantiated(parent: Node | null): Node {
-    const clonedData = Node.deepClone(this.data);
-    const cloned = new Node(clonedData, parent, true);
-    
-    cloned.children = [];
-    for (const child of this.children) {
-      cloned.children.push(child.cloneInstantiated(cloned));
+    if (this.component) {
+      for (const binding of this.component) {
+        if (binding === null) continue;
+        if (typeof binding.value === "object" && binding.value !== null) {
+          const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
+          binding._instantiatedNodes = [];
+          for (const d of dataArray) {
+            if (typeof d !== "string" && !('body' in d)) {
+              const newNode = new Node(d, this, true);
+              binding._instantiatedNodes!.push(newNode);
+              Node.typeComponentNodes.push(newNode);
+            }
+          }
+        }
+      }
     }
-    
-    cloned.isComponentInjected = true;
-    return cloned;
+    PlacementWorker.appendPlacement(this);
   }
 
   private resolveVersion(): void {
@@ -321,16 +305,16 @@ export class Node {
     } else {
       for (const key of changedKeys) {
         if (SupervisorInstance && SupervisorInstance.isPropertyLocked && SupervisorInstance.isPropertyLocked(key)) {
-           console.error(`[Node] Lock violation: Property '${key}' is currently locked by another phase for node ${this.css?.id}`);
-           return;
+          console.error(`[Node] Lock violation: Property '${key}' is currently locked by another phase for node ${this.css?.id}`);
+          return;
         }
         const pId = SupervisorClass.propertyToPhaseMap ? SupervisorClass.propertyToPhaseMap[key] : 5;
         if (pId !== undefined && pId < targetPhase) {
-           targetPhase = pId;
+          targetPhase = pId;
         }
       }
     }
-    
+
     // Snapshot state
     this._lastValidState = {
       type: this.type,

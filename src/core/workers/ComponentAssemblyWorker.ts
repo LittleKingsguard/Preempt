@@ -25,12 +25,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
       let processedTargets = new Set<string>();
 
       let getNextTarget = () => {
-        let currentTargets = Array.from(newTargetComponents.entries()).filter(t => !processedTargets.has(t[0]));
-        currentTargets.sort((a, b) => {
-          if (a[0] === "type" && b[0] !== "type") return -1;
-          if (a[0] !== "type" && b[0] === "type") return 1;
-          return 0;
-        });
+        let currentTargets = Array.from(newTargetComponents.entries()).filter(t => !processedTargets.has(t[0]) && t[0] === "type");
         return currentTargets.length > 0 ? currentTargets[0] : null;
       };
 
@@ -79,7 +74,9 @@ export class ComponentAssemblyWorker extends BaseWorker {
 
           for (const d of dataArray) {
             if (typeof d === "string") {
-              nextState.type = d;
+              if (node.type !== d) {
+                nextState.type = d;
+              }
               continue;
             }
 
@@ -140,68 +137,6 @@ export class ComponentAssemblyWorker extends BaseWorker {
               }
             }
           }
-        } else if (target === "content") {
-          if (Array.isArray(resolvedValue)) {
-            newContent = undefined;
-            newChildren = [];
-            for (let i = 0; i < resolvedValue.length; i++) {
-              const instantiatedNode = resolvedBinding?._instantiatedNodes?.[i];
-              if (instantiatedNode) {
-                const clonedChild = instantiatedNode.cloneInstantiated(node);
-                newChildren.push(clonedChild);
-                this.push(clonedChild);
-              } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
-                const newChild = new Node(resolvedValue[i], node, true);
-                newChildren.push(newChild);
-                this.push(newChild);
-              }
-            }
-          } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
-            newContent = undefined;
-            let instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
-            if (instantiatedNode) {
-              const clonedChild = instantiatedNode.cloneInstantiated(node);
-              newChildren = [clonedChild];
-              this.push(clonedChild);
-            } else {
-              const newChild = new Node(resolvedValue, node, true);
-              newChildren = [newChild];
-              this.push(newChild);
-            }
-          } else {
-            newContent = String(resolvedValue);
-            newChildren = [];
-          }
-        } else if (target.startsWith("props.")) {
-           const propName = target.substring(6);
-           newProps[propName] = String(resolvedValue);
-           nextState.props = newProps;
-        } else if (target.startsWith("css.style.")) {
-           const styleName = target.substring(10);
-           if (!newCss.style) newCss.style = {};
-           newCss.style[styleName] = String(resolvedValue);
-           nextState.css = newCss;
-        } else if (target.startsWith("css.classes.")) {
-           const actionStr = target.substring(12);
-           const parts = actionStr.split(".");
-           if (parts.length === 2 && parts[0] === "add") {
-             if (resolvedValue === "true" || resolvedValue === true) {
-               if (!newCss.classes) newCss.classes = [];
-               if (!newCss.classes.includes(parts[1])) newCss.classes.push(parts[1]);
-               nextState.css = newCss;
-             }
-           } else if (parts.length === 2 && parts[0] === "remove") {
-             if (resolvedValue === "true" || resolvedValue === true) {
-               if (newCss.classes) {
-                 newCss.classes = newCss.classes.filter((c: string) => c !== parts[1]);
-                 nextState.css = newCss;
-               }
-             }
-           }
-        } else if (target.startsWith("handlers.")) {
-           const handlerName = target.substring(9);
-           newHandlers[handlerName] = resolvedValue;
-           nextState.handlers = newHandlers;
         }
         
         nextTarget = getNextTarget();

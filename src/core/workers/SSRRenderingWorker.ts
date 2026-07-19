@@ -1,6 +1,44 @@
 import { Node } from "../Node.js";
+import { BaseWorker } from "./BaseWorker.js";
+import type { RollbackState } from "../../types/NodeSchema.js";
+import { StyleNode } from "../StyleNode.js";
 
-export class SSRRenderingWorker {
+export class SSRRenderingWorker extends BaseWorker {
+  public async processQueue(): Promise<void> {
+    if (this.queue.size === 0) return;
+
+    if ((this.supervisor as any).config?.runRendering !== false) {
+      (this.supervisor as any).executeHandlers("beforeRender");
+    }
+
+    await super.processQueue();
+
+    if ((this.supervisor as any).config?.runRendering !== false) {
+      const rootNode = (this.supervisor as any).rootNode;
+      if (rootNode) {
+        let cssString = SSRRenderingWorker.renderStyleNodesToString(StyleNode.cssDefs);
+        let htmlString = SSRRenderingWorker.renderToString(rootNode);
+        (this.supervisor as any).ssrResult = `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
+      }
+    }
+
+    if ((this.supervisor as any).config?.runRendering !== false) {
+      (this.supervisor as any).executeHandlers("afterRender");
+    }
+  }
+
+  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+    // Phase 6: SSR Rendering
+    node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
+    node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
+  }
+
+  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
+    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
+      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 7);
+    }
+  }
+
   public static renderToString(node: Node): string {
     if (!node.isValid) return "";
 
