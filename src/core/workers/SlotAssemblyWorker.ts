@@ -74,7 +74,7 @@ export class SlotAssemblyWorker extends BaseWorker {
               nextState.children.push(instantiatedNode.cloneInstantiated(node));
             } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
               // Raw NodeData, create it
-              nextState.children.push(new Node(resolvedValue[i] as NodeData, node, true));
+              nextState.children.push(new Node(resolvedValue[i] as NodeData, node));
             }
           }
         } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
@@ -83,7 +83,7 @@ export class SlotAssemblyWorker extends BaseWorker {
           if (instantiatedNode) {
             nextState.children = [instantiatedNode.cloneInstantiated(node)];
           } else {
-            nextState.children = [new Node(resolvedValue as NodeData, node, true)];
+            nextState.children = [new Node(resolvedValue as NodeData, node)];
           }
         } else {
           nextState.content = String(resolvedValue);

@@ -69,13 +69,6 @@ export class ClientRenderingWorker extends BaseWorker {
       return null;
     }
 
-    if (!node.hasChangedSinceRender && oldElement) {
-      for (const child of node.children) {
-        ClientRenderingWorker.render(child);
-      }
-      return oldElement;
-    }
-
     const targetTag = (node.type || "div").toLowerCase();
     const shouldReuse = oldElement && oldElement.tagName.toLowerCase() === targetTag;
     const el = shouldReuse ? oldElement! : document.createElement(targetTag);
@@ -211,7 +204,6 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
 
-    node.hasChangedSinceRender = false;
     return el;
   }
 

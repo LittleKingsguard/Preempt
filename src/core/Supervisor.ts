@@ -20,7 +20,7 @@ export class Supervisor {
 
   public static propertyToPhaseMap: Record<string, number> = {
     'data': 0,
-    'placement': 1,
+    'placement': 0,
     'activePlacement': 1,
     'component': 2,
     'content': 4,
@@ -104,7 +104,11 @@ export class Supervisor {
     if (Supervisor.instance) {
       const worker = Supervisor.instance.getWorkerForPhase(phaseId);
       if (worker) {
-        worker.push(node, rollbackState);
+        if (phaseId === 0 && typeof worker.pushRaw === 'function') {
+          worker.pushRaw(node.data, node);
+        } else {
+          worker.push(node, rollbackState);
+        }
       }
     }
   }

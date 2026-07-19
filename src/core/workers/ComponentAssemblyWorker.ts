@@ -4,7 +4,7 @@ import type { RollbackState } from "../../types/NodeSchema.js";
 import { StyleNode } from "../StyleNode.js";
 
 export class ComponentAssemblyWorker extends BaseWorker {
-  protected async processNode(node: Node, rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`);
     node.executeHandlers("beforeAssembly", { supervisor: this.supervisor }, false);
     
@@ -104,7 +104,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
                 if (instantiatedNode.css.cssDef) {
                   newCss.cssDef = [...(newCss.cssDef || []), ...instantiatedNode.css.cssDef];
                   for (const def of instantiatedNode.css.cssDef) {
-                    node.styleNodes.push(new StyleNode(def, node, true));
+                    node.styleNodes.push(new StyleNode(def, node));
                   }
                 }
                 nextState.css = newCss;
@@ -153,29 +153,19 @@ export class ComponentAssemblyWorker extends BaseWorker {
         node.receiveNextState(nextState);
       }
     }
-
-    let typeName = node.type || node.data?.type || rollbackState?.type;
-    
-    // In tests, typeComponentNodes might be mocked as an object. In actual code it's an array.
-    let instances: Node[] = [];
-    if (Node.typeComponentNodes) {
-      if (Array.isArray(Node.typeComponentNodes)) {
-        instances = Node.typeComponentNodes.filter(n => (n.type === typeName || n.data?.type === typeName));
-      } else {
-        // It's mocked as an object
-        for (const [key, nodes] of Object.entries(Node.typeComponentNodes)) {
-          if (Array.isArray(nodes) && nodes.includes(node)) {
-            typeName = key; // this node is in the list, meaning it's a definition (as per the mock)
+    let referencingNodes: Node[] = [];
+    if (node.parent && node.parent.component) {
+      for (const binding of node.parent.component) {
+        if (binding._instantiatedNodes && binding._instantiatedNodes.includes(node)) {
+          if (binding._referencingNodes) {
+            referencingNodes.push(...binding._referencingNodes);
           }
-        }
-        if (typeName && (Node.typeComponentNodes as any)[typeName]) {
-          instances = (Node.typeComponentNodes as any)[typeName];
         }
       }
     }
 
-    if (instances.length > 0) {
-      for (const instance of instances) {
+    if (referencingNodes.length > 0) {
+      for (const instance of referencingNodes) {
         if (instance !== node) {
           const nextState: any = {};
           if (node.data.props) nextState.props = Node.deepClone(node.data.props);

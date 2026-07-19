@@ -257,7 +257,6 @@ export class ClientAPI {
             if (overwrite || node.data.handlers![targetEvent] === undefined) {
               console.log(`Inserting handler ${h.name} for explicit event ${targetEvent} into node`, node.data);
               node.data.handlers![targetEvent] = { name: h.name, body: h.body };
-              node.hasChangedSinceRender = true;
               if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
           } else {
@@ -265,7 +264,6 @@ export class ClientAPI {
             if (overwrite || node.data.handlers![h.name] === undefined) {
               console.log(`Inserting handler ${h.name} into node`, node.data);
               node.data.handlers![h.name] = { name: h.name, body: h.body };
-              node.hasChangedSinceRender = true;
               if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
 
@@ -277,7 +275,6 @@ export class ClientAPI {
               if (overwrite || node.data.handlers![eventName] === undefined) {
                 console.log(`Inserting handler ${h.name} for event ${eventName} into node`, node.data);
                 node.data.handlers![eventName] = { name: h.name, body: h.body };
-                node.hasChangedSinceRender = true;
                 if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
               }
             }

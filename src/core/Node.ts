@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery, HandlerDef, ComponentBinding, NextState, RollbackState } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, HandlerDef, ComponentBinding, NextState, RollbackState, PlacementConfig } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
@@ -23,11 +23,10 @@ export class Node {
   public element: HTMLElement | null = null;
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
-  public isComponentInjected: boolean = false;
-  public hasChangedSinceRender: boolean = true;
 
   public type: string = 'div';
-  public placement?: any;
+  public placement?: PlacementConfig;
+  public activePlacement?: string;
   public component?: any[];
   public content?: string | undefined;
   public props: Record<string, any> = {};
@@ -40,7 +39,7 @@ export class Node {
   public targetComponents: Map<string, any> = new Map();
   public static placementArray: Node[] = [];
   public static sourcePlacements: Record<string, Node[]> = {};
-  public static typeComponentNodes: Node[] = [];
+
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
   public wasPlaced: boolean = false;
@@ -48,11 +47,26 @@ export class Node {
 
   public static globalMetadata: any = {};
 
-  public static deepClone(val: any): any {
+  private static readonly CLONE_IGNORE_KEYS = new Set([
+    '_lastValidState', 'element', 'styleNodes', 'node',
+    '_instantiatedNodes', '_referencingNodes', 'parent',
+    'children', 'originalParent'
+  ]);
+
+  private static readonly HASH_IGNORE_KEYS = new Set([
+    'node', 'css', '_instantiatedNodes', '_referencingNodes',
+    'parent', 'children', 'originalParent'
+  ]);
+
+  public static deepClone(val: any, shallowKeys: string[] = [], ignoreKeys: Iterable<string> = Node.CLONE_IGNORE_KEYS): any {
     if (val === undefined) return undefined;
     const seen = new WeakSet();
+    const ignoreSet = ignoreKeys instanceof Set ? ignoreKeys : new Set(ignoreKeys);
     const replacer = (k: string, v: any) => {
-      if (k === 'node' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+      if (shallowKeys.includes(k)) return undefined;
+      
+      if (ignoreSet.has(k)) return undefined;
+      
       if (typeof v === "object" && v !== null) {
         if (seen.has(v)) return undefined; // Prevent cycle
         seen.add(v);
@@ -60,7 +74,13 @@ export class Node {
       return v;
     };
     try {
-      return JSON.parse(JSON.stringify(val, replacer));
+      const cloned = JSON.parse(JSON.stringify(val, replacer));
+      if (val !== null && typeof val === 'object' && cloned !== null && typeof cloned === 'object') {
+        for (const key of shallowKeys) {
+          if (key in val) cloned[key] = val[key];
+        }
+      }
+      return cloned;
     } catch (e) {
       console.warn("Cycle detected during deepClone, falling back", e);
       return val;
@@ -71,7 +91,7 @@ export class Node {
 
   public static generateObjectHash(obj: any): string {
     const replacer = (k: string, v: any) => {
-      if (k === 'node' || k === 'css' || k === '_instantiatedNodes' || k === '_referencingNodes' || k === 'parent' || k === 'children' || k === 'originalParent') return undefined;
+      if (Node.HASH_IGNORE_KEYS.has(k)) return undefined;
       return v;
     };
     const str = JSON.stringify(obj, replacer) || "";
@@ -98,33 +118,39 @@ export class Node {
       delete this.component;
     } else {
       let filtered = components.filter(c => c !== null);
-      const seenUntargetedRefs = new Set<string>();
       this.sourceComponents.clear();
       this.targetComponents.clear();
-      filtered = filtered.reverse().filter(c => {
-        if (!c.target) {
-          if (seenUntargetedRefs.has(c.reference)) return false;
-          seenUntargetedRefs.add(c.reference);
-          this.sourceComponents.set(c.reference, c);
-          return true;
-        } else {
+      filtered.forEach(c => {
+        if (c.target) {
           this.targetComponents.set(c.target, c);
-          return true;
         }
-      }).reverse();
+        if (c.value !== undefined) {
+          this.sourceComponents.set(c.reference, c);
+        }
+      });
 
       if (filtered.length > 0) {
         this.component = filtered;
+        for (const binding of this.sourceComponents.values()) {
+          if (typeof binding.value === "object" && binding.value !== null) {
+            if ('body' in binding.value) {
+              const handlerName = (binding.value as any).name || binding.reference;
+              const compiled = clientAPI.compileHandler(handlerName, (binding.value as any).body);
+              if (compiled) this.compiledHandlers[handlerName] = compiled;
+            } else {
+              binding._instantiatedNodes = [];
+            }
+          }
+        }
       } else {
         delete this.component;
       }
     }
   }
 
-  constructor(data: NodeData, parent: Node | null = null, isComponentInjected: boolean = false) {
+  constructor(data: NodeData, parent: Node | null = null) {
     this.data = data;
     this.parent = parent;
-    this.isComponentInjected = isComponentInjected;
     this.resolveVersion();
 
     this.props = Node.deepClone(this.data.props) || {};
@@ -146,15 +172,7 @@ export class Node {
       }
     }
 
-    if (data.content) {
-      if (Array.isArray(data.content)) {
-        data.content.forEach(childData => {
-          this.children.push(new Node(childData, this, isComponentInjected));
-        });
-      } else if (typeof data.content === "object" && data.content !== null) {
-        this.children.push(new Node(data.content, this, isComponentInjected));
-      }
-    }
+
 
     if (this.data.type !== undefined) this.type = this.data.type;
     else this.type = 'div';
@@ -166,6 +184,8 @@ export class Node {
     this.handlers = Node.deepClone(this.data.handlers);
     if (this.handlers === undefined) {
       delete this.handlers;
+    } else {
+      this.compileHandlersMap(this.handlers);
     }
 
     this.setComponents(Node.deepClone(this.data.component));
@@ -179,22 +199,6 @@ export class Node {
 
     this.resolveVersion();
 
-    if (this.component) {
-      for (const binding of this.component) {
-        if (binding === null) continue;
-        if (typeof binding.value === "object" && binding.value !== null) {
-          const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
-          binding._instantiatedNodes = [];
-          for (const d of dataArray) {
-            if (typeof d !== "string" && !('body' in d)) {
-              const newNode = new Node(d, this, true);
-              binding._instantiatedNodes!.push(newNode);
-              Node.typeComponentNodes.push(newNode);
-            }
-          }
-        }
-      }
-    }
     PlacementWorker.appendPlacement(this);
   }
 
@@ -246,31 +250,41 @@ export class Node {
 
 
 
-  public addChild(childDataOrNode: NodeData | Node): Node {
-    let childNode: Node;
-    if (childDataOrNode instanceof Node) {
-      childNode = childDataOrNode;
-      childNode.parent = this;
-    } else {
-      childNode = new Node(childDataOrNode as NodeData, this);
-    }
 
-    this.hasChangedSinceRender = true;
-    this.children.push(childNode);
-
-    return childNode;
-  }
 
   public delete(): void {
     if (this.parent) {
-      this.parent.hasChangedSinceRender = true;
       const index = this.parent.children.indexOf(this);
       if (index > -1) {
         this.parent.children.splice(index, 1);
       }
     }
+    
+    let queuedNodes: Node[] = [];
+
     const pIndex = Node.placementArray.indexOf(this);
-    if (pIndex > -1) Node.placementArray.splice(pIndex, 1);
+    if (pIndex > -1) {
+      Node.placementArray.splice(pIndex, 1);
+      if (this.placement?.placementName) {
+        const oldPlacement = this.placement.placementName;
+        const referencingNodes = Node.sourcePlacements[oldPlacement] || [];
+        queuedNodes = [...referencingNodes];
+        for (const ref of referencingNodes) {
+          ref.receiveNextState({ activePlacement: undefined }, 1);
+        }
+      }
+    }
+
+    // Recursively delete children
+    while (this.children.length > 0) {
+      const child = this.children.pop();
+      if (child) {
+        if (queuedNodes.includes(child)) {
+          continue;
+        }
+        child.delete();
+      }
+    }
     for (const key of Object.keys(Node.sourcePlacements)) {
       if (Array.isArray((Node.sourcePlacements as any)[key])) {
         const arr = (Node.sourcePlacements as any)[key];
@@ -292,23 +306,20 @@ export class Node {
     const changedKeys = Object.keys(nextState);
     if (changedKeys.length === 0) return;
 
-    const SupervisorClass = (typeof globalThis !== 'undefined' && (globalThis as any).Supervisor) ? (globalThis as any).Supervisor : Supervisor;
-    const SupervisorInstance = SupervisorClass.instance;
-
     let targetPhase = 5; // default to Validation
     if (explicitPhaseId !== undefined) {
-      if (SupervisorInstance && SupervisorInstance.activeLockedPhases && SupervisorInstance.activeLockedPhases.has(explicitPhaseId)) {
+      if (Supervisor.instance && Supervisor.instance.activeLockedPhases && Supervisor.instance.activeLockedPhases.has(explicitPhaseId)) {
         console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
         return;
       }
       targetPhase = explicitPhaseId;
     } else {
       for (const key of changedKeys) {
-        if (SupervisorInstance && SupervisorInstance.isPropertyLocked && SupervisorInstance.isPropertyLocked(key)) {
+        if (Supervisor.isPropertyLocked(key)) {
           console.error(`[Node] Lock violation: Property '${key}' is currently locked by another phase for node ${this.css?.id}`);
           return;
         }
-        const pId = SupervisorClass.propertyToPhaseMap ? SupervisorClass.propertyToPhaseMap[key] : 5;
+        const pId = Supervisor.propertyToPhaseMap ? Supervisor.propertyToPhaseMap[key] : 5;
         if (pId !== undefined && pId < targetPhase) {
           targetPhase = pId;
         }
@@ -316,15 +327,13 @@ export class Node {
     }
 
     // Snapshot state
-    this._lastValidState = {
-      type: this.type,
-      props: Node.deepClone(this.props),
-      css: Node.deepClone(this.css),
-      handlers: Node.deepClone(this.handlers),
-      content: this.content, // shallow
-      placement: Node.deepClone(this.placement),
-      children: this.children // shallow
-    };
+    if (!this._lastValidState) {
+      this._lastValidState = Node.deepClone(this, ['content', 'children']);
+    }
+
+    if (nextState.handlers) {
+      this.compileHandlersMap(nextState.handlers);
+    }
 
     // Apply optimistically
     const mergeDeep = (target: any, source: any) => {
@@ -339,7 +348,6 @@ export class Node {
     };
     mergeDeep(this.data, nextState);
     Object.assign(this, nextState);
-    this.hasChangedSinceRender = true;
 
     const sup: any = (typeof globalThis !== 'undefined' && (globalThis as any).Supervisor) ? (globalThis as any).Supervisor : Supervisor.instance;
     if (sup && sup.getWorkerForPhase) {
@@ -481,23 +489,20 @@ export class Node {
     if (this.handlers && this.handlers[phase]) {
       try {
         const handlerObj = this.handlers[phase] as any;
-        const fullContext = { ...context, node: this, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
+        const fullContext = { 
+          ...context, 
+          node: this, 
+          metadata: Node.globalMetadata, 
+          rootNode: Supervisor.getRootNode(), 
+          contentPayload: Supervisor.instance?.contentData || [], 
+          clientAPI 
+        };
 
         let fn: Function | undefined;
         if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-          fn = clientAPI.getHandler(handlerObj.name, this);
+          fn = this.compiledHandlers[handlerObj.name] || clientAPI.getHandler(handlerObj.name, this);
         } else {
-          fn = clientAPI.getHandler(phase, this);
-        }
-
-        if (!fn) {
-          const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
-          const trimmedValue = handlerBody.trim();
-          if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-            fn = new Function('return ' + trimmedValue)();
-          } else {
-            fn = new Function('event', 'context', trimmedValue);
-          }
+          fn = this.compiledHandlers[phase] || clientAPI.getHandler(phase, this);
         }
 
         if (fn) {
@@ -525,6 +530,19 @@ export class Node {
     }
   }
 
+  private compileHandlersMap(handlersObj: Record<string, any>): void {
+    for (const [key, value] of Object.entries(handlersObj)) {
+      if (value === null) continue;
+      const handlerName = typeof value === 'object' && 'name' in value ? (value as any).name : key;
+      const handlerBody = typeof value === 'object' && 'body' in value ? (value as any).body : String(value);
+      const compiled = clientAPI.compileHandler(handlerName, handlerBody);
+      if (compiled) {
+        this.compiledHandlers[handlerName] = compiled;
+        if (handlerName !== key) this.compiledHandlers[key] = compiled;
+      }
+    }
+  }
+
   public exportToJson(): NodeData {
     const cleanData = (data: any) => {
       if (!data) return data;
@@ -543,6 +561,9 @@ export class Node {
         delete d.props;
       }
       if (d.component) {
+        // TODO: Architectural leak. Core code should not contain hardcoded references 
+        // to specific components like "PreemptEditor". This filtering logic should 
+        // be moved to the editor module or handled via a generalized exclude flag.
         const editorIndex = d.component.findIndex((c: any) => c.reference === "PreemptEditor");
         if (editorIndex !== -1) {
           d.component = [...d.component];

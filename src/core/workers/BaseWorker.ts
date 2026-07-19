@@ -11,9 +11,7 @@ export abstract class BaseWorker {
   }
 
   public push(node: Node, rollbackState?: RollbackState): void {
-    if (!this.queue.has(node)) {
-      this.queue.set(node, rollbackState);
-    }
+    this.queue.set(node, rollbackState);
   }
 
   public hasEvents(): boolean {
@@ -22,7 +20,7 @@ export abstract class BaseWorker {
 
   public async processQueue(): Promise<void> {
     let iter = 0;
-    while (this.queue.size > 0) {
+    while (this.hasEvents()) {
       if (++iter > 500) { console.error("INFINITE LOOP IN WORKER", this.constructor.name); break; }
       const currentQueue = new Map(this.queue);
       this.queue.clear();
