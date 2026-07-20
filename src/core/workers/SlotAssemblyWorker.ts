@@ -1,16 +1,19 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
-import type { RollbackState, HandlerDef, NodeData } from "../../types/NodeSchema.js";
+import type { RollbackState, HandlerDef } from "../../types/NodeSchema.js";
 import { clientAPI } from "../ClientAPI.js";
 
 export class SlotAssemblyWorker extends BaseWorker {
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
-    console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node.data);
+    console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     // Phase 3: Slot Assembly
     // Locks all other components (content, props, handlers, css)
-    
-    if (node.targetComponents.size === 0) return;
+
+    if (node.targetComponents.size === 0) {
+      node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
+      return;
+    }
 
     const sortedComponents: any[] = [];
     for (const c of node.targetComponents.values()) {
@@ -19,10 +22,14 @@ export class SlotAssemblyWorker extends BaseWorker {
       }
     }
 
-    if (sortedComponents.length === 0) return;
+    if (sortedComponents.length === 0) {
+      node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
+      return;
+    }
 
 
-    
+
+
     // Base collections that might be modified
     let newCss = node.css ? Node.deepClone(node.css) : {};
     let newProps = node.props ? Node.deepClone(node.props) : {};
@@ -52,9 +59,17 @@ export class SlotAssemblyWorker extends BaseWorker {
               const clonedChild = Node.deepClone(instantiatedNode, [], ['element', '_referencingNodes']);
               clonedChild.parent = node;
               node.children.push(clonedChild);
+
+              const emitTree = (n: Node) => {
+                if (n.component) n.setComponents(n.component);
+                Supervisor.emitToPhase(n, {}, 2);
+                if (n.children) {
+                  for (const c of n.children) emitTree(c);
+                }
+              };
+              emitTree(clonedChild);
             } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
-              // Raw NodeData, create it
-              node.children.push(new Node(resolvedValue[i] as NodeData, node));
+              console.warn(`[SlotAssemblyWorker] Skipping raw NodeData for content slot on node ${node.css?.id}. Raw nodes must be properly instantiated into _instantiatedNodes before slot assembly.`);
             }
           }
         } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
@@ -64,8 +79,17 @@ export class SlotAssemblyWorker extends BaseWorker {
             const clonedChild = Node.deepClone(instantiatedNode, [], ['element', '_referencingNodes']);
             clonedChild.parent = node;
             node.children = [clonedChild];
+
+            const emitTree = (n: Node) => {
+              if (n.component) n.setComponents(n.component);
+              Supervisor.emitToPhase(n, {}, 2);
+              if (n.children) {
+                for (const c of n.children) emitTree(c);
+              }
+            };
+            emitTree(clonedChild);
           } else {
-            node.children = [new Node(resolvedValue as NodeData, node)];
+            console.warn(`[SlotAssemblyWorker] Skipping raw NodeData for content slot on node ${node.css?.id}. Raw nodes must be properly instantiated into _instantiatedNodes before slot assembly.`);
           }
         } else {
           node.content = String(resolvedValue);
@@ -81,11 +105,11 @@ export class SlotAssemblyWorker extends BaseWorker {
   }
 
   private applyProperty(
-    path: string, 
-    value: string | HandlerDef, 
-    node: Node, 
-    newProps: any, 
-    newHandlers: any, 
+    path: string,
+    value: string | HandlerDef,
+    node: Node,
+    newProps: any,
+    newHandlers: any,
     newCss: any
   ): void {
     if (path === "content") {
@@ -113,7 +137,7 @@ export class SlotAssemblyWorker extends BaseWorker {
       const className = path.substring(12);
       if (!newCss.classes) newCss.classes = node.css?.classes ? [...node.css.classes] : [];
       const hasClass = newCss.classes.includes(className);
-      
+
       if (value === "true" && !hasClass) {
         newCss.classes.push(className);
         node.css = newCss;

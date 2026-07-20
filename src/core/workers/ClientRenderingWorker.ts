@@ -46,6 +46,9 @@ export class ClientRenderingWorker extends BaseWorker {
   }
 
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+    if (node.parent === undefined) return;
+    console.log(`[ClientRenderingWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
+
     // Phase 6: Rendering
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
     

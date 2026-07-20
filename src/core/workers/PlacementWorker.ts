@@ -52,7 +52,7 @@ export class PlacementWorker extends BaseWorker {
     if (target === node) {
       throw new Error("Cannot place node into itself");
     }
-    let current: Node | null = target.parent;
+    let current: Node | null | undefined = target.parent;
     while (current) {
       if (current === node) {
         throw new Error("Cannot place node into a descendant");
@@ -139,6 +139,19 @@ export class PlacementWorker extends BaseWorker {
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 1;
-    Supervisor.emitToPhase(node, _rollbackState || {}, 2);
+    let isAttached = false;
+    let current: Node | null | undefined = node;
+    
+    while (current !== undefined) {
+      if (current === null) {
+        isAttached = true;
+        break;
+      }
+      current = current.parent;
+    }
+
+    if (isAttached) {
+      Supervisor.emitToPhase(node, _rollbackState || {}, 2);
+    }
   }
 }

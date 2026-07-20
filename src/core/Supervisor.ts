@@ -414,6 +414,7 @@ export class Supervisor {
       if (this.instantiationWorker && (this.instantiationWorker as any).pushRaw) {
         (this.instantiationWorker as any).pushRaw(mountPointData, this.rootNode, (node: Node) => {
           this.rootNode = node;
+          if (this.rootNode) this.rootNode.parent = null;
         });
       }
     }

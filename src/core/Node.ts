@@ -20,7 +20,7 @@ export class Node {
   public _lastValidState?: RollbackState;
 
   public children: Node[] = [];
-  public parent: Node | null = null;
+  public parent?: Node | null;
   public element: HTMLElement | null = null;
   public styleNodes: StyleNode[] = [];
   public isValid: boolean = true;
@@ -145,6 +145,18 @@ export class Node {
         }
       }
     }
+    if (node.styleNodes && Array.isArray(node.styleNodes)) {
+      for (let i = 0; i < node.styleNodes.length; i++) {
+        const sNode = node.styleNodes[i];
+        if (sNode) {
+          Object.setPrototypeOf(sNode, StyleNode.prototype);
+          sNode.parent = node;
+          if (!sNode.data && node.css && node.css.cssDef && node.css.cssDef[i]) {
+            sNode.data = node.css.cssDef[i];
+          }
+        }
+      }
+    }
   }
   public static idCollisions = new Map<string, number>();
 
@@ -210,7 +222,7 @@ export class Node {
     }
   }
 
-  constructor(data: NodeData, parent: Node | null = null) {
+  constructor(data: NodeData, parent?: Node | null) {
     this.data = data;
     this.parent = parent;
     this.resolveVersion();

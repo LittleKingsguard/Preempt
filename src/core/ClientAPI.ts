@@ -17,7 +17,7 @@ export class ClientAPI {
         binding._referencingNodes.push(node);
       }
     } else {
-      let currentNode: Node | null = node;
+      let currentNode: Node | null | undefined = node;
       while (currentNode) {
         const parentBinding = currentNode.sourceComponents?.get(binding.reference);
         if (parentBinding) {
@@ -125,7 +125,7 @@ export class ClientAPI {
         payloads = Array.isArray(ext) ? ext : [ext];
       }
 
-      nodes = payloads.map((item: any) => new Node(item));
+      nodes = payloads.map((item: any) => new Node(item, null));
     } else {
       const templateJSON = JSON.stringify(options.defaultTemplate || {});
       nodes = data.map((item: any) => {
@@ -150,7 +150,7 @@ export class ClientAPI {
         } else if (Array.isArray(item)) {
           item.forEach((i: any) => parseToComponent(i));
         }
-        return new Node(nodeObj);
+        return new Node(nodeObj, null);
       });
     }
 

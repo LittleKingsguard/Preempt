@@ -7,9 +7,9 @@ import { clientAPI } from "../ClientAPI.js";
 
 export class ComponentAssemblyWorker extends BaseWorker {
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
-    console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`);
+    console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     node.executeHandlers("beforeAssembly", { supervisor: this.supervisor }, false);
-    
+
     // Phase 2: Component Assembly
     // This phase applies the 'type' component specifically.
 
@@ -46,6 +46,15 @@ export class ComponentAssemblyWorker extends BaseWorker {
               const clonedChild = Node.deepClone(child, [], ['element', '_referencingNodes']);
               clonedChild.parent = node;
               node.children.push(clonedChild);
+
+              const emitTree = (n: Node) => {
+                if (n.component) n.setComponents(n.component);
+                Supervisor.emitToPhase(n, {}, 2);
+                if (n.children) {
+                  for (const c of n.children) emitTree(c);
+                }
+              };
+              emitTree(clonedChild);
             }
 
             if (instantiatedNode.content !== undefined) {
@@ -82,7 +91,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
               }
               node.compiledHandlers = newCompiledHandlers;
             }
-            
+
             if (instantiatedNode.sourceComponents.size > 0 || instantiatedNode.targetComponents.size > 0) {
               for (const [k, v] of instantiatedNode.sourceComponents) newSourceComponents.set(k, v);
               for (const [k, v] of instantiatedNode.targetComponents) {
@@ -101,7 +110,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
 
 
       if (newContent !== node.content) {
-         node.content = newContent;
+        node.content = newContent;
       }
     }
 

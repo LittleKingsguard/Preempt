@@ -29,6 +29,9 @@ export class SSRRenderingWorker extends BaseWorker {
   }
 
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+    if (node.parent === undefined) return;
+    console.log(`[SSRRenderingWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
+
     // Phase 6: SSR Rendering
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);

@@ -55,7 +55,6 @@ export class InstantiationWorker extends BaseWorker {
           for (const d of dataArray) {
             if (typeof d !== "string" && !('body' in d)) {
               this.pushRaw(d, null, (componentNode: Node) => {
-                componentNode.parent = newNode;
                 binding._instantiatedNodes!.push(componentNode);
               });
             }
