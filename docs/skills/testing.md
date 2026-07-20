@@ -87,3 +87,28 @@ expect(Supervisor.process).toHaveBeenCalledWith(
 
 ## 4. End-to-End Validation Testing
 Because Preempt schemas (`NodeData`) strictly validate their structures (e.g. throwing errors if `type` is missing instead of `tag`), always test endpoint payloads using exactly formatted JSON objects matching `src/types/NodeSchema.ts`. Passing strings or structurally invalid objects to endpoints will trigger backend validation rejections. Ensure your test payloads perfectly mimic real database entries.
+
+## 5. Unit Testing Nodes and Workers
+In the current Worker-based architecture, the `Node` object serves strictly as a state container and is decoupled from pipeline logic. **Methods like `node.render()` and `node.validate()` have been removed from the `Node` class.**
+
+When writing unit or integration tests that require node processing, you must invoke the respective Worker class directly rather than relying on legacy Node methods.
+
+**Anti-Pattern (Legacy API):**
+```typescript
+const rootNode = new Node(payload);
+const html = await rootNode.render(); // Throws TypeError: node.render is not a function
+```
+
+**Best Practice (Worker API):**
+```typescript
+import { SSRRenderingWorker } from '../../../src/core/workers/SSRRenderingWorker.js';
+
+const rootNode = new Node(payload);
+const worker = new SSRRenderingWorker();
+const html = await worker.execute(rootNode);
+```
+
+For full pipeline integration tests, use the `Supervisor` to process the tree:
+```typescript
+await Supervisor.instance.process(rootNode);
+```

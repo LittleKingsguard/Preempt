@@ -17,23 +17,25 @@ This architecture enables:
 6. **Event Streaming**: Preempt leverages an internal event bus (via the `Events` table and a Kafka `eventRelay`) to stream real-time structural payload updates to distributed clients via WebSockets, enabling high-performance, dynamic UI reactivity.
 
 ## The Supervisor Pipeline
-At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline to convert raw JSON data from the database into a fully reactive UI.
+At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline using a suite of decoupled `Worker` classes to convert raw JSON data from the database into a fully reactive UI.
 
-1. **Instantiation**: The Supervisor accepts the `templateData` and `contentData` (an array of payloads). It aggregates `metadata` and `userData` across all payloads, then generates virtual `Node` objects from each payload's underlying `content` property.
-2. **Assembly**: It merges template and content components into the global registry, and then resolves all `targetPlacement` rules to insert content nodes into their requested template drop-zones. 
+1. **InstantiationWorker**: Converts the raw JSON `NodeData` into OOP `Node` instances in memory. During this stage, any Component Bindings with a non-null object or array `value` are eagerly parsed and deeply cloned into an `_instantiatedNodes` array. A cycle-safe `deepClone` (using a `WeakSet` to track references) must be used here to avoid crashing when bindings contain recursive parent/child references.
+2. **ComponentAssemblyWorker**: Merges template and content components into the global registry. Resolves standard component references (styles, properties, handlers) by deep-merging them into nodes. For structural components, it merges the eagerly instantiated content/children directly into the target node.
+3. **SlotAssemblyWorker**: Assembles dynamically injected content into slots.
+4. **PlacementWorker**: The supervisor collects all placements across the tree, deliberately scanning into the `_instantiatedNodes` of structural components to ensure nested drop-zones are mapped correctly. Content nodes are then placed into their target drop-zones.
+5. **PreprocessingWorker**: A placeholder stage for implementation-specific expansions (e.g., hooks for custom data formatting).
+6. **ValidationWorker**: Executes structural integrity checks to ensure the `Node` tree is valid before rendering.
+7. **SSRRenderingWorker / ClientRenderingWorker**:
+   - *Server-Side (`SSRRenderingWorker`)*: Generates raw HTML strings and a bundled CSS block to send to the browser.
+   - *Client-Side (`ClientRenderingWorker`)*: Syncs the virtual `Node` tree with the native DOM, patching changes iteratively via an atomic event loop.
+8. **PostprocessingWorker**: A placeholder stage for final cleanup tasks or custom implementation-specific expansions.
 
-The pipeline executes the following stages sequentially:
-1. **DB Load**: Fetches the Template, Content, Handlers, and Components from the SQL database. (SSR only)
-2. **Instantiation**: Converts the raw JSON `NodeData` into OOP `Node` instances in memory. During this stage, any Component Bindings with a non-null object or array `value` are eagerly parsed and deeply cloned into an `_instantiatedNodes` array. A cycle-safe `deepClone` (using a `WeakSet` to track references) must be used here to avoid crashing when bindings contain recursive parent/child references.
-3. **Assembly**: 
-   - **Placements**: The supervisor collects all placements across the tree, deliberately scanning into the `_instantiatedNodes` of structural components to ensure nested drop-zones are mapped correctly. Content nodes are then placed into their target drop-zones.
-   - **Bindings**: Resolves standard component references (styles, properties, handlers) by deep-merging them into nodes. For structural components, it merges the eagerly instantiated content/children directly into the target node.
-4. **Pre-Processing & Validation**: Hooks for custom data formatting and structural integrity checks.
-5. **Rendering**:
-   - *Server-Side*: Generates raw HTML strings and a bundled CSS block to send to the browser.
-   - *Client-Side*: Syncs the virtual `Node` tree with the native DOM, patching changes iteratively.
-6. **Post-Processing**: Final cleanup tasks.
-7. **Monitoring**: (Client-Side only) Enters a continuous loop that checks the `Node` tree for state mutations. If a node changes (e.g., a handler modifies its style or content), Preempt automatically flushes that specific node's updates to the DOM.
+### Hydration & Reactivity
+On the client side, Preempt uses an **atomic node update model** driven by an internal Event Bus, rather than rebuilding the entire virtual DOM tree on every state change.
+
+1. When a handler modifies a node's state (e.g. via `ClientAPI.modifyNode()`), the state payload is pushed to that specific node's `_nextStateQueue`.
+2. The `ClientRenderingWorker` listens to the event bus and pulls from these node queues asynchronously.
+3. The worker then seamlessly patches the native DOM to reflect the new state, providing granular reactivity without triggering full pipeline re-instantiations (`Supervisor.rerun()`).
 
 ## General Use Case
 Preempt is designed for highly dynamic platforms where administrators or non-technical operators need the power to restructure layouts, edit styles, and deploy new interactive logic instantly, without requiring a codebase recompilation, pull request, or deployment cycle. 

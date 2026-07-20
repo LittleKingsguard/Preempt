@@ -17,8 +17,8 @@ The most important property is `context.node`, which points to the Preempt `Node
 You can traverse the node tree using:
 - `context.node.parent`: The parent `Node`.
 - `context.node.children`: An array of child `Node`s.
-- `context.node.findNode(query)`: Recursively searches children for a node matching the query (e.g., `{ classes: ['login-form-wrapper'] }`).
-- `context.node.findNodes(query)`: Returns an array of all matching nodes.
+- `context.node.findNode(query)`: Recursively searches children for a node matching the query (e.g., `{ classes: ['login-form-wrapper'] }`). *(Note: This method delegates internally to the `NodeQueryUtils` engine).*
+- `context.node.findNodes(query)`: Returns an array of all matching nodes. *(Note: This method delegates internally to the `NodeQueryUtils` engine).*
 
 **Example Traversal (Best Practice):**
 ```javascript
@@ -45,25 +45,20 @@ By binding the handler to the common ancestor component:
 1. You guarantee that all required child nodes exist in the `node.children` array when the handler is executed.
 2. Traversal becomes much simpler and more robust, because you only need to traverse downwards (`context.node.children[...]`) instead of unpredictably jumping up and across the tree from a nested trigger element.
 
-## Making Changes That Persist Through Renders
-If a handler only modifies the native DOM element directly (e.g., `event.target.style.display = 'none'`), the change will be wiped out if the Preempt pipeline ever re-evaluates and rebuilds the DOM (for example, when clicking an element in the Editor mode triggers the `EditorInspectHandler` which runs `Supervisor.resetInstantiation()`).
+## Atomic State Updates
+If a handler only modifies the native DOM element directly (e.g., `event.target.style.display = 'none'`), the change will be wiped out if the Preempt pipeline ever re-evaluates and rebuilds the DOM.
 
-To make changes that persist through pipeline re-renders (or explicitly manage temporary state), you should use the managed **`context.clientAPI.modifyNode`** function rather than mutating `node.data` manually.
+To make changes that persist through pipeline re-renders and seamlessly update the UI, you should use the managed **`context.clientAPI.modifyNode`** function rather than mutating `node.data` manually. Preempt uses an atomic state update model: state changes are pushed to a queue on the node and processed asynchronously by the `ClientRenderingWorker`.
 
 ### The `modifyNode` API
 ```javascript
-context.clientAPI.modifyNode(partialNode, targetNode, nextCallback, persistentFlag)
+context.clientAPI.modifyNode(partialNode, targetNode, nextCallback)
 ```
 - **`partialNode`**: An object containing the properties to update (e.g., `{ css: { style: { display: "block" } } }`).
 - **`targetNode`**: The `Node` instance you want to modify (e.g., found via `context.node.findNode()`).
-- **`nextCallback`**: Optional callback function to run after the modification.
-- **`persistentFlag`**: `true` for persistent changes, `false` for temporary changes. (Defaults to `false` if the Supervisor is currently running, `true` otherwise).
+- **`nextCallback`**: Optional callback function to run after the modification is pushed to the queue.
 
-**Temporary Modifications:**
-If `persistentFlag` is `false`, the changes are strictly applied to the runtime `Node` object and re-rendered immediately. This is useful for UI state like highlighting an active tab or showing an editor overlay, where you *don't* want the changes written to the underlying JSON source of truth.
-
-**Persistent Modifications:**
-If `persistentFlag` is `true`, the changes are deep-merged into the foundational `node.data` source block, and the entire Supervisor pipeline is re-run (`Supervisor.rerun()`). This ensures the change permanently survives pipeline re-instantiation.
+When you call `modifyNode`, the `partialNode` state is pushed onto the `targetNode`'s `_nextStateQueue` using `receiveNextState()`. The `ClientRenderingWorker`, which listens for events across the pipeline, will automatically pull these state updates and seamlessly patch the DOM without requiring a full pipeline re-instantiation. This means all UI state transitions naturally survive without needing a full `Supervisor.rerun()`.
 
 **Example Implementation:**
 ```javascript
@@ -76,15 +71,12 @@ async (event, context) => {
     const loginFormNode = container.findNode({ classes: ["login-form-wrapper"] });
     
     if (loginFormNode) {
-        // 2. Use ClientAPI to modify the node
-        // Setting persistent=false makes this a temporary UI transition
+        // 2. Use ClientAPI to push atomic state updates to the node
         const newCss = { ...loginFormNode.css, style: { ...loginFormNode.css?.style, display: "block" } };
         
         context.clientAPI.modifyNode(
             { css: newCss },
-            loginFormNode,
-            undefined,
-            false // temporary modification
+            loginFormNode
         );
     }
 }
@@ -95,7 +87,7 @@ For a handler function to be successfully loaded and sent to the frontend, it is
 
 The handler MUST be explicitly mapped to the structural Component in the `componenthandlers` table in the database. When the backend resolves the payload, it only looks up handlers that are formally joined to that component in the database. If the mapping is missing, the frontend will silently fail on interaction because the JavaScript function body was never sent to the client.
 
-By following this exact pattern, your UI state changes will successfully survive pipeline re-renders caused by the `Supervisor`.
+By following this exact pattern, your atomic UI state changes will successfully trigger rendering worker updates and apply to the DOM.
 
 ## Pipeline Lifecycle Handlers
 
