@@ -1,11 +1,39 @@
 import { Supervisor } from "./Supervisor.js";
 import { Node } from "./Node.js";
-import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ContentPayload, ComponentBinding } from "../types/NodeSchema.js";
 
 export class ClientAPI {
   public handlers: { [key: string]: Function } = {};
 
   constructor() {}
+
+  public resolveComponentBinding(binding: ComponentBinding, node: Node): { resolvedValue: any, resolvedBinding: ComponentBinding | null } {
+    let resolvedValue: any = binding.value !== undefined ? binding.value : null;
+    let resolvedBinding: ComponentBinding | null = binding.value !== undefined ? binding : null;
+
+    if (resolvedValue !== null) {
+      if (!binding._referencingNodes) binding._referencingNodes = [];
+      if (!binding._referencingNodes.includes(node)) {
+        binding._referencingNodes.push(node);
+      }
+    } else {
+      let currentNode: Node | null = node;
+      while (currentNode) {
+        const parentBinding = currentNode.sourceComponents?.get(binding.reference);
+        if (parentBinding) {
+          resolvedValue = parentBinding.value !== undefined ? parentBinding.value : null;
+          resolvedBinding = parentBinding;
+          if (!parentBinding._referencingNodes) parentBinding._referencingNodes = [];
+          if (!parentBinding._referencingNodes.includes(node)) {
+            parentBinding._referencingNodes.push(node);
+          }
+          break;
+        }
+        currentNode = currentNode.parent;
+      }
+    }
+    return { resolvedValue, resolvedBinding };
+  }
 
   public getInitialData(): any {
     if (typeof document !== 'undefined') {
@@ -24,16 +52,16 @@ export class ClientAPI {
   public getHandler(key: string, contextNode?: Node): Function | undefined {
     let current: Node | null | undefined = contextNode;
     while (current) {
-      if (current.compiledHandlers && current.compiledHandlers[key]) {
-        return current.compiledHandlers[key];
+      if (current.compiledHandlers && current.compiledHandlers.has(key)) {
+        return current.compiledHandlers.get(key);
       }
       
-      const componentBinding = current.sourceComponents.get(key);
+      const componentBinding = current.sourceComponents?.get(key);
       if (componentBinding && typeof componentBinding.value === 'object' && componentBinding.value !== null && 'body' in componentBinding.value) {
         const compiled = this.compileHandler(key, componentBinding.value.body as string);
         if (compiled) {
-          if (!current.compiledHandlers) current.compiledHandlers = {};
-          current.compiledHandlers[key] = compiled;
+          if (!current.compiledHandlers) current.compiledHandlers = new Map();
+          current.compiledHandlers.set(key, compiled);
           return compiled;
         }
       }
@@ -45,7 +73,7 @@ export class ClientAPI {
       return this.handlers[key];
     }
     
-    console.error(`Handler ${key} not found in tree.`);
+    console.error(`Handler ${key} not found in tree.`, contextNode);
     return undefined;
   }
 

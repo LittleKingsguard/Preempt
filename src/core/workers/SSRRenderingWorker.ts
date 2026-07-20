@@ -1,5 +1,6 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
+import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { StyleNode } from "../StyleNode.js";
 
@@ -7,23 +8,23 @@ export class SSRRenderingWorker extends BaseWorker {
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
 
-    if ((this.supervisor as any).config?.runRendering !== false) {
-      (this.supervisor as any).executeHandlers("beforeRender");
+    if (this.supervisor.config?.runRendering !== false) {
+      this.supervisor.executeHandlers("beforeRender");
     }
 
     await super.processQueue();
 
-    if ((this.supervisor as any).config?.runRendering !== false) {
-      const rootNode = (this.supervisor as any).rootNode;
+    if (this.supervisor.config?.runRendering !== false) {
+      const rootNode = this.supervisor.rootNode;
       if (rootNode) {
-        let cssString = SSRRenderingWorker.renderStyleNodesToString(StyleNode.cssDefs);
+        let cssString = SSRRenderingWorker.renderStyleNodesToString(Array.from(StyleNode.cssDefs.values()));
         let htmlString = SSRRenderingWorker.renderToString(rootNode);
-        (this.supervisor as any).ssrResult = `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
+        this.supervisor.ssrResult = `<style id="preempt-dynamic-styles">${cssString}</style>${htmlString}`;
       }
     }
 
-    if ((this.supervisor as any).config?.runRendering !== false) {
-      (this.supervisor as any).executeHandlers("afterRender");
+    if (this.supervisor.config?.runRendering !== false) {
+      this.supervisor.executeHandlers("afterRender");
     }
   }
 
@@ -33,10 +34,9 @@ export class SSRRenderingWorker extends BaseWorker {
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
   }
 
-  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
-    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
-      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 7);
-    }
+  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    node.lastCompletedPhase = 6;
+    Supervisor.emitToPhase(node, _rollbackState || {}, 7);
   }
 
   public static renderToString(node: Node): string {
@@ -66,17 +66,26 @@ export class SSRRenderingWorker extends BaseWorker {
       }
     }
 
+    let computedStyle: Record<string, any> = {};
+    if (node.css && node.css.style) {
+       computedStyle = { ...node.css.style };
+    }
+    if (node.placement?.placementName && (!node.children || node.children.length === 0)) {
+       computedStyle['display'] = 'none';
+    }
+
     if (node.css) {
       if (node.css.id) attributes += ` id="${node.css.id}"`;
       if (node.css.classes && node.css.classes.length > 0) {
         attributes += ` class="${node.css.classes.join(" ")}"`;
       }
-      if (node.css.style) {
-        const styleStr = Object.entries(node.css.style)
-          .map(([k, v]) => `${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}: ${v}`)
-          .join("; ");
-        if (styleStr) attributes += ` style="${styleStr}"`;
-      }
+    }
+
+    if (Object.keys(computedStyle).length > 0) {
+      const styleStr = Object.entries(computedStyle)
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}: ${v}`)
+        .join("; ");
+      if (styleStr) attributes += ` style="${styleStr}"`;
     }
 
     let innerHTML = "";
@@ -87,8 +96,12 @@ export class SSRRenderingWorker extends BaseWorker {
         .replace(/>/g, "&gt;");
     }
 
-    for (const child of node.children) {
-      innerHTML += SSRRenderingWorker.renderToString(child);
+    if (node.children && Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child) {
+          innerHTML += SSRRenderingWorker.renderToString(child);
+        }
+      }
     }
 
     const voidElements = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];

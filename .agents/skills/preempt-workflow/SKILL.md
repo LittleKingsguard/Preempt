@@ -30,6 +30,9 @@ Handlers are JavaScript functions executed in the browser. To modify a node's st
   - **Temporary modifications (`persistentFlag=false`)**: Applies directly to the runtime Node and immediately re-renders (useful for UI state). Defaults to temporary if Supervisor is actively running.
   - **Persistent modifications (`persistentFlag=true`)**: Deep-merges into the underlying `node.data` JSON and completely reruns the pipeline (`Supervisor.rerun()`).
 
+## Important Rules
+- Never use `globalThis.Supervisor` as a fallback. `Supervisor` is an import and its singleton should be accessed directly via `Supervisor.instance`.
+
 ## Accessing Advanced Documentation
 Detailed technical guidelines exist in the repository under `docs/skills/`. Before making major structural or design changes, you should read the relevant file using the `view_file` tool:
 - `docs/skills/overview.md`: Core architecture, Supervisor pipeline, and User Auth state.

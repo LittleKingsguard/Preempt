@@ -16,7 +16,7 @@ export class ClientRenderingWorker extends BaseWorker {
     }
     const sheet = styleEl.sheet;
     if (sheet) {
-      for (const sNode of StyleNode.cssDefs) {
+      for (const sNode of StyleNode.cssDefs.values()) {
         if (sNode.ruleIndex === -1) {
           try {
             sNode.render(sheet);
@@ -30,36 +30,41 @@ export class ClientRenderingWorker extends BaseWorker {
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
 
-    if ((this.supervisor as any).config?.runRendering !== false) {
-      (this.supervisor as any).executeHandlers("beforeRender");
+    if (this.supervisor.config?.runRendering !== false) {
+      this.supervisor.executeHandlers("beforeRender");
     }
 
     await super.processQueue();
 
-    if (typeof window !== 'undefined' && (this.supervisor as any).config?.runRendering !== false) {
+    if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
       ClientRenderingWorker.renderStyles();
-      const rootNode = (this.supervisor as any).rootNode;
-      if (rootNode) {
-        ClientRenderingWorker.render(rootNode);
-      }
     }
 
-    if ((this.supervisor as any).config?.runRendering !== false) {
-      (this.supervisor as any).executeHandlers("afterRender");
+    if (this.supervisor.config?.runRendering !== false) {
+      this.supervisor.executeHandlers("afterRender");
     }
   }
 
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     // Phase 6: Rendering
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
-    // DOM rendering is deferred to processQueue to avoid duplicate client side work
+    
+    if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
+      this.renderNode(node);
+    }
+    
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
   }
 
-  public static render(node: Node): HTMLElement | null {
+  private renderNode(node: Node): HTMLElement | null {
     if (typeof document === 'undefined') return null;
 
-    const oldElement = node.element;
+    let oldElement = node.element;
+
+    if (!oldElement && !node.parent) {
+      const mountId = (node.props?.id as string) || node.css?.id || 'app';
+      oldElement = document.getElementById(mountId);
+    }
 
     if (!node.isValid) {
       if (oldElement) {
@@ -97,6 +102,8 @@ export class ClientRenderingWorker extends BaseWorker {
           let fn: Function | undefined;
           if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
             fn = clientAPI.getHandler(handlerObj.name, node);
+          } else if (typeof handlerObj === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(handlerObj)) {
+            fn = clientAPI.getHandler(handlerObj, node);
           } else {
             fn = clientAPI.getHandler(key, node);
           }
@@ -135,6 +142,14 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
 
+    if (node.placement?.placementName) {
+      if (!node.children || node.children.length === 0) {
+        el.style.display = 'none';
+      } else if (el.style.display === 'none' && node.css?.style?.['display'] !== 'none') {
+        el.style.display = (node.css?.style?.['display'] as string) || '';
+      }
+    }
+
     if (node.content) {
       if (typeof node.content === "string") {
         el.textContent = node.content;
@@ -162,12 +177,23 @@ export class ClientRenderingWorker extends BaseWorker {
     }
 
     const activeChildElements = new Set<HTMLElement>();
-    for (const child of node.children) {
-      ClientRenderingWorker.render(child);
-      if (child.element) {
-        activeChildElements.add(child.element);
-        if (child.element.parentNode !== el) {
-          el.appendChild(child.element);
+    if (node.children && Array.isArray(node.children)) {
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (!child) continue;
+
+        if (!child.element) {
+          this.push(child);
+        } else {
+          activeChildElements.add(child.element);
+          if (child.element.parentNode !== el) {
+            el.appendChild(child.element);
+          }
+          
+          const expectedNode = el.children[i];
+          if (expectedNode !== child.element) {
+             el.insertBefore(child.element, expectedNode || null);
+          }
         }
       }
     }
@@ -185,31 +211,23 @@ export class ClientRenderingWorker extends BaseWorker {
       } else {
         oldElement.remove();
       }
-    } else if (!oldElement) {
-      if (node.parent && node.parent.element) {
+    }
+
+    if (node.parent) {
+      if (!node.parent.element) {
+        this.push(node.parent);
+      } else if (el.parentNode !== node.parent.element) {
         node.parent.element.appendChild(el);
-      } else if (!node.parent) {
-         // Mount root node to DOM
-         const mountElementId = (typeof (globalThis as any).Supervisor !== 'undefined' && (globalThis as any).Supervisor.instance) ? (globalThis as any).Supervisor.instance.mountElementId : 'app';
-         const appElement = document.getElementById(mountElementId);
-         if (appElement && appElement !== el) {
-            if (appElement.parentNode) {
-                appElement.replaceWith(el);
-            } else {
-                appElement.appendChild(el);
-            }
-         } else if (!appElement) {
-            document.body.appendChild(el);
-         }
       }
+    } else if (!el.parentNode) {
+      document.body.appendChild(el);
     }
 
     return el;
   }
 
-  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
-    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
-      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 7);
-    }
+  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    node.lastCompletedPhase = 6;
+    Supervisor.emitToPhase(node, _rollbackState || {}, 7);
   }
 }

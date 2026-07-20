@@ -56,7 +56,7 @@ export class Supervisor {
     return phaseId !== undefined && this.activeLockedPhases.has(phaseId);
   }
 
-  private config: PipelineConfig;
+  public config: PipelineConfig;
   public rootNode: Node | null = null;
   public contentNodes: Map<string | ContentPayload, Node[]> = new Map();
   private isMonitoring: boolean = false;
@@ -452,7 +452,7 @@ export class Supervisor {
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
   }
 
-  private executeHandlers(phase: string): void {
+  public executeHandlers(phase: string): void {
     if (this.config.isValidationRun) return;
     if (this.rootNode) {
       this.rootNode.executeHandlers(phase, { supervisor: this });

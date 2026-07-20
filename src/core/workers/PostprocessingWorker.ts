@@ -10,7 +10,8 @@ export class PostprocessingWorker extends BaseWorker {
     node.executeHandlers("afterPostprocess", { supervisor: this.supervisor }, false);
   }
 
-  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    node.lastCompletedPhase = 7;
 
   }
 }

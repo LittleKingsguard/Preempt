@@ -1,8 +1,8 @@
 import type { CssDef } from "../types/NodeSchema.js";
-import type { Node } from "./Node.js";
+import { Node } from "./Node.js";
 
 export class StyleNode {
-  public static cssDefs: StyleNode[] = [];
+  public static cssDefs: Map<string, StyleNode> = new Map();
 
   public data: CssDef;
   public parent: Node | null = null;
@@ -15,11 +15,17 @@ export class StyleNode {
   }
 
   public static append(node: StyleNode): void {
-    StyleNode.cssDefs.push(node);
+    const existing = StyleNode.cssDefs.get(node.data.selector);
+    if (existing) {
+      if (Node.generateObjectHash(existing.data) !== Node.generateObjectHash(node.data)) {
+        console.warn(`StyleNode overwrite alert: Definition for selector ${node.data.selector} is being overwritten with different data.`);
+      }
+    }
+    StyleNode.cssDefs.set(node.data.selector, node);
   }
 
   public static clear(): void {
-    StyleNode.cssDefs = [];
+    StyleNode.cssDefs.clear();
   }
 
   public render(sheet: CSSStyleSheet): void {
@@ -43,13 +49,12 @@ export class StyleNode {
       this.ruleIndex = -1;
     }
 
-    const index = StyleNode.cssDefs.indexOf(this);
-    if (index > -1) {
-      StyleNode.cssDefs.splice(index, 1);
+    if (StyleNode.cssDefs.get(this.data.selector) === this) {
+      StyleNode.cssDefs.delete(this.data.selector);
     }
 
     if (sheetRef && deletedIndex >= 0) {
-      for (const node of StyleNode.cssDefs) {
+      for (const node of StyleNode.cssDefs.values()) {
         if (node.sheet === sheetRef && node.ruleIndex > deletedIndex) {
           node.ruleIndex--;
         }

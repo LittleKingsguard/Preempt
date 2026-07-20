@@ -1,5 +1,6 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
+import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 
 export class PreprocessingWorker extends BaseWorker {
@@ -10,9 +11,8 @@ export class PreprocessingWorker extends BaseWorker {
     node.executeHandlers("afterPreprocess", { supervisor: this.supervisor }, false);
   }
 
-  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
-    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
-      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 5);
-    }
+  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    node.lastCompletedPhase = 4;
+    Supervisor.emitToPhase(node, _rollbackState || {}, 5);
   }
 }

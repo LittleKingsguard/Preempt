@@ -1,5 +1,6 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
+import { Supervisor } from "../Supervisor.js";
 import type { NodeData, RollbackState } from "../../types/NodeSchema.js";
 import { PlacementWorker } from "./PlacementWorker.js";
 
@@ -114,11 +115,8 @@ export class InstantiationWorker extends BaseWorker {
     PlacementWorker.appendPlacement(node);
   }
 
-  protected onProcessSuccess(_node: Node, _rollbackState?: RollbackState): void {
-    // Optionally emit to next phase if needed
-    // In our architecture, the Supervisor routes to the next phase queue based on configuration
-    if (typeof (globalThis as any).Supervisor !== 'undefined' && typeof (globalThis as any).Supervisor.emitToPhase === 'function') {
-      (globalThis as any).Supervisor.emitToPhase(_node, _rollbackState || {}, 1); // Emit to Placement phase
-    }
+  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    node.lastCompletedPhase = 0;
+    Supervisor.emitToPhase(node, _rollbackState || {}, 1); // Emit to Placement phase
   }
 }

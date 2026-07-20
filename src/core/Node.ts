@@ -3,6 +3,7 @@ import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
 import { PlacementWorker } from "./workers/PlacementWorker.js";
+import { NodeQueryUtils } from "./utils/NodeQueryUtils.js";
 
 export class Node {
   public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
@@ -31,9 +32,10 @@ export class Node {
   public content?: string | undefined;
   public props: Record<string, any> = {};
   public handlers?: Record<string, string | HandlerDef>;
-  public compiledHandlers: Record<string, Function> = {};
+  public compiledHandlers: Map<string, Function> = new Map();
   public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
   public versions?: any[];
+  public lastCompletedPhase?: number;
 
   public sourceComponents: Map<string, any> = new Map();
   public targetComponents: Map<string, any> = new Map();
@@ -79,6 +81,21 @@ export class Node {
         for (const key of shallowKeys) {
           if (key in val) cloned[key] = val[key];
         }
+        const ignoreSet = ignoreKeys instanceof Set ? ignoreKeys : new Set(ignoreKeys);
+        const childrenDeepCloned = !ignoreSet.has('children') && !shallowKeys.includes('children');
+        const instNodesDeepCloned = !ignoreSet.has('_instantiatedNodes') && !shallowKeys.includes('_instantiatedNodes');
+
+        const runRestore = (original: any, copy: any) => {
+          if (original instanceof Node) {
+            Node.restorePrototypesAndParents(copy, copy.parent || null, childrenDeepCloned, instNodesDeepCloned);
+          } else if (Array.isArray(original) && Array.isArray(copy)) {
+            for (let i = 0; i < original.length; i++) {
+              runRestore(original[i], copy[i]);
+            }
+          }
+        };
+
+        runRestore(val, cloned);
       }
       return cloned;
     } catch (e) {
@@ -87,6 +104,48 @@ export class Node {
     }
   }
 
+  public static restorePrototypesAndParents(node: any, parent: Node | null = null, restoreChildren: boolean = true, restoreInstantiated: boolean = true): void {
+    Object.setPrototypeOf(node, Node.prototype);
+    node.parent = parent;
+    
+    if (node.compiledHandlers && !(node.compiledHandlers instanceof Map)) {
+      node.compiledHandlers = new Map();
+    }
+    
+    if (node.handlers) {
+      node.compileHandlersMap(node.handlers);
+    }
+    
+    if (node.sourceComponents && !(node.sourceComponents instanceof Map)) {
+      const plainObj = node.sourceComponents;
+      node.sourceComponents = new Map();
+      for (const key of Object.keys(plainObj)) {
+        node.sourceComponents.set(key, plainObj[key]);
+      }
+    }
+    if (node.targetComponents && !(node.targetComponents instanceof Map)) {
+      const plainObj = node.targetComponents;
+      node.targetComponents = new Map();
+      for (const key of Object.keys(plainObj)) {
+        node.targetComponents.set(key, plainObj[key]);
+      }
+    }
+
+    if (restoreChildren && node.children && Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child) {
+          Node.restorePrototypesAndParents(child, node as Node, restoreChildren, restoreInstantiated);
+        }
+      }
+    }
+    if (restoreInstantiated && node._instantiatedNodes && Array.isArray(node._instantiatedNodes)) {
+      for (const instNode of node._instantiatedNodes) {
+        if (instNode) {
+          Node.restorePrototypesAndParents(instNode, node as Node, restoreChildren, restoreInstantiated);
+        }
+      }
+    }
+  }
   public static idCollisions = new Map<string, number>();
 
   public static generateObjectHash(obj: any): string {
@@ -122,6 +181,9 @@ export class Node {
       this.targetComponents.clear();
       filtered.forEach(c => {
         if (c.target) {
+          if (this.targetComponents.get(c.target) !== undefined) {
+            console.error(`Duplicate target component defined for target: ${c.target}`);
+          }
           this.targetComponents.set(c.target, c);
         }
         if (c.value !== undefined) {
@@ -136,7 +198,7 @@ export class Node {
             if ('body' in binding.value) {
               const handlerName = (binding.value as any).name || binding.reference;
               const compiled = clientAPI.compileHandler(handlerName, (binding.value as any).body);
-              if (compiled) this.compiledHandlers[handlerName] = compiled;
+              if (compiled) this.compiledHandlers.set(handlerName, compiled);
             } else {
               binding._instantiatedNodes = [];
             }
@@ -157,6 +219,9 @@ export class Node {
     this.css = Node.deepClone(this.data.css) || {};
     if (!this.css.id) {
       this.css.id = this.props.id || Node.generateObjectHash(this.data);
+    }
+    if (!this.props.id) {
+      this.props.id = this.css.id;
     }
 
     if (typeof window !== 'undefined' && typeof document !== 'undefined' && this.css.id) {
@@ -238,8 +303,10 @@ export class Node {
         if (c._referencingNodes) c._referencingNodes = [];
       }
     }
-    for (const child of this.children) {
-      child.clearTrackingArrays();
+    if (this.children && Array.isArray(this.children)) {
+      for (const child of this.children) {
+        if (child) child.clearTrackingArrays();
+      }
     }
   }
 
@@ -304,7 +371,54 @@ export class Node {
 
   public receiveNextState(nextState: NextState, explicitPhaseId?: number): void {
     const changedKeys = Object.keys(nextState);
-    if (changedKeys.length === 0) return;
+    if (changedKeys.length === 0) {
+      if (explicitPhaseId !== undefined) {
+        if (Supervisor.instance && Supervisor.instance.activeLockedPhases && Supervisor.instance.activeLockedPhases.has(explicitPhaseId)) {
+          console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
+          return;
+        }
+        if (Supervisor.instance && Supervisor.instance.getWorkerForPhase) {
+          const worker = Supervisor.instance.getWorkerForPhase(explicitPhaseId);
+          if (worker) worker.push(this, this._lastValidState);
+        }
+      }
+      return;
+    }
+
+    if (nextState.placement !== undefined) {
+      const nextPlacementHash = Node.generateObjectHash(nextState.placement);
+      const currentPlacementHash = Node.generateObjectHash(this.placement);
+      if (nextPlacementHash !== currentPlacementHash) {
+        console.error(`[Node] receiveNextState rejected: Cannot modify placement data via receiveNextState. Please update the node.data state and pass the layout change to Supervisor/InstantiationWorker so the node tree can be properly rebuilt. Node ID: ${this.css?.id}`);
+        return;
+      }
+    }
+
+    if (nextState.component !== undefined) {
+      const oldComponents = this.component || [];
+      const newComponents = nextState.component || [];
+
+      let sourceChanged = false;
+      const oldSource = oldComponents.filter(c => c.value !== undefined);
+      const newSource = newComponents.filter(c => c.value !== undefined);
+
+      if (oldSource.length !== newSource.length) {
+        sourceChanged = true;
+      } else {
+        for (const oldC of oldSource) {
+          const newC = newSource.find(c => c.reference === oldC.reference);
+          if (!newC || newC.target !== oldC.target || Node.generateObjectHash(newC.value) !== Node.generateObjectHash(oldC.value)) {
+            sourceChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (sourceChanged) {
+        console.error(`[Node] receiveNextState rejected: Cannot modify source components via receiveNextState. Please update the node.data state and pass the layout change to Supervisor/InstantiationWorker so the node tree can be properly rebuilt. Node ID: ${this.css?.id}`);
+        return;
+      }
+    }
 
     let targetPhase = 5; // default to Validation
     if (explicitPhaseId !== undefined) {
@@ -349,11 +463,12 @@ export class Node {
     mergeDeep(this.data, nextState);
     Object.assign(this, nextState);
 
-    const sup: any = (typeof globalThis !== 'undefined' && (globalThis as any).Supervisor) ? (globalThis as any).Supervisor : Supervisor.instance;
-    if (sup && sup.getWorkerForPhase) {
-      const worker = sup.getWorkerForPhase(targetPhase);
+    if (Supervisor.instance && Supervisor.instance.getWorkerForPhase) {
+      const worker = Supervisor.instance.getWorkerForPhase(targetPhase);
       if (worker) worker.push(this, this._lastValidState);
     }
+
+
   }
 
   public rollback(rollbackState?: RollbackState): void {
@@ -370,119 +485,18 @@ export class Node {
     Node.sourcePlacements = {};
   }
 
-  public validate(bubbleErrors: boolean = false): boolean {
-    let valid = true;
-    if (!this.type) {
-      console.error("Node validation failed: missing 'type' property", this.data);
-      valid = false;
-    } else {
-      if (this.component) {
-        const typeTargets = this.component.filter(c => c.target === "type");
-        if (typeTargets.length > 1) {
-          console.error("Node validation failed: node cannot have more than one 'type' target in components", this.data);
-          valid = false;
-        }
-      }
-      const requiredProps = Node.REQUIRED_PROPS_MAP[this.type.toLowerCase()];
-      if (requiredProps) {
-        for (const prop of requiredProps) {
-          if (!this.props || !this.props[prop]) {
-            console.error(`Node validation failed: '${this.type}' missing required property: '${prop}'`, this.data);
-            valid = false;
-          }
-        }
-      }
-    }
-    for (const sNode of this.styleNodes) {
-      if (!sNode.validate()) {
-        console.error("Node validation failed: invalid StyleNode in cssDef", sNode.data);
-        valid = false;
-      }
-    }
-    for (const child of this.children) {
-      if (!child.validate(bubbleErrors) && bubbleErrors) {
-        valid = false;
-      }
-    }
-    this.isValid = valid;
-    return valid;
-  }
+
 
   public isMatch(query: NodeQuery | ((node: Node) => boolean)): boolean {
-    if (typeof query === 'function') {
-      return query(this);
-    }
-
-    if (query.id && this.css?.id !== query.id) return false;
-    if (query.type && this.type !== query.type) return false;
-
-    if (query.classes && query.classes.length > 0) {
-      if (!this.css?.classes) return false;
-      const hasAllClasses = query.classes.every(c => this.css!.classes!.includes(c));
-      if (!hasAllClasses) return false;
-    }
-
-    if (query.props) {
-      if (!this.props) return false;
-      for (const [k, v] of Object.entries(query.props)) {
-        if (this.props[k] !== v) return false;
-      }
-    }
-
-    if (query.style) {
-      if (!this.css?.style) return false;
-      for (const [k, v] of Object.entries(query.style)) {
-        if (this.css.style[k] !== v) return false;
-      }
-    }
-
-    if (query.handlers) {
-      if (!this.handlers) return false;
-      for (const [k, v] of Object.entries(query.handlers)) {
-        if (this.handlers[k] !== v) return false;
-      }
-    }
-
-    if (query.components && query.components.length > 0) {
-      if (!this.component) return false;
-      for (const compQuery of query.components) {
-        const match = this.component.some(c => {
-          if (compQuery.target && c.target !== compQuery.target) return false;
-          if (compQuery.reference && c.reference !== compQuery.reference) return false;
-          return true;
-        });
-        if (!match) return false;
-      }
-    }
-
-    return true;
+    return NodeQueryUtils.isMatch(this, query);
   }
 
   public findNodes(query: NodeQuery | ((node: Node) => boolean)): Node[] {
-    const results: Node[] = [];
-
-    if (this.isMatch(query)) {
-      results.push(this);
-    }
-
-    for (const child of this.children) {
-      results.push(...child.findNodes(query));
-    }
-
-    return results;
+    return NodeQueryUtils.findNodes(this, query);
   }
 
   public findNode(query: NodeQuery | ((node: Node) => boolean), depth: number = 0): Node | null {
-    if (this.isMatch(query)) {
-      return this;
-    }
-
-    for (const child of this.children) {
-      const found = child.findNode(query, depth + 1);
-      if (found) return found;
-    }
-
-    return null;
+    return NodeQueryUtils.findNode(this, query, depth);
   }
 
   public executeHandlers(phase: string, context: any, recursive: boolean = true): void {
@@ -500,9 +514,19 @@ export class Node {
 
         let fn: Function | undefined;
         if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-          fn = this.compiledHandlers[handlerObj.name] || clientAPI.getHandler(handlerObj.name, this);
+          fn = this.compiledHandlers.get(handlerObj.name);
+          if (!fn && 'body' in handlerObj) {
+            fn = clientAPI.compileHandler(handlerObj.name, handlerObj.body);
+            if (fn) {
+              this.compiledHandlers.set(handlerObj.name, fn);
+              this.compiledHandlers.set(phase, fn);
+            }
+          }
+          if (!fn) fn = clientAPI.getHandler(handlerObj.name, this);
+        } else if (typeof handlerObj === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(handlerObj)) {
+          fn = this.compiledHandlers.get(handlerObj) || clientAPI.getHandler(handlerObj, this);
         } else {
-          fn = this.compiledHandlers[phase] || clientAPI.getHandler(phase, this);
+          fn = this.compiledHandlers.get(phase) || clientAPI.getHandler(phase, this);
         }
 
         if (fn) {
@@ -523,9 +547,11 @@ export class Node {
       }
     }
 
-    if (recursive) {
+    if (recursive && this.children && Array.isArray(this.children)) {
       for (const child of this.children) {
-        child.executeHandlers(phase, context, recursive);
+        if (child) {
+          child.executeHandlers(phase, context, recursive);
+        }
       }
     }
   }
@@ -533,12 +559,13 @@ export class Node {
   private compileHandlersMap(handlersObj: Record<string, any>): void {
     for (const [key, value] of Object.entries(handlersObj)) {
       if (value === null) continue;
+      if (typeof value === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(value)) continue;
       const handlerName = typeof value === 'object' && 'name' in value ? (value as any).name : key;
       const handlerBody = typeof value === 'object' && 'body' in value ? (value as any).body : String(value);
       const compiled = clientAPI.compileHandler(handlerName, handlerBody);
       if (compiled) {
-        this.compiledHandlers[handlerName] = compiled;
-        if (handlerName !== key) this.compiledHandlers[key] = compiled;
+        this.compiledHandlers.set(handlerName, compiled);
+        if (handlerName !== key) this.compiledHandlers.set(key, compiled);
       }
     }
   }
