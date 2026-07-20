@@ -55,7 +55,7 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
     await Supervisor.process(clientConfig, rawExport, undefined);
     
     expect(Supervisor.currentStage).toBe('monitoring');
-    expect(Supervisor.getRootNode()?.data.props.class).toBe('csr-only');
+    expect(Supervisor.getRootNode()?.children[0]?.data.props.class).toBe('csr-only');
   });
 
   it('Scenario 3.2.2: Handlers Crashing Bubble Protection in Worker Context', async () => {
