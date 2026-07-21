@@ -4,6 +4,7 @@ import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 import { clientAPI } from "../ClientAPI.js";
 import { StyleNode } from "../StyleNode.js";
+import { Handler } from "../Handler.js";
 
 export class ClientRenderingWorker extends BaseWorker {
   public static renderStyles(): void {
@@ -98,33 +99,22 @@ export class ClientRenderingWorker extends BaseWorker {
     if (node.handlers) {
       for (const [key, value] of Object.entries(node.handlers)) {
         try {
-          let handlerFunc: EventListener;
-          const handlerObj = value as any;
-          const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
-
-          let fn: Function | undefined;
-          if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-            fn = clientAPI.getHandler(handlerObj.name, node);
-          } else if (typeof handlerObj === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(handlerObj)) {
-            fn = clientAPI.getHandler(handlerObj, node);
-          } else {
-            fn = clientAPI.getHandler(key, node);
-          }
-
-          if (fn) {
-            handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-          } else {
-            const handlerBody = typeof handlerObj === 'object' && handlerObj !== null && 'body' in handlerObj ? handlerObj.body : String(handlerObj);
-            const trimmedValue = handlerBody.trim();
-            if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
-              fn = new Function('return ' + trimmedValue)();
-              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-            } else {
-              fn = new Function('event', 'context', trimmedValue);
-              handlerFunc = ((event: Event) => fn!(event, context)) as EventListener;
-            }
-          }
-          const eventName = key.startsWith('on') ? key.substring(2).toLowerCase() : key.toLowerCase();
+          const handlerObj = value instanceof Handler ? value : new Handler(value, key);
+          if (!handlerObj.event) continue;
+          const rawEvent = handlerObj.event;
+          const eventName = rawEvent.startsWith('on') ? rawEvent.substring(2).toLowerCase() : rawEvent.toLowerCase();
+          
+          const handlerFunc = (event: Event) => {
+             const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
+             let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
+             if (fn) {
+               if (fn.length === 1) {
+                  fn(context);
+               } else {
+                  fn(event, context);
+               }
+             }
+          };
           el.addEventListener(eventName, handlerFunc);
           node._attachedListeners.push({ eventName, handlerFunc });
         } catch (err) {
@@ -153,10 +143,8 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
 
-    if (node.content) {
-      if (typeof node.content === "string") {
-        el.textContent = node.content;
-      }
+    if (node.content !== undefined) {
+      el.textContent = node.content.toString();
     }
 
     if (["input", "textarea", "select"].includes(targetTag)) {
@@ -165,9 +153,10 @@ export class ClientRenderingWorker extends BaseWorker {
       if (inputKey) {
         if (Node.globalMetadata[inputKey] !== undefined) {
           inputEl.value = Node.globalMetadata[inputKey];
-        } else if (node.content !== undefined && typeof node.content === "string") {
-          inputEl.value = node.content;
-          Node.globalMetadata[inputKey] = node.content;
+        } else if (node.content !== undefined) {
+          const contentStr = node.content.toString();
+          inputEl.value = contentStr;
+          Node.globalMetadata[inputKey] = contentStr;
         }
 
         if (!oldElement || !shouldReuse) {

@@ -3,6 +3,7 @@ import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import type { NodeData, RollbackState } from "../../types/NodeSchema.js";
 import { PlacementWorker } from "./PlacementWorker.js";
+import { Placement } from "../Placement.js";
 
 
 export class InstantiationWorker extends BaseWorker {
@@ -22,9 +23,10 @@ export class InstantiationWorker extends BaseWorker {
 
     if (existingNode) {
       if (existingNode.parent) {
-        const index = existingNode.parent.children.indexOf(existingNode);
+        const index = existingNode.parent.nativeChildren.indexOf(existingNode);
         if (index > -1) {
-          existingNode.parent.children[index] = newNode;
+          existingNode.parent.nativeChildren[index] = newNode;
+          existingNode.parent.invalidateChildrenCache();
           newNode.parent = existingNode.parent;
           existingNode.parent = null; // Prevent delete from splicing array
         }
@@ -37,13 +39,15 @@ export class InstantiationWorker extends BaseWorker {
         data.content.forEach((childData: any) => {
           this.pushRaw(childData, null, (childNode: Node) => {
             childNode.parent = newNode;
-            newNode.children.push(childNode);
+            newNode.nativeChildren.push(childNode);
+            newNode.invalidateChildrenCache();
           });
         });
       } else if (typeof data.content === "object" && data.content !== null) {
         this.pushRaw(data.content, null, (childNode: Node) => {
           childNode.parent = newNode;
-          newNode.children.push(childNode);
+          newNode.nativeChildren.push(childNode);
+          newNode.invalidateChildrenCache();
         });
       }
     }
@@ -111,7 +115,7 @@ export class InstantiationWorker extends BaseWorker {
 
     // 3. Updates global placement data so other nodes can identify them.
     // Placement arrays are locked globally after this phase by Supervisor.
-    PlacementWorker.appendPlacement(node);
+    if (node.placement) node.placement.append();
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {

@@ -33,7 +33,9 @@ export class NodeQueryUtils {
     if (query.handlers) {
       if (!node.handlers) return false;
       for (const [k, v] of Object.entries(query.handlers)) {
-        if (node.handlers[k] !== v) return false;
+        if (!node.handlers[k]) return false;
+        if (typeof v === 'string' && node.handlers[k].body !== v) return false;
+        if (typeof v !== 'string' && (node.handlers[k].body !== (v as any).body || node.handlers[k].name !== (v as any).name)) return false;
       }
     }
 

@@ -10,8 +10,8 @@
         {
           "type": "div",
           "content": [
-            { "type": "button", "content": "Add Handler", "props": { "data-add-type": "handler", "data-target-id": "inspector-handlers-fields" }, "component": [{"target": "handlers.click", "reference": "editorAddField"}] },
-            { "type": "button", "content": "Update", "props": { "data-prop-path": "handlers", "data-struct": "array_of_objects", "data-target-id": "inspector-handlers-fields" }, "component": [{"target": "handlers.click", "reference": "editorUpdateNodeProp"}] }
+            { "type": "button", "content": "Add Handler", "props": { "data-add-type": "handler", "data-target-id": "inspector-handlers-fields" }, "handlers": { "editorAddField": { "name": "editorAddField", "event": "click" } } },
+            { "type": "button", "content": "Update", "props": { "data-prop-path": "handlers", "data-struct": "array_of_objects", "data-target-id": "inspector-handlers-fields" }, "handlers": { "editorUpdateNodeProp": { "name": "editorUpdateNodeProp", "event": "click" } } }
           ]
         }
       ]

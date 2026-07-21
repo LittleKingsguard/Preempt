@@ -37,6 +37,8 @@ function extractReferences(payload: any) {
          const val = node.handlers[key];
          if (typeof val === 'string' && val.trim().length > 0 && !val.trim().startsWith('(')) {
            handlers.add(val.trim());
+         } else if (typeof val === 'object' && val !== null && val.name) {
+           handlers.add(val.name);
          }
        }
     }

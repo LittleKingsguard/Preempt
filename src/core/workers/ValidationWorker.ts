@@ -38,10 +38,12 @@ export class ValidationWorker extends BaseWorker {
       }
     }
 
-    for (const sNode of node.styleNodes) {
-      if (!sNode.validate()) {
-        console.error("Node validation failed: invalid StyleNode in cssDef", sNode.data);
-        valid = false;
+    if (node.css && node.css.styleNodes) {
+      for (const sNode of node.css.styleNodes) {
+        if (!sNode.validate()) {
+          console.error("Node validation failed: invalid StyleNode in cssDef", sNode.data);
+          valid = false;
+        }
       }
     }
 

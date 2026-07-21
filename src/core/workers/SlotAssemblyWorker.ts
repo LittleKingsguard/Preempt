@@ -3,6 +3,10 @@ import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import type { RollbackState, HandlerDef } from "../../types/NodeSchema.js";
 import { clientAPI } from "../ClientAPI.js";
+import { CloneUtils } from "../utils/CloneUtils.js";
+import { Handler } from "../Handler.js";
+import { Css } from "../Css.js";
+
 
 export class SlotAssemblyWorker extends BaseWorker {
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
@@ -31,14 +35,19 @@ export class SlotAssemblyWorker extends BaseWorker {
 
 
     // Base collections that might be modified
-    let newCss = node.css ? Node.deepClone(node.css) : {};
-    let newProps = node.props ? Node.deepClone(node.props) : {};
-    let newHandlers = node.handlers ? Node.deepClone(node.handlers) : {};
+    let newCss = node.css ? node.css.clone() : new Css();
+    let newProps = node.props ? CloneUtils.deepClone(node.props) : {};
+    let newHandlers: Record<string, Handler> = {};
+    if (node.handlers) {
+      for (const [k, v] of Object.entries(node.handlers)) {
+        newHandlers[k] = v.clone();
+      }
+    }
 
     for (const binding of sortedComponents) {
       if (!binding.target) continue;
 
-      let { resolvedValue, resolvedBinding } = clientAPI.resolveComponentBinding(binding, node);
+      let { resolvedValue, resolvedBinding } = binding.resolveBinding();
 
       if (resolvedValue === null) {
         console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
@@ -51,14 +60,14 @@ export class SlotAssemblyWorker extends BaseWorker {
         this.applyProperty(binding.target, resolvedValue as unknown as string | HandlerDef, node, newProps, newHandlers, newCss);
       } else if (binding.target === "content") {
         if (Array.isArray(resolvedValue)) {
-          node.content = undefined;
           node.children = [];
           for (let i = 0; i < resolvedValue.length; i++) {
             const instantiatedNode = resolvedBinding?._instantiatedNodes?.[i];
             if (instantiatedNode) {
-              const clonedChild = Node.deepClone(instantiatedNode, [], ['element', '_referencingNodes']);
+              const clonedChild = instantiatedNode.clone([], ['element', '_referencingNodes']);
               clonedChild.parent = node;
-              node.children.push(clonedChild);
+              node.nativeChildren.push(clonedChild);
+              node.invalidateChildrenCache();
 
               const emitTree = (n: Node) => {
                 if (n.component) n.setComponents(n.component);
@@ -76,7 +85,7 @@ export class SlotAssemblyWorker extends BaseWorker {
           node.content = undefined;
           let instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
           if (instantiatedNode) {
-            const clonedChild = Node.deepClone(instantiatedNode, [], ['element', '_referencingNodes']);
+            const clonedChild = instantiatedNode.clone([], ['element', '_referencingNodes']);
             clonedChild.parent = node;
             node.children = [clonedChild];
 
@@ -113,7 +122,7 @@ export class SlotAssemblyWorker extends BaseWorker {
     newCss: any
   ): void {
     if (path === "content") {
-      if (node.content !== (value as string)) node.content = value as string;
+      node.content = value as string;
     } else if (path.startsWith("props.")) {
       const propName = path.substring(6);
       if (node.props?.[propName] !== (value as string)) {
@@ -122,8 +131,12 @@ export class SlotAssemblyWorker extends BaseWorker {
       }
     } else if (path.startsWith("handlers.")) {
       const handlerName = path.substring(9);
-      if (node.handlers?.[handlerName] !== value) {
-        newHandlers[handlerName] = value as string | HandlerDef;
+      const isDifferent = typeof value === 'string' 
+        ? node.handlers?.[handlerName]?.body !== value
+        : node.handlers?.[handlerName]?.body !== value.body || node.handlers?.[handlerName]?.name !== value.name || node.handlers?.[handlerName]?.event !== value.event;
+        
+      if (isDifferent) {
+        newHandlers[handlerName] = new Handler(value, handlerName);
         node.handlers = newHandlers;
       }
     } else if (path.startsWith("css.style.")) {

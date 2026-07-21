@@ -50,6 +50,7 @@ export class SSRRenderingWorker extends BaseWorker {
 
     if (node.props) {
       for (const [key, value] of Object.entries(node.props)) {
+        if (key === 'id' || key === 'class' || key === 'style') continue;
         const escapedValue = String(value).replace(/"/g, '&quot;');
         attributes += ` ${key}="${escapedValue}"`;
       }
@@ -93,7 +94,7 @@ export class SSRRenderingWorker extends BaseWorker {
 
     let innerHTML = "";
     if (node.content !== undefined) {
-      innerHTML += node.content
+      innerHTML += node.content.toString()
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");

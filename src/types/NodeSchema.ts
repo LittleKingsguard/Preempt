@@ -8,11 +8,13 @@ export interface CssDef {
 export interface PlacementConfig {
   placementName?: string;
   targetPlacement?: string[];
-  _referencingNodes?: any[];
+  _referencingNodes?: Set<any>;
 }
 
 export interface HandlerDef {
   name: string;
+  event?: string;
+  phase?: string;
   body: string;
 }
 
@@ -20,7 +22,7 @@ export interface ComponentBinding {
   reference: string;
   target?: string;
   value?: string | HandlerDef | NodeData | NodeData[] | null;
-  _referencingNodes?: any[];
+  _referencingNodes?: Set<any>;
   _instantiatedNodes?: any[];
   _clonedChildren?: any[];
   _appendedContent?: string;

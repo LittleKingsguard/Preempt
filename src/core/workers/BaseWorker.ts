@@ -11,7 +11,9 @@ export abstract class BaseWorker {
   }
 
   public push(node: Node, rollbackState?: RollbackState): void {
-    this.queue.set(node, rollbackState);
+    if (!this.queue.has(node)) {
+      this.queue.set(node, rollbackState);
+    }
   }
 
   public hasEvents(): boolean {

@@ -1,9 +1,15 @@
-import type { NodeData, NodeQuery, HandlerDef, ComponentBinding, NextState, RollbackState, PlacementConfig } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ComponentBinding, NextState, RollbackState } from "../types/NodeSchema.js";
 import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
 import { PlacementWorker } from "./workers/PlacementWorker.js";
 import { NodeQueryUtils } from "./utils/NodeQueryUtils.js";
+import { Component } from "./Component.js";
+import { Handler } from "./Handler.js";
+import { Css } from "./Css.js";
+import { Placement } from "./Placement.js";
+
+import { CloneUtils } from "./utils/CloneUtils.js";
 
 export class Node {
   public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
@@ -19,28 +25,46 @@ export class Node {
   public data: NodeData;
   public _lastValidState?: RollbackState;
 
-  public children: Node[] = [];
+  public nativeChildren: Node[] = [];
+  private _childrenCache: Node[] | null = null;
   public parent?: Node | null;
   public element: HTMLElement | null = null;
-  public styleNodes: StyleNode[] = [];
+
   public isValid: boolean = true;
 
+  public get children(): Node[] {
+    if (this._childrenCache) return this._childrenCache;
+    let placedChildren: Node[] = [];
+    if (this.placement && this.placement._referencingNodes) { //TODO: Expand placement to array of placements
+      placedChildren = Array.from(this.placement._referencingNodes);
+    }
+    this._childrenCache = [...this.nativeChildren, ...placedChildren];
+    return this._childrenCache;
+  }
+
+  public set children(val: Node[]) {
+    this.nativeChildren = val;
+    this.invalidateChildrenCache();
+  }
+
+  public invalidateChildrenCache(): void {
+    this._childrenCache = null;
+    if (this.parent) this.parent.invalidateChildrenCache();
+  }
+
   public type: string = 'div';
-  public placement?: PlacementConfig;
+  public placement?: Placement;
   public activePlacement?: string;
-  public component?: any[];
-  public content?: string | undefined;
+  public component?: Component[];
+  public content?: string | any;
   public props: Record<string, any> = {};
-  public handlers?: Record<string, string | HandlerDef>;
-  public compiledHandlers: Map<string, Function> = new Map();
-  public css: { id?: string; classes?: string[]; style?: Record<string, string>; cssDef?: any[] } = {};
+  public handlers?: Record<string, Handler>;
+  public css: Css = new Css();
   public versions?: any[];
   public lastCompletedPhase?: number;
 
-  public sourceComponents: Map<string, any> = new Map();
-  public targetComponents: Map<string, any> = new Map();
-  public static placementArray: Node[] = [];
-  public static sourcePlacements: Record<string, Node[]> = {};
+  public sourceComponents: Map<string, Component> = new Map();
+  public targetComponents: Map<string, Component> = new Map();
 
   public originalParent: Node | null = null;
   public originalIndex: number = -1;
@@ -49,120 +73,16 @@ export class Node {
 
   public static globalMetadata: any = {};
 
-  private static readonly CLONE_IGNORE_KEYS = new Set([
-    '_lastValidState', 'element', 'styleNodes', 'node',
-    '_instantiatedNodes', '_referencingNodes', 'parent',
-    'children', 'originalParent'
-  ]);
 
-  private static readonly HASH_IGNORE_KEYS = new Set([
-    'node', 'css', '_instantiatedNodes', '_referencingNodes',
-    'parent', 'children', 'originalParent'
-  ]);
-
-  public static deepClone(val: any, shallowKeys: string[] = [], ignoreKeys: Iterable<string> = Node.CLONE_IGNORE_KEYS): any {
-    if (val === undefined) return undefined;
-    const seen = new WeakSet();
-    const ignoreSet = ignoreKeys instanceof Set ? ignoreKeys : new Set(ignoreKeys);
-    const replacer = (k: string, v: any) => {
-      if (shallowKeys.includes(k)) return undefined;
-      
-      if (ignoreSet.has(k)) return undefined;
-      
-      if (typeof v === "object" && v !== null) {
-        if (seen.has(v)) return undefined; // Prevent cycle
-        seen.add(v);
-      }
-      return v;
-    };
-    try {
-      const cloned = JSON.parse(JSON.stringify(val, replacer));
-      if (val !== null && typeof val === 'object' && cloned !== null && typeof cloned === 'object') {
-        for (const key of shallowKeys) {
-          if (key in val) cloned[key] = val[key];
-        }
-        const ignoreSet = ignoreKeys instanceof Set ? ignoreKeys : new Set(ignoreKeys);
-        const childrenDeepCloned = !ignoreSet.has('children') && !shallowKeys.includes('children');
-        const instNodesDeepCloned = !ignoreSet.has('_instantiatedNodes') && !shallowKeys.includes('_instantiatedNodes');
-
-        const runRestore = (original: any, copy: any) => {
-          if (original instanceof Node) {
-            Node.restorePrototypesAndParents(copy, copy.parent || null, childrenDeepCloned, instNodesDeepCloned);
-          } else if (Array.isArray(original) && Array.isArray(copy)) {
-            for (let i = 0; i < original.length; i++) {
-              runRestore(original[i], copy[i]);
-            }
-          }
-        };
-
-        runRestore(val, cloned);
-      }
-      return cloned;
-    } catch (e) {
-      console.warn("Cycle detected during deepClone, falling back", e);
-      return val;
-    }
-  }
-
-  public static restorePrototypesAndParents(node: any, parent: Node | null = null, restoreChildren: boolean = true, restoreInstantiated: boolean = true): void {
-    Object.setPrototypeOf(node, Node.prototype);
-    node.parent = parent;
-    
-    if (node.compiledHandlers && !(node.compiledHandlers instanceof Map)) {
-      node.compiledHandlers = new Map();
-    }
-    
-    if (node.handlers) {
-      node.compileHandlersMap(node.handlers);
-    }
-    
-    if (node.sourceComponents && !(node.sourceComponents instanceof Map)) {
-      const plainObj = node.sourceComponents;
-      node.sourceComponents = new Map();
-      for (const key of Object.keys(plainObj)) {
-        node.sourceComponents.set(key, plainObj[key]);
-      }
-    }
-    if (node.targetComponents && !(node.targetComponents instanceof Map)) {
-      const plainObj = node.targetComponents;
-      node.targetComponents = new Map();
-      for (const key of Object.keys(plainObj)) {
-        node.targetComponents.set(key, plainObj[key]);
-      }
-    }
-
-    if (restoreChildren && node.children && Array.isArray(node.children)) {
-      for (const child of node.children) {
-        if (child) {
-          Node.restorePrototypesAndParents(child, node as Node, restoreChildren, restoreInstantiated);
-        }
-      }
-    }
-    if (restoreInstantiated && node._instantiatedNodes && Array.isArray(node._instantiatedNodes)) {
-      for (const instNode of node._instantiatedNodes) {
-        if (instNode) {
-          Node.restorePrototypesAndParents(instNode, node as Node, restoreChildren, restoreInstantiated);
-        }
-      }
-    }
-    if (node.styleNodes && Array.isArray(node.styleNodes)) {
-      for (let i = 0; i < node.styleNodes.length; i++) {
-        const sNode = node.styleNodes[i];
-        if (sNode) {
-          Object.setPrototypeOf(sNode, StyleNode.prototype);
-          sNode.parent = node;
-          if (!sNode.data && node.css && node.css.cssDef && node.css.cssDef[i]) {
-            sNode.data = node.css.cssDef[i];
-          }
-        }
-      }
-    }
-  }
   public static idCollisions = new Map<string, number>();
 
   public static generateObjectHash(obj: any): string {
+    const HASH_IGNORE_KEYS = new Set([
+      'node', 'css', '_instantiatedNodes', '_referencingNodes',
+      'parent', 'children', 'nativeChildren', 'originalParent'
+    ]);
     const replacer = (k: string, v: any) => {
-      if (Node.HASH_IGNORE_KEYS.has(k)) return undefined;
+      if (HASH_IGNORE_KEYS.has(k)) return undefined;
       return v;
     };
     const str = JSON.stringify(obj, replacer) || "";
@@ -188,7 +108,7 @@ export class Node {
     if (components === undefined) {
       delete this.component;
     } else {
-      let filtered = components.filter(c => c !== null);
+      let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this));
       this.sourceComponents.clear();
       this.targetComponents.clear();
       filtered.forEach(c => {
@@ -209,8 +129,12 @@ export class Node {
           if (typeof binding.value === "object" && binding.value !== null) {
             if ('body' in binding.value) {
               const handlerName = (binding.value as any).name || binding.reference;
-              const compiled = clientAPI.compileHandler(handlerName, (binding.value as any).body);
-              if (compiled) this.compiledHandlers.set(handlerName, compiled);
+              if (!this.handlers) this.handlers = {};
+              if (!this.handlers[handlerName]) {
+                this.handlers[handlerName] = new Handler({ name: handlerName, body: (binding.value as any).body });
+              } else {
+                this.handlers[handlerName].body = (binding.value as any).body;
+              }
             } else {
               binding._instantiatedNodes = [];
             }
@@ -227,8 +151,8 @@ export class Node {
     this.parent = parent;
     this.resolveVersion();
 
-    this.props = Node.deepClone(this.data.props) || {};
-    this.css = Node.deepClone(this.data.css) || {};
+    this.props = CloneUtils.deepClone(this.data.props) || {};
+    this.css = new Css(this.data.css || {}, this);
     if (!this.css.id) {
       this.css.id = this.props.id || Node.generateObjectHash(this.data);
     }
@@ -243,40 +167,33 @@ export class Node {
       }
     }
 
-    if (data.css && data.css.cssDef) {
-      for (const def of data.css.cssDef) {
-        this.styleNodes.push(new StyleNode(def, this));
-      }
-    }
+
 
 
 
     if (this.data.type !== undefined) this.type = this.data.type;
     else this.type = 'div';
 
-    if (typeof this.data.content === "string") {
-      this.content = this.data.content;
+    if (this.data.content !== undefined) {
+      this.content = this.data.content as string;
     }
 
-    this.handlers = Node.deepClone(this.data.handlers);
-    if (this.handlers === undefined) {
-      delete this.handlers;
-    } else {
-      this.compileHandlersMap(this.handlers);
+    if (this.data.handlers) {
+      this.handlers = {};
+      for (const [k, v] of Object.entries(this.data.handlers)) {
+        this.handlers[k] = new Handler(v, k);
+      }
     }
 
-    this.setComponents(Node.deepClone(this.data.component));
+    this.setComponents(CloneUtils.deepClone(this.data.component));
 
 
-    this.placement = Node.deepClone(this.data.placement);
-    if (this.placement === undefined) delete this.placement;
+    this.placement = this.data.placement ? new Placement(this.data.placement, this) : undefined;
 
-    this.versions = Node.deepClone(this.data.versions);
+    this.versions = CloneUtils.deepClone(this.data.versions);
     if (this.versions === undefined) delete this.versions;
 
     this.resolveVersion();
-
-    PlacementWorker.appendPlacement(this);
   }
 
   private resolveVersion(): void {
@@ -308,11 +225,11 @@ export class Node {
 
   public clearTrackingArrays(): void {
     if (this.placement && this.placement._referencingNodes) {
-      this.placement._referencingNodes = [];
+      this.placement._referencingNodes = new Set();
     }
     if (this.component) {
       for (const c of this.component) {
-        if (c._referencingNodes) c._referencingNodes = [];
+        if (c._referencingNodes) c._referencingNodes = new Set();
       }
     }
     if (this.children && Array.isArray(this.children)) {
@@ -322,59 +239,48 @@ export class Node {
     }
   }
 
-
-
-  // Removed applyComponents and applyComponentsTree to align with purely reactive data container spec
-
-
-
-
-
-
   public delete(): void {
     if (this.parent) {
-      const index = this.parent.children.indexOf(this);
+      const index = this.parent.nativeChildren.indexOf(this);
       if (index > -1) {
-        this.parent.children.splice(index, 1);
-      }
-    }
-    
-    let queuedNodes: Node[] = [];
-
-    const pIndex = Node.placementArray.indexOf(this);
-    if (pIndex > -1) {
-      Node.placementArray.splice(pIndex, 1);
-      if (this.placement?.placementName) {
-        const oldPlacement = this.placement.placementName;
-        const referencingNodes = Node.sourcePlacements[oldPlacement] || [];
-        queuedNodes = [...referencingNodes];
-        for (const ref of referencingNodes) {
-          ref.receiveNextState({ activePlacement: undefined }, 1);
-        }
+        this.parent.nativeChildren.splice(index, 1);
+        this.parent.invalidateChildrenCache();
       }
     }
 
-    // Recursively delete children
-    while (this.children.length > 0) {
-      const child = this.children.pop();
+    if (this.placement instanceof Placement) {
+      this.placement.delete();
+    }
+
+    // Recursively delete native children
+    while (this.nativeChildren.length > 0) {
+      const child = this.nativeChildren.pop();
       if (child) {
-        if (queuedNodes.includes(child)) {
-          continue;
-        }
         child.delete();
       }
     }
-    for (const key of Object.keys(Node.sourcePlacements)) {
-      if (Array.isArray((Node.sourcePlacements as any)[key])) {
-        const arr = (Node.sourcePlacements as any)[key];
-        const sIndex = arr.indexOf(this);
-        if (sIndex > -1) arr.splice(sIndex, 1);
-        if (arr.length === 0) delete (Node.sourcePlacements as any)[key];
+    
+
+    if (this.css && this.css.delete) {
+      this.css.delete();
+    }
+    
+    if (this.component) {
+      for (const c of this.component) {
+        if (c && c.delete) {
+          c.delete();
+        }
       }
     }
-    for (const sNode of this.styleNodes) {
-      sNode.delete();
+    
+    if (this.handlers) {
+      for (const h of Object.values(this.handlers)) {
+        if (h && h.delete) {
+          h.delete();
+        }
+      }
     }
+    
     if (this.element) {
       this.element.remove();
       this.element = null;
@@ -454,11 +360,7 @@ export class Node {
 
     // Snapshot state
     if (!this._lastValidState) {
-      this._lastValidState = Node.deepClone(this, ['content', 'children']);
-    }
-
-    if (nextState.handlers) {
-      this.compileHandlersMap(nextState.handlers);
+      this._lastValidState = CloneUtils.deepClone(this, ['content', 'children']);
     }
 
     // Apply optimistically
@@ -492,10 +394,6 @@ export class Node {
     }
   }
 
-  public static clearPlacements(): void {
-    Node.placementArray = [];
-    Node.sourcePlacements = {};
-  }
 
 
 
@@ -512,50 +410,41 @@ export class Node {
   }
 
   public executeHandlers(phase: string, context: any, recursive: boolean = true): void {
-    if (this.handlers && this.handlers[phase]) {
-      try {
-        const handlerObj = this.handlers[phase] as any;
-        const fullContext = { 
-          ...context, 
-          node: this, 
-          metadata: Node.globalMetadata, 
-          rootNode: Supervisor.getRootNode(), 
-          contentPayload: Supervisor.instance?.contentData || [], 
-          clientAPI 
-        };
-
-        let fn: Function | undefined;
-        if (typeof handlerObj === 'object' && handlerObj !== null && 'name' in handlerObj) {
-          fn = this.compiledHandlers.get(handlerObj.name);
-          if (!fn && 'body' in handlerObj) {
-            fn = clientAPI.compileHandler(handlerObj.name, handlerObj.body);
-            if (fn) {
-              this.compiledHandlers.set(handlerObj.name, fn);
-              this.compiledHandlers.set(phase, fn);
+    if (this.handlers) {
+      for (const handler of Object.values(this.handlers)) {
+        if (handler.phase === phase || (!handler.phase && !handler.event && handler.name === phase)) {
+          try {
+            const fullContext = {
+              ...context,
+              node: this,
+              metadata: Node.globalMetadata,
+              rootNode: Supervisor.getRootNode(),
+              contentPayload: Supervisor.instance?.contentData || [],
+              clientAPI
+            };
+            
+            let fn = handler.compiled || clientAPI.getHandler(handler.name, this);
+            if (!fn) {
+              fn = clientAPI.getHandler(phase, this);
             }
-          }
-          if (!fn) fn = clientAPI.getHandler(handlerObj.name, this);
-        } else if (typeof handlerObj === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(handlerObj)) {
-          fn = this.compiledHandlers.get(handlerObj) || clientAPI.getHandler(handlerObj, this);
-        } else {
-          fn = this.compiledHandlers.get(phase) || clientAPI.getHandler(phase, this);
-        }
 
-        if (fn) {
-          let result: any;
-          if (fn.length === 1) {
-            result = fn(fullContext);
-          } else {
-            result = fn(null, fullContext);
-          }
-          if (result && typeof result.catch === 'function') {
-            result.catch((err: any) => {
-              console.error(`Failed to execute async ${phase} handler on node:`, err);
-            });
+            if (fn) {
+              let result: any;
+              if (fn.length === 1) {
+                result = fn(fullContext);
+              } else {
+                result = fn(null, fullContext);
+              }
+              if (result && typeof result.catch === 'function') {
+                result.catch((err: any) => {
+                  console.error(`Failed to execute async ${phase} handler on node:`, err);
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to execute ${phase} handler on node:`, err);
           }
         }
-      } catch (err) {
-        console.error(`Failed to execute ${phase} handler on node:`, err);
       }
     }
 
@@ -564,20 +453,6 @@ export class Node {
         if (child) {
           child.executeHandlers(phase, context, recursive);
         }
-      }
-    }
-  }
-
-  private compileHandlersMap(handlersObj: Record<string, any>): void {
-    for (const [key, value] of Object.entries(handlersObj)) {
-      if (value === null) continue;
-      if (typeof value === 'string' && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(value)) continue;
-      const handlerName = typeof value === 'object' && 'name' in value ? (value as any).name : key;
-      const handlerBody = typeof value === 'object' && 'body' in value ? (value as any).body : String(value);
-      const compiled = clientAPI.compileHandler(handlerName, handlerBody);
-      if (compiled) {
-        this.compiledHandlers.set(handlerName, compiled);
-        if (handlerName !== key) this.compiledHandlers.set(key, compiled);
       }
     }
   }
@@ -619,5 +494,53 @@ export class Node {
     };
 
     return cleanData(this.data);
+  }
+
+  public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = []): Node {
+    const clonedData = CloneUtils.deepClone(this.data);
+    const clonedNode = new Node(clonedData);
+
+    clonedNode.type = this.type;
+    clonedNode.activePlacement = this.activePlacement;
+
+    if (!ignoreProps.includes('css')) {
+      clonedNode.css = this.css ? this.css.clone(ignoreProps, clonedNode) : new Css({}, clonedNode);
+    }
+    if (!ignoreProps.includes('placement')) {
+      clonedNode.placement = this.placement ? this.placement.clone(ignoreProps, clonedNode) : undefined;
+    }
+    if (!ignoreProps.includes('content')) {
+      clonedNode.content = this.content ? this.content : undefined;
+    }
+    if (!ignoreProps.includes('props')) {
+      clonedNode.props = CloneUtils.deepClone(this.props);
+    }
+    if (!ignoreProps.includes('handlers')) {
+      if (this.handlers) {
+        clonedNode.handlers = {};
+        for (const [k, v] of Object.entries(this.handlers)) {
+          clonedNode.handlers[k] = v.clone();
+        }
+      }
+    }
+    if (!ignoreProps.includes('component')) {
+      if (this.component) {
+        clonedNode.component = this.component.map(c => c.clone(ignoreProps, clonedNode));
+      }
+    }
+
+    clonedNode.versions = CloneUtils.deepClone(this.versions);
+
+    // clone native children
+    if (!ignoreProps.includes('children') && !ignoreProps.includes('nativeChildren')) {
+      clonedNode.nativeChildren = this.nativeChildren.map(c => {
+        const clonedChild = c.clone(ignoreProps, shallowCopyProps);
+        clonedChild.parent = clonedNode;
+        return clonedChild;
+      });
+      clonedNode.invalidateChildrenCache();
+    }
+
+    return clonedNode;
   }
 }

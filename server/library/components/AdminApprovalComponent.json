@@ -2,7 +2,7 @@
   "type": "div",
   "css": { "classes": ["admin-approval-container"] },
   "handlers": {
-    "afterInstantiate": "fetchPendingBatches"
+    "fetchPendingBatches": { "name": "fetchPendingBatches", "event": "afterInstantiate" }
   },
   "content": [
     {

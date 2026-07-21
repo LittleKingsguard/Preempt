@@ -70,7 +70,7 @@
     if (result !== null) {
       if (propPath === "handlers") {
         const handlersObj = {};
-        result.forEach(r => { if (r.event && r.reference) handlersObj[r.event] = r.reference; });
+        result.forEach(r => { if (r.event && r.reference) handlersObj[r.reference] = { name: r.reference, event: r.event }; });
         context.clientAPI.modifyNode({ handlers: handlersObj }, node, undefined, false);
       } else if (propPath === "css.style") {
         context.clientAPI.modifyNode({ css: { ...node.data.css, style: result } }, node, undefined, false);
