@@ -7,4 +7,8 @@ export default defineConfig({
     // Optional: generate sourcemaps for easier debugging
     sourcemap: true,
   },
+  test: {
+    include: ['server/tests/**/*.test.ts'],
+    environment: 'node',
+  },
 });
