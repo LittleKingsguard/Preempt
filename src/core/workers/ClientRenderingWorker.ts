@@ -135,7 +135,7 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
 
-    if (node.placement?.placementName) {
+    if (node.placement?.some(p => p.placementName)) {
       if (!node.children || node.children.length === 0) {
         el.style.display = 'none';
       } else if (el.style.display === 'none' && node.css?.style?.['display'] !== 'none') {

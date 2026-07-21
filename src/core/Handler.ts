@@ -28,6 +28,13 @@ export class Handler implements HandlerDef {
   public compile(): Function | undefined {
     try {
       const trimmed = this._body.trim();
+      if (!trimmed) {
+        console.error('Handler body is empty for', this);
+        return () => {
+          console.error('Attempted to execute empty handler for', this.name);
+        };
+      }
+
       if (trimmed.startsWith('(') || trimmed.startsWith('async (')) {
         return new Function('return ' + trimmed)();
       } else {
@@ -35,6 +42,9 @@ export class Handler implements HandlerDef {
       }
     } catch (err) {
       console.error(`Failed to compile handler ${this.name}`, err);
+      return () => {
+        console.error('Compilation error in handler', this.name, err);
+      };
     }
   }
 

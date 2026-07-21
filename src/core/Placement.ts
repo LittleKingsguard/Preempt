@@ -1,9 +1,9 @@
 import type { PlacementConfig } from "../types/NodeSchema.js";
-import type { Node } from "./Node.js";
+import { Node } from "./Node.js";
 
 export class Placement implements PlacementConfig {
-  public static placementArray: Node[] = [];
-  public static sourcePlacements: Record<string, Node[]> = {};
+  public static placementArray: Placement[] = [];
+  public static sourcePlacements: Record<string, Placement[]> = {};
 
   public static clearPlacements(): void {
     Placement.placementArray = [];
@@ -42,31 +42,24 @@ export class Placement implements PlacementConfig {
       current = current.parent;
     }
 
-    if (node.parent) {
-      node.originalParent = node.parent;
-      node.originalIndex = node.parent.nativeChildren.indexOf(node);
-      if (node.originalIndex > -1) {
-        node.parent.nativeChildren.splice(node.originalIndex, 1);
-        node.parent.invalidateChildrenCache();
-      }
-    }
-    node.parent = this.parent;
-    node.wasPlaced = true;
+    const clonedNode = node.clone();
+    clonedNode.parent = this.parent;
     this.parent.invalidateChildrenCache();
 
     if (!this._referencingNodes) this._referencingNodes = new Set();
-    this._referencingNodes.add(node);
+    this._referencingNodes.add(clonedNode);
   }
+
   public append(): void {
     if (!this.parent) return;
 
-    if (this.placementName && !Placement.placementArray.includes(this.parent)) {
-      Placement.placementArray.push(this.parent);
+    if (this.placementName && !Placement.placementArray.includes(this)) {
+      Placement.placementArray.push(this);
 
       const newPlacement = this.placementName;
-      const referencingNodes = Placement.sourcePlacements[newPlacement] || [];
-      for (const ref of referencingNodes) {
-        ref.receiveNextState({ activePlacement: undefined }, 1);
+      const referencingPlacements = Placement.sourcePlacements[newPlacement] || [];
+      for (const ref of referencingPlacements) {
+        ref.parent.receiveNextState({}, 1);
       }
     }
     if (this.targetPlacement) {
@@ -74,31 +67,33 @@ export class Placement implements PlacementConfig {
         if (!Placement.sourcePlacements[target]) {
           Placement.sourcePlacements[target] = [];
         }
-        if (!Placement.sourcePlacements[target].includes(this.parent)) {
-          Placement.sourcePlacements[target].push(this.parent);
+        if (!Placement.sourcePlacements[target].includes(this)) {
+          Placement.sourcePlacements[target].push(this);
         }
       }
     }
   }
 
-
   public delete(): void {
     if (this.parent) {
-      const pIndex = Placement.placementArray.indexOf(this.parent);
+      const pIndex = Placement.placementArray.indexOf(this);
       if (pIndex > -1) {
         Placement.placementArray.splice(pIndex, 1);
       }
     }
 
     if (this.placementName) {
-      const referencingNodes = Placement.sourcePlacements[this.placementName] || [];
-      for (const ref of referencingNodes) {
-        ref.receiveNextState({ activePlacement: undefined }, 1);
+      const referencingPlacements = Placement.sourcePlacements[this.placementName] || [];
+      for (const ref of referencingPlacements) {
+        ref.parent.receiveNextState({}, 1);
       }
       delete Placement.sourcePlacements[this.placementName];
     }
 
     if (this._referencingNodes) {
+      for (const clonedNode of this._referencingNodes) {
+        clonedNode.delete();
+      }
       this._referencingNodes.clear();
     }
   }

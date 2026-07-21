@@ -74,7 +74,7 @@ export class SSRRenderingWorker extends BaseWorker {
     if (node.css && node.css.style) {
        computedStyle = { ...node.css.style };
     }
-    if (node.placement?.placementName && (!node.children || node.children.length === 0)) {
+    if (node.placement?.some(p => p.placementName) && (!node.children || node.children.length === 0)) {
        computedStyle['display'] = 'none';
     }
 

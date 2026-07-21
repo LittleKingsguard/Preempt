@@ -135,16 +135,25 @@ export class ClientAPI {
       node.props.batchLabel = options.batchLabel;
       
       if (!node.data.placement) {
-        node.data.placement = { targetPlacement: [] };
+        node.data.placement = [{ targetPlacement: [] }];
+      } else if (node.data.placement.length === 0) {
+        node.data.placement.push({ targetPlacement: [] });
       }
-      if (!node.data.placement.targetPlacement) {
-        node.data.placement.targetPlacement = [];
-      }
-      node.data.placement.targetPlacement.push(...options.placements);
       
-      if (!node.placement) node.placement = new Placement({ targetPlacement: [] }, node);
-      if (!node.placement.targetPlacement) node.placement.targetPlacement = [];
-      node.placement.targetPlacement.push(...options.placements);
+      const dataPlacement = node.data.placement!;
+      const dp0 = dataPlacement[0]!;
+      if (!dp0.targetPlacement) {
+        dp0.targetPlacement = [];
+      }
+      dp0.targetPlacement.push(...options.placements);
+      
+      if (!node.placement) node.placement = [new Placement({ targetPlacement: [] }, node)];
+      else if (node.placement.length === 0) node.placement.push(new Placement({ targetPlacement: [] }, node));
+      
+      const nodePlacement = node.placement!;
+      const np0 = nodePlacement[0]!;
+      if (!np0.targetPlacement) np0.targetPlacement = [];
+      np0.targetPlacement.push(...options.placements);
     });
 
     if (Supervisor.instance) {

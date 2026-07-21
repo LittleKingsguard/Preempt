@@ -70,6 +70,7 @@ export class Supervisor {
   private constructor(config: PipelineConfig, mountElementId: string = "app") {
     this.config = config;
     this.mountElementId = mountElementId;
+    Supervisor.instance = this;
     this.instantiationWorker = new InstantiationWorker(this);
     this.placementWorker = new PlacementWorker(this);
     this.componentAssemblyWorker = new ComponentAssemblyWorker(this);
@@ -279,7 +280,7 @@ export class Supervisor {
 
       if (existingNodes.length > 0) {
         existingNodes.forEach(node => {
-          PlacementWorker.restorePlacement(node);
+          node.clearTrackingArrays();
         });
       }
 

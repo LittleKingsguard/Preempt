@@ -2,8 +2,6 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import type { NodeData, RollbackState } from "../../types/NodeSchema.js";
-import { PlacementWorker } from "./PlacementWorker.js";
-import { Placement } from "../Placement.js";
 
 
 export class InstantiationWorker extends BaseWorker {
@@ -115,7 +113,11 @@ export class InstantiationWorker extends BaseWorker {
 
     // 3. Updates global placement data so other nodes can identify them.
     // Placement arrays are locked globally after this phase by Supervisor.
-    if (node.placement) node.placement.append();
+    if (node.placement) {
+      for (const p of node.placement) {
+        p.append();
+      }
+    }
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {

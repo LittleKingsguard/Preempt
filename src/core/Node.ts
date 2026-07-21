@@ -35,8 +35,12 @@ export class Node {
   public get children(): Node[] {
     if (this._childrenCache) return this._childrenCache;
     let placedChildren: Node[] = [];
-    if (this.placement && this.placement._referencingNodes) { //TODO: Expand placement to array of placements
-      placedChildren = Array.from(this.placement._referencingNodes);
+    if (this.placement) {
+      for (const p of this.placement) {
+        if (p._referencingNodes) {
+          placedChildren = placedChildren.concat(Array.from(p._referencingNodes));
+        }
+      }
     }
     this._childrenCache = [...this.nativeChildren, ...placedChildren];
     return this._childrenCache;
@@ -53,8 +57,7 @@ export class Node {
   }
 
   public type: string = 'div';
-  public placement?: Placement | undefined;
-  public activePlacement?: string | undefined;
+  public placement: Placement[];
   public component?: Component[] | undefined;
   public content?: string | any | undefined;
   public props: Record<string, any> = {};
@@ -66,9 +69,7 @@ export class Node {
   public sourceComponents: Map<string, Component> = new Map();
   public targetComponents: Map<string, Component> = new Map();
 
-  public originalParent: Node | null = null;
-  public originalIndex: number = -1;
-  public wasPlaced: boolean = false;
+
   public _attachedListeners: { eventName: string, handlerFunc: EventListener }[] = [];
 
   public static globalMetadata: any = {};
@@ -188,7 +189,14 @@ export class Node {
     this.setComponents(CloneUtils.deepClone(this.data.component));
 
 
-    this.placement = this.data.placement ? new Placement(this.data.placement, this) : undefined;
+    if (this.data.placement) {
+      const placements = Array.isArray(this.data.placement) ? this.data.placement : [this.data.placement];
+      this.placement = placements.map((p: any) => new Placement(p, this));
+      this.data.placement = placements as any;
+    } else {
+      this.placement = [];
+      this.data.placement = [];
+    }
 
     this.versions = CloneUtils.deepClone(this.data.versions);
     if (this.versions === undefined) delete this.versions;
@@ -224,8 +232,15 @@ export class Node {
   }
 
   public clearTrackingArrays(): void {
-    if (this.placement && this.placement._referencingNodes) {
-      this.placement._referencingNodes = new Set();
+    if (this.placement) {
+      for (const p of this.placement) {
+        if (p._referencingNodes) {
+          for (const clone of p._referencingNodes) {
+            clone.delete();
+          }
+          p._referencingNodes = new Set();
+        }
+      }
     }
     if (this.component) {
       for (const c of this.component) {
@@ -248,8 +263,10 @@ export class Node {
       }
     }
 
-    if (this.placement instanceof Placement) {
-      this.placement.delete();
+    if (this.placement && Array.isArray(this.placement)) {
+      for (const p of this.placement) {
+        if (p && p.delete) p.delete();
+      }
     }
 
     // Recursively delete native children
@@ -259,12 +276,12 @@ export class Node {
         child.delete();
       }
     }
-    
+
 
     if (this.css && this.css.delete) {
       this.css.delete();
     }
-    
+
     if (this.component) {
       for (const c of this.component) {
         if (c && c.delete) {
@@ -272,7 +289,7 @@ export class Node {
         }
       }
     }
-    
+
     if (this.handlers) {
       for (const h of Object.values(this.handlers)) {
         if (h && h.delete) {
@@ -280,7 +297,7 @@ export class Node {
         }
       }
     }
-    
+
     if (this.element) {
       this.element.remove();
       this.element = null;
@@ -360,7 +377,8 @@ export class Node {
 
     // Snapshot state
     if (!this._lastValidState) {
-      this._lastValidState = CloneUtils.deepClone(this, ['content', 'children']);
+      this._lastValidState = this.clone(['content', 'children', 'nativeChildren', '_childrenCache', 'parent', 'element']);
+      this._lastValidState.nativeChildren = [...this.nativeChildren];
     }
 
     // Apply optimistically
@@ -388,7 +406,11 @@ export class Node {
   public rollback(rollbackState?: RollbackState): void {
     const stateToRestore = rollbackState || this._lastValidState;
     if (stateToRestore) {
-      Object.assign(this.data, stateToRestore);
+      if ((stateToRestore as any).data) {
+        Object.assign(this.data, (stateToRestore as any).data);
+      } else {
+        Object.assign(this.data, stateToRestore);
+      }
       Object.assign(this, stateToRestore);
       console.warn(`[Node] Rolled back to previous valid state for node ${this.css?.id}`);
     }
@@ -412,7 +434,7 @@ export class Node {
   public executeHandlers(phase: string, context: any, recursive: boolean = true): void {
     if (this.handlers) {
       for (const handler of Object.values(this.handlers)) {
-        if (handler.phase === phase || (!handler.phase && !handler.event && handler.name === phase)) {
+        if (handler.phase === phase || handler.event === phase || (!handler.phase && !handler.event && handler.name === phase)) {
           try {
             const fullContext = {
               ...context,
@@ -420,27 +442,14 @@ export class Node {
               metadata: Node.globalMetadata,
               rootNode: Supervisor.getRootNode(),
               contentPayload: Supervisor.instance?.contentData || [],
-              clientAPI
+              clientAPI,
+              supervisor: Supervisor.instance
             };
-            
-            let fn = handler.compiled || clientAPI.getHandler(handler.name, this);
-            if (!fn) {
-              fn = clientAPI.getHandler(phase, this);
-            }
 
-            if (fn) {
-              let result: any;
-              if (fn.length === 1) {
-                result = fn(fullContext);
-              } else {
-                result = fn(null, fullContext);
-              }
-              if (result && typeof result.catch === 'function') {
-                result.catch((err: any) => {
-                  console.error(`Failed to execute async ${phase} handler on node:`, err);
-                });
-              }
+            if (phase === "beforeRender" && handler.name === "CheckLoginHandler") {
+              console.log("EXECUTING CheckLoginHandler! fullContext.supervisor:", !!fullContext.supervisor, "userData:", fullContext.supervisor?.userData);
             }
+            handler.execute(null, fullContext);
           } catch (err) {
             console.error(`Failed to execute ${phase} handler on node:`, err);
           }
@@ -501,13 +510,13 @@ export class Node {
     const clonedNode = new Node(clonedData);
 
     clonedNode.type = this.type;
-    clonedNode.activePlacement = this.activePlacement;
+
 
     if (!ignoreProps.includes('css')) {
       clonedNode.css = this.css ? this.css.clone(ignoreProps, clonedNode) : new Css({}, clonedNode);
     }
     if (!ignoreProps.includes('placement')) {
-      clonedNode.placement = this.placement ? this.placement.clone(ignoreProps, clonedNode) : undefined;
+      clonedNode.placement = this.placement ? this.placement.map(p => p.clone(ignoreProps, clonedNode)) : [];
     }
     if (!ignoreProps.includes('content')) {
       clonedNode.content = this.content ? this.content : undefined;

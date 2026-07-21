@@ -44,7 +44,7 @@ export interface NodeVersion {
 
 export interface NodeData {
   type: string;
-  placement?: PlacementConfig | undefined;
+  placement?: PlacementConfig[] | undefined;
   component?: ComponentBinding[] | undefined;
   content?: string | NodeData | NodeData[] | undefined;
   props?: Record<string, any> | undefined;
