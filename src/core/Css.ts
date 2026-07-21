@@ -4,9 +4,9 @@ import { StyleNode } from "./StyleNode.js";
 import type { Node } from "./Node.js";
 
 export class Css {
-  public id?: string;
-  public classes?: string[];
-  public style?: Record<string, string>;
+  public id?: string | undefined;
+  public classes?: string[] | undefined;
+  public style?: Record<string, string> | undefined;
   public styleNodes: StyleNode[] = [];
 
   constructor(data: any = {}, node?: Node) {

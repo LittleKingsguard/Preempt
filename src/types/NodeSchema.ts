@@ -6,57 +6,57 @@ export interface CssDef {
 
 
 export interface PlacementConfig {
-  placementName?: string;
-  targetPlacement?: string[];
-  _referencingNodes?: Set<any>;
+  placementName?: string | undefined;
+  targetPlacement?: string[] | undefined;
+  _referencingNodes?: Set<any> | undefined;
 }
 
 export interface HandlerDef {
   name: string;
-  event?: string;
-  phase?: string;
+  event?: string | undefined;
+  phase?: string | undefined;
   body: string;
 }
 
 export interface ComponentBinding {
   reference: string;
-  target?: string;
-  value?: string | HandlerDef | NodeData | NodeData[] | null;
-  _referencingNodes?: Set<any>;
-  _instantiatedNodes?: any[];
-  _clonedChildren?: any[];
-  _appendedContent?: string;
+  target?: string | undefined;
+  value?: string | HandlerDef | NodeData | NodeData[] | null | undefined;
+  _referencingNodes?: Set<any> | undefined;
+  _instantiatedNodes?: any[] | undefined;
+  _clonedChildren?: any[] | undefined;
+  _appendedContent?: string | undefined;
 }
 export interface NodeVersion {
-  name?: string;
+  name?: string | undefined;
   timestamp: number;
-  content?: string | NodeData | NodeData[];
-  props?: Record<string, any>;
-  component?: ComponentBinding[];
+  content?: string | NodeData | NodeData[] | undefined;
+  props?: Record<string, any> | undefined;
+  component?: ComponentBinding[] | undefined;
   css?: {
-    id?: string;
-    classes?: string[];
-    style?: Record<string, string>;
-    cssDef?: CssDef[];
-  };
+    id?: string | undefined;
+    classes?: string[] | undefined;
+    style?: Record<string, string> | undefined;
+    cssDef?: CssDef[] | undefined;
+  } | undefined;
 }
 
 
 export interface NodeData {
   type: string;
-  placement?: PlacementConfig;
-  component?: ComponentBinding[];
-  content?: string | NodeData | NodeData[];
-  props?: Record<string, any>;
-  handlers?: Record<string, string | HandlerDef>;
+  placement?: PlacementConfig | undefined;
+  component?: ComponentBinding[] | undefined;
+  content?: string | NodeData | NodeData[] | undefined;
+  props?: Record<string, any> | undefined;
+  handlers?: Record<string, string | HandlerDef> | undefined;
   css?: {
-    id?: string;
-    classes?: string[];
-    style?: Record<string, string>;
-    cssDef?: CssDef[];
-  };
-  versions?: NodeVersion[];
-  node?: any;
+    id?: string | undefined;
+    classes?: string[] | undefined;
+    style?: Record<string, string> | undefined;
+    cssDef?: CssDef[] | undefined;
+  } | undefined;
+  versions?: NodeVersion[] | undefined;
+  node?: any | undefined;
 }
 
 export interface UserData {
@@ -69,21 +69,21 @@ export interface UserData {
 }
 
 export interface ContentPayload {
-  metadata?: Record<string, any>;
-  userData?: UserData;
-  component?: ComponentBinding[];
+  metadata?: Record<string, any> | undefined;
+  userData?: UserData | undefined;
+  component?: ComponentBinding[] | undefined;
   content: NodeData[];
 }
 
 export interface NodeQuery {
-  type?: string;
-  id?: string;
-  classes?: string[];
-  props?: Record<string, any>;
-  handlers?: Record<string, string>;
-  style?: Record<string, string>;
-  components?: { target?: string; reference?: string }[];
-  format?: string;
+  type?: string | undefined;
+  id?: string | undefined;
+  classes?: string[] | undefined;
+  props?: Record<string, any> | undefined;
+  handlers?: Record<string, string> | undefined;
+  style?: Record<string, string> | undefined;
+  components?: { target?: string; reference?: string }[] | undefined;
+  format?: string | undefined;
 }
 
 import type { Node } from "../core/Node.js";

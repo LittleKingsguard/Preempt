@@ -2,6 +2,7 @@ import { Supervisor } from "./Supervisor.js";
 import { Node } from "./Node.js";
 import type { NodeData, NodeQuery, ContentPayload, ComponentBinding } from "../types/NodeSchema.js";
 import { Placement } from "./Placement.js";
+import { Component } from "./Component.js";
 
 export class ClientAPI {
   public handlers: { [key: string]: Function } = {};
@@ -141,7 +142,7 @@ export class ClientAPI {
       }
       node.data.placement.targetPlacement.push(...options.placements);
       
-      if (!node.placement) node.placement = new Placement({ targetPlacement: [] });
+      if (!node.placement) node.placement = new Placement({ targetPlacement: [] }, node);
       if (!node.placement.targetPlacement) node.placement.targetPlacement = [];
       node.placement.targetPlacement.push(...options.placements);
     });
@@ -238,11 +239,11 @@ export class ClientAPI {
       if (root) {
         handlers.forEach((h: any) => {
           if (!root.sourceComponents.has(h.name)) {
-            root.sourceComponents.set(h.name, { reference: h.name, value: h.body });
+            root.sourceComponents.set(h.name, new Component({ reference: h.name, value: h.body }, root));
           }
         });
         if (!root.sourceComponents.has("inspectedNodeData")) {
-          root.sourceComponents.set("inspectedNodeData", { reference: "inspectedNodeData", value: "" });
+          root.sourceComponents.set("inspectedNodeData", new Component({ reference: "inspectedNodeData", value: "" }, root));
         }
       }
 
@@ -270,7 +271,7 @@ export class ClientAPI {
 
             // If the node has a component reference matching the handler's name, map it to the target event
             const eventBinding = Array.from(node.targetComponents.values()).find((c: any) => c.reference === h.name && c.target?.startsWith("handlers."));
-            if (eventBinding) {
+            if (eventBinding && eventBinding.target) {
               eventBinding.value = { name: h.name, body: h.body };
               const eventName = eventBinding.target.substring(9);
               if (overwrite || node.data.handlers![eventName] === undefined) {

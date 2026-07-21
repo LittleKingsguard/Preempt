@@ -2,10 +2,10 @@ import type { HandlerDef } from "../types/NodeSchema.js";
 
 export class Handler implements HandlerDef {
   public name: string;
-  public event?: string;
-  public phase?: string;
+  public event?: string | undefined;
+  public phase?: string | undefined;
   private _body: string = '';
-  private _compiled?: Function;
+  private _compiled?: Function | undefined;
 
   constructor(data: HandlerDef | string, defaultName?: string) {
     if (typeof data === 'string') {

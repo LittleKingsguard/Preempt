@@ -4,15 +4,15 @@ import type { Node } from "./Node.js";
 
 export class Component implements ComponentBinding {
   public reference: string;
-  public target?: string;
-  public value?: string | HandlerDef | NodeData | NodeData[] | null;
-  public _referencingNodes?: Set<any>;
-  public _instantiatedNodes?: any[];
-  public _clonedChildren?: any[];
-  public _appendedContent?: string;
+  public target?: string | undefined;
+  public value?: string | HandlerDef | NodeData | NodeData[] | null | undefined;
+  public _referencingNodes?: Set<any> | undefined;
+  public _instantiatedNodes?: any[] | undefined;
+  public _clonedChildren?: any[] | undefined;
+  public _appendedContent?: string | undefined;
   public parent: Node;
 
-  private _sourceComponent?: Component;
+  private _sourceComponent?: Component | undefined;
 
   public get sourceComponent(): Component | undefined {
     return this._sourceComponent;

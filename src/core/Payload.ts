@@ -4,9 +4,9 @@ import { Component } from "./Component.js";
 import { Node } from "./Node.js";
 
 export class Payload implements ContentPayload {
-  public metadata?: Record<string, any>;
-  public userData?: UserData;
-  public component?: Component[];
+  public metadata?: Record<string, any> | undefined;
+  public userData?: UserData | undefined;
+  public component?: Component[] | undefined;
   public content: NodeData[];
 
   constructor(data: Partial<ContentPayload> | string | NodeData | NodeData[], parent?: Node) {

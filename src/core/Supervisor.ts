@@ -47,7 +47,7 @@ export class Supervisor {
   public renderingWorker: any;
   public postprocessingWorker: PostprocessingWorker;
 
-  public ssrResult?: string;
+  public ssrResult?: string | undefined;
 
   public activeLockedPhases: Set<number> = new Set();
 

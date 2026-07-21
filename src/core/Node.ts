@@ -53,15 +53,15 @@ export class Node {
   }
 
   public type: string = 'div';
-  public placement?: Placement;
-  public activePlacement?: string;
-  public component?: Component[];
-  public content?: string | any;
+  public placement?: Placement | undefined;
+  public activePlacement?: string | undefined;
+  public component?: Component[] | undefined;
+  public content?: string | any | undefined;
   public props: Record<string, any> = {};
-  public handlers?: Record<string, Handler>;
+  public handlers?: Record<string, Handler> | undefined;
   public css: Css = new Css();
-  public versions?: any[];
-  public lastCompletedPhase?: number;
+  public versions?: any[] | undefined;
+  public lastCompletedPhase?: number | undefined;
 
   public sourceComponents: Map<string, Component> = new Map();
   public targetComponents: Map<string, Component> = new Map();
@@ -148,7 +148,7 @@ export class Node {
 
   constructor(data: NodeData, parent?: Node | null) {
     this.data = data;
-    this.parent = parent;
+    this.parent = parent ?? null;
     this.resolveVersion();
 
     this.props = CloneUtils.deepClone(this.data.props) || {};

@@ -8,9 +8,9 @@ import { Placement } from "../Placement.js";
 
 export class InstantiationWorker extends BaseWorker {
   // Allow queueing node data instead of just instantiated nodes
-  protected dataQueue: { data: NodeData, existingNode?: Node | null, callback?: (node: Node) => void }[] = [];
+  protected dataQueue: { data: NodeData, existingNode?: Node | null | undefined, callback?: ((node: Node) => void) | undefined }[] = [];
 
-  public pushRaw(data: NodeData, existingNode?: Node | null, callback?: (node: Node) => void): void {
+  public pushRaw(data: NodeData, existingNode?: Node | null | undefined, callback?: ((node: Node) => void) | undefined): void {
     this.dataQueue.push({ data, existingNode, callback });
   }
 
@@ -57,8 +57,8 @@ export class InstantiationWorker extends BaseWorker {
         if (binding._instantiatedNodes && binding._instantiatedNodes.length === 0) {
           const dataArray = Array.isArray(binding.value) ? binding.value : [binding.value];
           for (const d of dataArray) {
-            if (typeof d !== "string" && !('body' in d)) {
-              this.pushRaw(d, null, (componentNode: Node) => {
+            if (d && typeof d !== "string" && !('body' in d)) {
+              this.pushRaw(d as NodeData, null, (componentNode: Node) => {
                 binding._instantiatedNodes!.push(componentNode);
               });
             }

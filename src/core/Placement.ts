@@ -10,9 +10,9 @@ export class Placement implements PlacementConfig {
     Placement.sourcePlacements = {};
   }
 
-  public placementName?: string;
-  public targetPlacement?: string[];
-  public _referencingNodes?: Set<any>;
+  public placementName?: string | undefined;
+  public targetPlacement?: string[] | undefined;
+  public _referencingNodes?: Set<any> | undefined;
   public parent: Node;
 
   constructor(data: PlacementConfig, parent: Node) {
@@ -89,7 +89,7 @@ export class Placement implements PlacementConfig {
         Placement.placementArray.splice(pIndex, 1);
       }
     }
-    
+
     if (this.placementName) {
       const referencingNodes = Placement.sourcePlacements[this.placementName] || [];
       for (const ref of referencingNodes) {
@@ -97,7 +97,7 @@ export class Placement implements PlacementConfig {
       }
       delete Placement.sourcePlacements[this.placementName];
     }
-    
+
     if (this._referencingNodes) {
       this._referencingNodes.clear();
     }
