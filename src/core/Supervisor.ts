@@ -130,12 +130,12 @@ export class Supervisor {
 
   public static lockPhase(phaseId: number): void {
     if (phaseId === 2) {
-      // Component assembly locks on slot completion (Phase 3 completion)
+      // Phase 2 locks when Phase 3 locks
       return;
     }
     Supervisor.activeLockedPhases.add(phaseId);
     if (phaseId === 3) {
-      // Slot assembly completion also locks component assembly (Phase 2)
+      // Phase 3 locking also locks Phase 2
       Supervisor.activeLockedPhases.add(2);
     }
   }
@@ -145,13 +145,15 @@ export class Supervisor {
   }
 
   public static emitToPhase(caller: any, node: Node, rollbackState: any, phaseId: number): void {
-    console.log(`[Supervisor.emitToPhase] Phase ${phaseId} emitted for node ${node.css?.id || 'unknown'} by:`, caller);
     if (Supervisor.instance) {
       if (!Supervisor.isPhaseLocked(phaseId)) {
         const worker = Supervisor.instance.getWorkerForPhase(phaseId);
         if (worker && typeof worker.push === 'function') {
           worker.push(node, rollbackState);
+          console.log(`[Supervisor.emitToPhase] Phase ${phaseId} emitted for node ${node.css?.id || 'unknown'} by:`, caller);
         }
+      } else {
+        console.warn(`[Supervisor.emitToPhase] Failed attempt to emit to Phase ${phaseId} for node ${node.css?.id || 'unknown'} by:`, caller, `(Phase ${phaseId} is locked)`);
       }
     } else {
       Supervisor.pendingEmits.push({ caller, node, rollbackState, phaseId });
@@ -397,8 +399,14 @@ export class Supervisor {
         const worker = this.getWorkerForPhase(phaseId);
         if (worker && worker.hasEvents()) {
           Supervisor.currentStage = this.getStageNameForPhase(phaseId);
+          // Lock prior phases when starting a higher phase queue
+          for (let p = 0; p < phaseId; p++) {
+            Supervisor.lockPhase(p);
+          }
+          if (phaseId === 1 || phaseId === 6 || phaseId === 7) {
+            Supervisor.lockPhase(phaseId);
+          }
           await worker.processQueue();
-          Supervisor.lockPhase(phaseId);
           queueDrained = false;
           break; // Restart loop to prioritize lowest phase IDs again
         }
