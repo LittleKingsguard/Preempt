@@ -1,10 +1,10 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { StyleNode } from "../StyleNode.js";
 
 export class SSRRenderingWorker extends BaseWorker {
+  public readonly phase = 6;
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
 
@@ -39,7 +39,6 @@ export class SSRRenderingWorker extends BaseWorker {
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 6;
-    Supervisor.emitToPhase(node, _rollbackState || {}, 7);
   }
 
   public static renderToString(node: Node): string {
@@ -56,11 +55,12 @@ export class SSRRenderingWorker extends BaseWorker {
       }
     }
 
-    if (node.handlers) {
-      for (const [key, value] of Object.entries(node.handlers)) {
-        const eventName = key.startsWith('on') ? key.toLowerCase() : `on${key.toLowerCase()}`;
-        const handlerBody = typeof value === 'object' && value !== null && 'body' in value ? (value as any).body : String(value);
-        const trimmedValue = String(handlerBody).trim();
+    if (node.handlers && Array.isArray(node.handlers)) {
+      for (const handlerObj of node.handlers) {
+        if (!handlerObj.event) continue;
+        const eventName = handlerObj.event.startsWith('on') ? handlerObj.event.toLowerCase() : `on${handlerObj.event.toLowerCase()}`;
+        const handlerBody = handlerObj.body;
+        const trimmedValue = String(handlerBody || '').trim();
         let jsCode = trimmedValue;
         if (trimmedValue.startsWith('(') || trimmedValue.startsWith('async (')) {
           jsCode = `(${trimmedValue})(event, { node: null, metadata: null, rootNode: null })`;
@@ -93,8 +93,8 @@ export class SSRRenderingWorker extends BaseWorker {
     }
 
     let innerHTML = "";
-    if (node.content !== undefined) {
-      innerHTML += node.content.toString()
+    if (typeof node.content === "string") {
+      innerHTML += node.content
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");

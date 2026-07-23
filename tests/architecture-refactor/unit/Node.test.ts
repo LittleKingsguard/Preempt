@@ -9,7 +9,7 @@ describe('Node - Atomic Architecture', () => {
   beforeEach(() => {
     // Reset global arrays and create a fresh node
     Node.clearPlacements();
-    node = new Node({ type: 'div', props: { id: 'test-node' } });
+    node = new Node({ type: 'div', props: { id: 'test-node' } }, null, 0);
 
     // Mock worker for routing
     mockWorker = {
@@ -38,7 +38,8 @@ describe('Node - Atomic Architecture', () => {
 
   it('denies changes when an explicitly passed phaseId is centrally locked', () => {
     // Explicitly configure phase locks to test the lock mechanism
-    global.Supervisor.activeLockedPhases = new Set([2]); // Phase 2 is locked
+    Supervisor.activeLockedPhases = new Set([2]); // Phase 2 is locked
+    global.Supervisor.isPhaseLocked = vi.fn((phase) => Supervisor.activeLockedPhases.has(phase));
     
     global.Supervisor.isPropertyLocked = vi.fn(() => false); // Should not be called
     
@@ -60,26 +61,21 @@ describe('Node - Atomic Architecture', () => {
   });
 
   it('diffs incoming state and queries Supervisor to deny changes to locked properties', () => {
-    // Supervisor centrally locks placement
-    global.Supervisor.isPhaseLocked = vi.fn(() => false);
-    global.Supervisor.isPropertyLocked = vi.fn((prop) => prop === 'placement');
-
     const nextState = { placement: 'header' };
 
-    // Attempting to modify placement should be denied even without a phaseId
+    // Attempting to modify placement should be denied via receiveNextState
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
     node.receiveNextState(nextState);
 
-    expect(global.Supervisor.isPropertyLocked).toHaveBeenCalledWith('placement');
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Lock violation'));
-    expect(node.data.placement).toBeUndefined(); // Should not have applied
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('receiveNextState rejected'));
+    expect(node.placement).toEqual([]); // Should not have applied
 
     consoleSpy.mockRestore();
   });
 
   it('stores a rollback copy without deep cloning child nodes', () => {
     const originalId = node.data.props.id;
-    const childNode = new Node({ type: 'span' });
+    const childNode = new Node({ type: 'span' }, null, 0);
     node.children = [childNode];
 
     // Mock Supervisor to allow all properties

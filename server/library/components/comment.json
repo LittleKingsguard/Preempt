@@ -1,7 +1,7 @@
 {
   "type": "div",
   "css": { "style": { "padding": "1rem", "border": "1px solid #eaeaea", "borderRadius": "4px", "marginBottom": "1rem", "background": "#f9f9f9" } },
-  "content": [
+  "children": [
     { "type": "div", "css": { "style": { "fontWeight": "bold", "marginBottom": "0.5rem" } }, "content": "AUTHOR_PLACEHOLDER", "component": [{"target": "content", "reference": "author"}] },
     { "type": "div", "css": { "style": { "color": "#333", "whiteSpace": "pre-wrap", "lineHeight": "1.5" } }, "content": "BODY_PLACEHOLDER", "component": [{"target": "content", "reference": "body"}] },
     { "type": "div", "css": { "style": { "fontSize": "0.8rem", "color": "#888", "marginTop": "0.5rem" } }, "content": "DATE_PLACEHOLDER", "component": [{"target": "content", "reference": "date"}] }

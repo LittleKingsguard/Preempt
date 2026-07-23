@@ -1,10 +1,10 @@
 {
   "type": "div",
   "css": { "classes": ["admin-approval-container"] },
-  "handlers": {
-    "fetchPendingBatches": { "name": "fetchPendingBatches", "event": "afterInstantiate" }
-  },
-  "content": [
+  "handlers": [
+    { "name": "fetchPendingBatches", "event": "afterInstantiate" }
+  ],
+  "children": [
     {
       "type": "h3",
       "content": "Pending Change Batches",

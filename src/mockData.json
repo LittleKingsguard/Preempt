@@ -2,7 +2,9 @@
   "template": {
     "type": "div",
     "css": {
-      "classes": ["hello-container"],
+      "classes": [
+        "hello-container"
+      ],
       "style": {
         "display": "flex",
         "flexDirection": "column",
@@ -28,12 +30,14 @@
         }
       ]
     },
-    "content": [
+    "children": [
       {
         "type": "h1",
         "content": "Hello World",
         "css": {
-          "classes": ["dynamic-title"]
+          "classes": [
+            "dynamic-title"
+          ]
         }
       },
       {
@@ -50,7 +54,9 @@
               }
             }
           ],
-          "classes": ["dynamic-subtitle"]
+          "classes": [
+            "dynamic-subtitle"
+          ]
         }
       },
       {
@@ -75,9 +81,11 @@
       },
       {
         "type": "div",
-        "placement": {
-          "placementName": "test-zone"
-        },
+        "placement": [
+          {
+            "placementName": "test-zone"
+          }
+        ],
         "css": {
           "style": {
             "border": "2px dashed #888",
@@ -86,7 +94,7 @@
             "borderRadius": "8px"
           }
         },
-        "content": [
+        "children": [
           {
             "type": "p",
             "content": "This is the placement zone.",
@@ -101,9 +109,11 @@
       },
       {
         "type": "div",
-        "placement": {
-          "placementName": "empty-zone"
-        },
+        "placement": [
+          {
+            "placementName": "empty-zone"
+          }
+        ],
         "css": {
           "style": {
             "border": "2px dashed #f06292",
@@ -117,9 +127,11 @@
       },
       {
         "type": "div",
-        "placement": {
-          "placementName": "comment-zone"
-        }
+        "placement": [
+          {
+            "placementName": "comment-zone"
+          }
+        ]
       }
     ]
   },
@@ -136,18 +148,37 @@
       "isShadowed": false
     },
     "component": [
-      { "reference": "writerName", "value": "Alice_Engineer" },
-      { "reference": "avatarColor", "value": "#9c27b0" },
-      { "reference": "commentText", "value": "This component assembly system is really powerful!" },
-      { "reference": "shadowColor", "value": "5px 5px 15px rgba(156, 39, 176, 0.5)" },
-      { "reference": "unusedValue", "value": "I am never consumed" }
+      {
+        "reference": "writerName",
+        "value": "Alice_Engineer"
+      },
+      {
+        "reference": "avatarColor",
+        "value": "#9c27b0"
+      },
+      {
+        "reference": "commentText",
+        "value": "This component assembly system is really powerful!"
+      },
+      {
+        "reference": "shadowColor",
+        "value": "5px 5px 15px rgba(156, 39, 176, 0.5)"
+      },
+      {
+        "reference": "unusedValue",
+        "value": "I am never consumed"
+      }
     ],
-    "content": [
+    "children": [
       {
         "type": "div",
-        "placement": {
-          "targetPlacement": ["test-zone"]
-        },
+        "placement": [
+          {
+            "targetPlacement": [
+              "test-zone"
+            ]
+          }
+        ],
         "content": "This was dynamically placed here!",
         "css": {
           "style": {
@@ -161,9 +192,13 @@
       },
       {
         "type": "div",
-        "placement": {
-          "targetPlacement": ["fake-zone"]
-        },
+        "placement": [
+          {
+            "targetPlacement": [
+              "fake-zone"
+            ]
+          }
+        ],
         "content": "I was looking for a fake zone, so I stayed here.",
         "css": {
           "style": {
@@ -177,11 +212,19 @@
       },
       {
         "type": "div",
-        "placement": {
-          "targetPlacement": ["comment-zone"]
-        },
+        "placement": [
+          {
+            "targetPlacement": [
+              "comment-zone"
+            ]
+          }
+        ],
         "component": [
-          { "reference": "shadowColor", "target": "css.style.boxShadow", "value": null }
+          {
+            "reference": "shadowColor",
+            "target": "css.style.boxShadow",
+            "value": null
+          }
         ],
         "css": {
           "style": {
@@ -194,11 +237,15 @@
             "alignItems": "flex-start"
           }
         },
-        "content": [
+        "children": [
           {
             "type": "div",
             "component": [
-              { "reference": "avatarColor", "target": "css.style.backgroundColor", "value": null }
+              {
+                "reference": "avatarColor",
+                "target": "css.style.backgroundColor",
+                "value": null
+              }
             ],
             "css": {
               "style": {
@@ -211,11 +258,15 @@
           },
           {
             "type": "div",
-            "content": [
+            "children": [
               {
                 "type": "h3",
                 "component": [
-                  { "reference": "writerName", "target": "content", "value": null }
+                  {
+                    "reference": "writerName",
+                    "target": "content",
+                    "value": null
+                  }
                 ],
                 "css": {
                   "style": {
@@ -227,8 +278,16 @@
               {
                 "type": "p",
                 "component": [
-                  { "reference": "commentText", "target": "content", "value": null },
-                  { "reference": "missingValue", "target": "css.style.border", "value": null }
+                  {
+                    "reference": "commentText",
+                    "target": "content",
+                    "value": null
+                  },
+                  {
+                    "reference": "missingValue",
+                    "target": "css.style.border",
+                    "value": null
+                  }
                 ],
                 "css": {
                   "style": {
@@ -245,7 +304,10 @@
         "type": "div",
         "content": "This orphaned component should never be rendered!",
         "css": {
-          "style": { "color": "red", "fontSize": "50px" }
+          "style": {
+            "color": "red",
+            "fontSize": "50px"
+          }
         }
       },
       {
@@ -259,9 +321,13 @@
             "color": "#fff"
           }
         },
-        "handlers": {
-          "afterAssembly": "(context) => { if (context.supervisor.userData) { const roles = []; if (context.supervisor.userData.isAdmin) roles.push('Admin'); if (context.supervisor.userData.isContributor) roles.push('Contributor'); context.node.modify({ content: 'Welcome ' + context.supervisor.userData.username + ' (' + roles.join(', ') + ') <button>Logout</button>' }); } }"
-        },
+        "handlers": [
+          {
+            "name": "afterAssembly",
+            "phase": "afterAssembly",
+            "body": "(context) => { if (context.supervisor.userData) { const roles = []; if (context.supervisor.userData.isAdmin) roles.push('Admin'); if (context.supervisor.userData.isContributor) roles.push('Contributor'); context.node.modify({ content: 'Welcome ' + context.supervisor.userData.username + ' (' + roles.join(', ') + ') <button>Logout</button>' }); } }"
+          }
+        ],
         "content": "Please log in"
       }
     ]

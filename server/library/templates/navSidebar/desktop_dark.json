@@ -1,114 +1,152 @@
 {
-  "type": "div",
-  "css": {
-    "style": {
-      "background": "#121212",
-      "color": "#e0e0e0",
-      "minHeight": "100vh",
-      "display": "flex",
-      "flexDirection": "column"
-    }
-  },
-  "content": [
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "navBar"
-        }
-      ]
+  "root": {
+    "type": "div",
+    "css": {
+      "style": {
+        "background": "#121212",
+        "color": "#e0e0e0",
+        "minHeight": "100vh",
+        "display": "flex",
+        "flexDirection": "column"
+      }
     },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "header"
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "css": {
-        "style": {
-          "display": "flex",
-          "flex": "1",
-          "maxWidth": "1200px",
-          "margin": "0 auto",
-          "width": "100%"
-        }
+    "children": [
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "navBar"
+          }
+        ]
       },
-      "content": [
-        {
-          "type": "nav",
-          "css": {
-            "style": {
-              "width": "250px",
-              "padding": "2rem",
-              "borderRight": "1px solid #333"
-            }
-          },
-          "placement": {
-            "placementName": "sidebar"
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "header"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "style": {
+            "display": "flex",
+            "flex": "1",
+            "maxWidth": "1200px",
+            "margin": "0 auto",
+            "width": "100%"
           }
         },
-        {
-          "type": "div",
-          "css": {
-            "style": {
-              "flex": "1",
-              "padding": "2rem"
-            }
-          },
-          "content": [
-            {
-              "type": "div",
-              "placement": {
-                "placementName": "article"
+        "children": [
+          {
+            "type": "nav",
+            "css": {
+              "style": {
+                "width": "250px",
+                "padding": "2rem",
+                "borderRight": "1px solid #333"
               }
             },
+            "placement": [
+              {
+                "placementName": "sidebar"
+              }
+            ]
+          },
+          {
+            "type": "div",
+            "css": {
+              "style": {
+                "flex": "1",
+                "padding": "2rem"
+              }
+            },
+            "children": [
+              {
+                "type": "div",
+                "placement": [
+                  {
+                    "placementName": "article"
+                  }
+                ]
+              },
+              {
+                "type": "button",
+                "content": "Show Comments",
+                "component": [
+                  {
+                    "target": "handlers.onLoad",
+                    "reference": "toggleCommentsButton"
+                  },
+                  {
+                    "target": "handlers.click",
+                    "reference": "showComments"
+                  }
+                ],
+                "css": {
+                  "style": {
+                    "marginTop": "2rem",
+                    "padding": "10px 20px",
+                    "background": "#42b883",
+                    "color": "white",
+                    "border": "none",
+                    "borderRadius": "4px",
+                    "cursor": "pointer",
+                    "fontSize": "1rem",
+                    "fontWeight": "bold",
+                    "width": "100%"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "footer"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "classes": [
+            "preempt-modal-placement"
+          ],
+          "cssDef": [
             {
-              "type": "button",
-              "content": "Show Comments",
-              "component": [
-                {
-                  "target": "handlers.onLoad",
-                  "reference": "toggleCommentsButton"
-                },
-                {
-                  "target": "handlers.click",
-                  "reference": "showComments"
-                }
-              ],
-              "css": {
-                "style": {
-                  "marginTop": "2rem",
-                  "padding": "10px 20px",
-                  "background": "#42b883",
-                  "color": "white",
-                  "border": "none",
-                  "borderRadius": "4px",
-                  "cursor": "pointer",
-                  "fontSize": "1rem",
-                  "fontWeight": "bold",
-                  "width": "100%"
-                }
+              "selector": ".preempt-modal-placement",
+              "styles": {
+                "position": "fixed",
+                "top": "0",
+                "left": "0",
+                "width": "100%",
+                "height": "100%",
+                "background": "rgba(0, 0, 0, 0.5)",
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "zIndex": "9999"
               }
             }
           ]
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "footer"
-        }
-      ]
-    },
+        },
+        "placement": [
+          {
+            "placementName": "modal"
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
     {
       "type": "div",
       "css": {
@@ -122,11 +160,13 @@
           "reference": "adminDashboardLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "adminLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "adminLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -141,11 +181,13 @@
           "reference": "editContentLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -160,39 +202,13 @@
           "reference": "createArticleLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
-    },
-    {
-      "type": "div",
-      "css": {
-        "classes": [
-          "preempt-modal-placement"
-        ],
-        "cssDef": [
-          {
-            "selector": ".preempt-modal-placement",
-            "styles": {
-              "position": "fixed",
-              "top": "0",
-              "left": "0",
-              "width": "100%",
-              "height": "100%",
-              "background": "rgba(0, 0, 0, 0.5)",
-              "display": "flex",
-              "justifyContent": "center",
-              "alignItems": "center",
-              "zIndex": "9999"
-            }
-          }
-        ]
-      },
-      "placement": {
-        "placementName": "modal"
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     }
   ]
 }

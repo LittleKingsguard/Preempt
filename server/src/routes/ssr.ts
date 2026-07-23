@@ -8,6 +8,7 @@ import { pgSettingSource } from "../sources/settingsSource.js";
 import { pgUserSource } from "../sources/userSource.js";
 import { Setting } from "../models/settings.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
+import { Template } from "../../../src/core/Template.js";
 import path from "path";
 import fs from "fs";
 import { authenticateToken } from "../middleware/auth.js";
@@ -48,7 +49,11 @@ async function renderAndSendHtml(res: any, contentData: any) {
     }
   }
 
-  const htmlOutput = await Supervisor.process(serverConfig, contentData.template_payload, contentData.payload, serverApi);
+  let htmlOutput = "";
+  if (serverConfig.runInstantiation) {
+    const template = new Template(contentData.template_payload);
+    htmlOutput = (await Supervisor.process(serverConfig, template, contentData.payload, serverApi)) as string || "";
+  }
 
   let html = fs.readFileSync(distPath, "utf-8");
 
@@ -70,7 +75,9 @@ async function renderAndSendHtml(res: any, contentData: any) {
 
   const headersInject = ((contentData as any).headers || "") + "\n" + payloadScript;
   html = html.replace("<!-- HEADERS_INJECT -->", headersInject);
-  html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput || ""}</div>`);
+  if (serverConfig.runInstantiation && htmlOutput) {
+    html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput}</div>`);
+  }
 
   res.send(html);
 }
@@ -204,7 +211,7 @@ router.get("/user/:username", authenticateToken, async (req, res) => {
     }
 
     const templatePath = path.join(process.cwd(), "library/templates/navSidebar/desktop_light.json");
-    const templatePayload = fs.existsSync(templatePath) ? JSON.parse(fs.readFileSync(templatePath, "utf-8")) : { type: "div", placement: { placementName: "article" } };
+    const templatePayload = fs.existsSync(templatePath) ? JSON.parse(fs.readFileSync(templatePath, "utf-8")) : { type: "div", placement: [{ placementName: "article" }] };
 
     const contentData = {
       template_payload: templatePayload,

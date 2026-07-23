@@ -1,33 +1,43 @@
 import type { PlacementConfig } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
+import { Supervisor } from "./Supervisor.js";
 
 export class Placement implements PlacementConfig {
-  public static placementArray: Placement[] = [];
-  public static sourcePlacements: Record<string, Placement[]> = {};
+  public static placementMap: Map<string, Placement[]> = new Map<string, Placement[]>();
+  public static sourcePlacements: Map<string, Placement[]> = new Map<string, Placement[]>();
 
   public static clearPlacements(): void {
-    Placement.placementArray = [];
-    Placement.sourcePlacements = {};
+    Placement.placementMap.clear();
+    Placement.sourcePlacements.clear();
   }
 
   public placementName?: string | undefined;
   public targetPlacement?: string[] | undefined;
-  public _referencingNodes?: Set<any> | undefined;
+  public _referencingNodes: Set<Node> = new Set();
   public parent: Node;
 
-  constructor(data: PlacementConfig, parent: Node) {
+  constructor(data: PlacementConfig, parent: Node, phase: number, _isInTree?: boolean) {
     this.parent = parent;
     this.placementName = data.placementName;
     this.targetPlacement = data.targetPlacement ? [...data.targetPlacement] : undefined;
-    if (data._referencingNodes) this._referencingNodes = new Set(data._referencingNodes);
+    this.append(phase);
   }
 
-  public clone(ignoreProps: string[] = [], newParent: Node): Placement {
-    return new Placement({
+  public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Placement {
+    const parentNode = newParent || this.parent;
+    const targetPhase = phase;
+    const clonedPlacement = new Placement({
       placementName: ignoreProps.includes('placementName') ? undefined : this.placementName,
-      targetPlacement: ignoreProps.includes('targetPlacement') ? undefined : this.targetPlacement,
-      _referencingNodes: ignoreProps.includes('_referencingNodes') ? undefined : (this._referencingNodes ? new Set(this._referencingNodes) : undefined)
-    }, newParent);
+      targetPlacement: ignoreProps.includes('targetPlacement') ? undefined : this.targetPlacement
+    }, parentNode, targetPhase, parentNode.isInTree);
+
+    if (!ignoreProps.includes('_referencingNodes')) {
+      for (const refNode of this._referencingNodes) {
+        clonedPlacement._referencingNodes.add(refNode.clone(ignoreProps, [], parentNode, targetPhase));
+      }
+    }
+
+    return clonedPlacement;
   }
 
   public placeInto(node: Node): void {
@@ -42,52 +52,73 @@ export class Placement implements PlacementConfig {
       current = current.parent;
     }
 
-    const clonedNode = node.clone();
+    const clonedNode = node.clone([], [], this.parent, 99);
     clonedNode.parent = this.parent;
     this.parent.invalidateChildrenCache();
 
-    if (!this._referencingNodes) this._referencingNodes = new Set();
     this._referencingNodes.add(clonedNode);
   }
 
-  public append(): void {
-    if (!this.parent) return;
+  public append(phase: number): void {
+    if (this.placementName) {
+      let list = Placement.placementMap.get(this.placementName);
+      if (!list) {
+        list = [];
+        Placement.placementMap.set(this.placementName, list);
+      }
+      if (!list.includes(this)) {
+        list.push(this);
 
-    if (this.placementName && !Placement.placementArray.includes(this)) {
-      Placement.placementArray.push(this);
-
-      const newPlacement = this.placementName;
-      const referencingPlacements = Placement.sourcePlacements[newPlacement] || [];
-      for (const ref of referencingPlacements) {
-        ref.parent.receiveNextState({}, 1);
+        if (phase === 0) {
+          const referencingPlacements = Placement.sourcePlacements.get(this.placementName) || [];
+          for (const ref of referencingPlacements) {
+            ref.parent.receiveNextState({}, 1);
+          }
+        }
       }
     }
     if (this.targetPlacement) {
       for (const target of this.targetPlacement) {
-        if (!Placement.sourcePlacements[target]) {
-          Placement.sourcePlacements[target] = [];
+        let list = Placement.sourcePlacements.get(target);
+        if (!list) {
+          list = [];
+          Placement.sourcePlacements.set(target, list);
         }
-        if (!Placement.sourcePlacements[target].includes(this)) {
-          Placement.sourcePlacements[target].push(this);
+        if (!list.includes(this)) {
+          list.push(this);
         }
+      }
+      if (phase === 0) {
+        Supervisor.emitToPhase(this, this.parent, {}, 1); // Emit to PlacementWorker (Phase 1)
       }
     }
   }
 
   public delete(): void {
-    if (this.parent) {
-      const pIndex = Placement.placementArray.indexOf(this);
-      if (pIndex > -1) {
-        Placement.placementArray.splice(pIndex, 1);
-      }
-    }
-
     if (this.placementName) {
-      const referencingPlacements = Placement.sourcePlacements[this.placementName] || [];
+      const list = Placement.placementMap.get(this.placementName);
+      if (list) {
+        const idx = list.indexOf(this);
+        if (idx > -1) list.splice(idx, 1);
+        if (list.length === 0) Placement.placementMap.delete(this.placementName);
+      }
+
+      const referencingPlacements = Placement.sourcePlacements.get(this.placementName) || [];
       for (const ref of referencingPlacements) {
         ref.parent.receiveNextState({}, 1);
       }
-      delete Placement.sourcePlacements[this.placementName];
+      Placement.sourcePlacements.delete(this.placementName);
+    }
+
+    if (this.targetPlacement) {
+      for (const target of this.targetPlacement) {
+        const list = Placement.sourcePlacements.get(target);
+        if (list) {
+          const idx = list.indexOf(this);
+          if (idx > -1) list.splice(idx, 1);
+          if (list.length === 0) Placement.sourcePlacements.delete(target);
+        }
+      }
     }
 
     if (this._referencingNodes) {

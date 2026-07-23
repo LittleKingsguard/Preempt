@@ -43,7 +43,7 @@ async (event, context) => {
 
     const detailNode = {
       type: "div",
-      placement: { targetPlacement: ["modal"] },
+      placement: [{ targetPlacement: ["modal"] }],
       component: [{ reference: "editorDetailPane", target: "type" }]
     };
     

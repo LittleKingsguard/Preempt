@@ -8,7 +8,6 @@ export interface CssDef {
 export interface PlacementConfig {
   placementName?: string | undefined;
   targetPlacement?: string[] | undefined;
-  _referencingNodes?: Set<any> | undefined;
 }
 
 export interface HandlerDef {
@@ -22,15 +21,12 @@ export interface ComponentBinding {
   reference: string;
   target?: string | undefined;
   value?: string | HandlerDef | NodeData | NodeData[] | null | undefined;
-  _referencingNodes?: Set<any> | undefined;
-  _instantiatedNodes?: any[] | undefined;
-  _clonedChildren?: any[] | undefined;
-  _appendedContent?: string | undefined;
 }
 export interface NodeVersion {
   name?: string | undefined;
   timestamp: number;
-  content?: string | NodeData | NodeData[] | undefined;
+  content?: string | undefined;
+  children?: NodeData[] | undefined;
   props?: Record<string, any> | undefined;
   component?: ComponentBinding[] | undefined;
   css?: {
@@ -46,9 +42,10 @@ export interface NodeData {
   type: string;
   placement?: PlacementConfig[] | undefined;
   component?: ComponentBinding[] | undefined;
-  content?: string | NodeData | NodeData[] | undefined;
+  content?: string | undefined;
+  children?: NodeData[] | undefined;
   props?: Record<string, any> | undefined;
-  handlers?: Record<string, string | HandlerDef> | undefined;
+  handlers?: HandlerDef[] | undefined;
   css?: {
     id?: string | undefined;
     classes?: string[] | undefined;
@@ -57,6 +54,12 @@ export interface NodeData {
   } | undefined;
   versions?: NodeVersion[] | undefined;
   node?: any | undefined;
+}
+
+export interface TemplateData {
+  root: NodeData;
+  children?: NodeData[] | undefined;
+  component?: ComponentBinding[] | undefined;
 }
 
 export interface UserData {
@@ -83,6 +86,7 @@ export interface NodeQuery {
   handlers?: Record<string, string> | undefined;
   style?: Record<string, string> | undefined;
   components?: { target?: string; reference?: string }[] | undefined;
+  hasNonTypeTargetComponents?: boolean | undefined;
   format?: string | undefined;
 }
 

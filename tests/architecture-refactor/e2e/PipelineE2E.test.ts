@@ -62,9 +62,9 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
     // We attach a crashing lifecycle handler to the template
     const templateData = { 
       type: 'div',
-      handlers: {
-        afterAssembly: 'nonExistentVar.foo()' // Will crash
-      }
+      handlers: [
+        { name: 'afterAssembly', phase: 'afterAssembly', body: 'nonExistentVar.foo()' }
+      ]
     };
     
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

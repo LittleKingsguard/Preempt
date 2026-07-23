@@ -10,7 +10,7 @@ describe('SSRRenderingWorker', () => {
       props: { 'data-test': 'hello', role: 'button' },
       css: { id: 'container', classes: ['flex', 'bold'], style: { display: 'flex', color: 'red' } },
       content: 'Click Me'
-    });
+    }, null, 0);
 
     const html = SSRRenderingWorker.renderToString(node);
 
@@ -27,7 +27,7 @@ describe('SSRRenderingWorker', () => {
     const node = new Node({
       type: 'div',
       props: { 'data-malicious': 'this has "quotes" inside' }
-    });
+    }, null, 0);
 
     const html = SSRRenderingWorker.renderToString(node);
     
@@ -38,7 +38,7 @@ describe('SSRRenderingWorker', () => {
     const node = new Node({
       type: 'div',
       content: '<script>alert("hacked")</script>'
-    });
+    }, null, 0);
 
     const html = SSRRenderingWorker.renderToString(node);
     
@@ -48,8 +48,8 @@ describe('SSRRenderingWorker', () => {
   });
 
   it('handles HTML5 void elements without generating closing tags', () => {
-    const imgNode = new Node({ type: 'img', props: { src: 'test.png', alt: 'test image' } });
-    const inputNode = new Node({ type: 'input', props: { type: 'text' } });
+    const imgNode = new Node({ type: 'img', props: { src: 'test.png', alt: 'test image' } }, null, 0);
+    const inputNode = new Node({ type: 'input', props: { type: 'text' } }, null, 0);
 
     const imgHtml = SSRRenderingWorker.renderToString(imgNode);
     const inputHtml = SSRRenderingWorker.renderToString(inputNode);
@@ -61,10 +61,10 @@ describe('SSRRenderingWorker', () => {
   });
 
   it('recursively serializes deep trees', () => {
-    const root = new Node({ type: 'main' });
-    const child1 = new Node({ type: 'header', content: 'Header' }, root);
-    const child2 = new Node({ type: 'section' }, root);
-    const subChild = new Node({ type: 'p', content: 'Paragraph' }, child2);
+    const root = new Node({ type: 'main' }, null, 0);
+    const child1 = new Node({ type: 'header', content: 'Header' }, root, 0);
+    const child2 = new Node({ type: 'section' }, root, 0);
+    const subChild = new Node({ type: 'p', content: 'Paragraph' }, child2, 0);
     
     root.children = [child1, child2];
     child2.children = [subChild];

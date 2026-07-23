@@ -77,7 +77,7 @@
       } else if (propPath === "css.classes") {
         context.clientAPI.modifyNode({ css: { ...node.data.css, classes: result } }, node, undefined, false);
       } else if (propPath === "placement.targetPlacement") {
-        context.clientAPI.modifyNode({ placement: { ...node.data.placement, targetPlacement: result } }, node, undefined, false);
+        context.clientAPI.modifyNode({ placement: [{ ...((node.data.placement && node.data.placement[0]) || {}), targetPlacement: result }] }, node, undefined, false);
       } else {
         context.clientAPI.modifyNode({ [propPath]: result }, node, undefined, false);
       }

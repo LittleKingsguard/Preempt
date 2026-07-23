@@ -2,13 +2,32 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
-import { StyleNode } from "../StyleNode.js";
-import { clientAPI } from "../ClientAPI.js";
-import { CloneUtils } from "../utils/CloneUtils.js";
-import { Css } from "../Css.js";
 import { Handler } from "../Handler.js";
+import { Placement } from "../Placement.js";
+
+import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
+
+import { SlotAssemblyWorker } from "./SlotAssemblyWorker.js";
 
 export class ComponentAssemblyWorker extends BaseWorker {
+  public readonly phase = 2;
+
+  public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
+    if (!Supervisor.instance || !Supervisor.instance.componentAssemblyWorker) return;
+    const isMatch = (n: Node) => {
+      const hasTypeComponent = (n.targetComponents && n.targetComponents.has("type")) ||
+        (n.component && n.component.some(c => c.target === "type"));
+      const hasHandlers = n.handlers && n.handlers.some(h => h.phase === "beforeAssembly" || h.phase === "afterAssembly");
+      return Boolean(hasTypeComponent || hasHandlers);
+    };
+    const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
+    for (const match of matchingNodes) {
+      if (match.isInTree && match.lastCompletedPhase !== 2) {
+        Supervisor.instance.componentAssemblyWorker.push(match, rollbackState);
+      }
+    }
+  }
+
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     node.executeHandlers("beforeAssembly", { supervisor: this.supervisor }, false);
@@ -18,13 +37,11 @@ export class ComponentAssemblyWorker extends BaseWorker {
 
     const typeComponent = node.targetComponents.get("type");
     if (typeComponent) {
-
-      let newCss = node.css ? node.css.clone() : new Css();
-      let newProps = node.props ? CloneUtils.deepClone(node.props) : {};
+      typeComponent.rollback = node.clone(['parent', 'children', '_childrenCache', 'element'], [], null, 99);
       let newHandlers: Record<string, Handler> = {};
       if (node.handlers) {
         for (const [k, v] of Object.entries(node.handlers)) {
-          newHandlers[k] = v.clone();
+          newHandlers[k] = v.clone(node, node.lastCompletedPhase || 0);
         }
       }
       let newSourceComponents = new Map(node.sourceComponents);
@@ -45,56 +62,51 @@ export class ComponentAssemblyWorker extends BaseWorker {
             node.type = d;
           }
         } else {
-          const instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
-          if (instantiatedNode) {
-            if (instantiatedNode.type) node.type = instantiatedNode.type;
+          const componentRootNode = (resolvedBinding && resolvedBinding._instantiatedNodes && resolvedBinding._instantiatedNodes.length > 0)
+            ? resolvedBinding._instantiatedNodes[0]
+            : null;
 
-            for (const child of instantiatedNode.children) {
-              const clonedChild = child.clone([], ['element', '_referencingNodes']);
-              clonedChild.parent = node;
-              node.nativeChildren.push(clonedChild);
-              node.invalidateChildrenCache();
+          if (componentRootNode) {
+            if (componentRootNode.type) node.type = componentRootNode.type;
 
-              const emitTree = (n: Node) => {
-                if (n.component) n.setComponents(n.component);
-                Supervisor.emitToPhase(n, {}, 2);
-                if (n.children) {
-                  for (const c of n.children) emitTree(c);
-                }
-              };
-              emitTree(clonedChild);
-            }
-
-            if (instantiatedNode.content !== undefined) {
-              // TODO: Implementing proper content combination logic for ContentPayload objects
-              newContent = instantiatedNode.content.clone();
-            }
-
-            if (instantiatedNode.css) {
-              if (instantiatedNode.css.style) newCss.style = { ...newCss.style, ...instantiatedNode.css.style };
-              if (instantiatedNode.css.classes) newCss.classes = [...new Set([...(newCss.classes || []), ...instantiatedNode.css.classes])];
-              if (instantiatedNode.css.styleNodes && instantiatedNode.css.styleNodes.length > 0) {
-                for (const sNode of instantiatedNode.css.styleNodes) {
-                  newCss.styleNodes.push(new StyleNode(CloneUtils.deepClone(sNode.data), node));
-                }
+            // Clone children explicitly from componentRootNode.nativeChildren
+            if (componentRootNode.nativeChildren && componentRootNode.nativeChildren.length > 0) {
+              for (const child of componentRootNode.nativeChildren) {
+                const clonedChild = child.clone([], [], node, this.phase);
+                node.nativeChildren.push(clonedChild);
+                node.invalidateChildrenCache();
               }
-              node.css = newCss;
             }
 
-            if (instantiatedNode.props) {
-              newProps = { ...newProps, ...instantiatedNode.props };
-              node.props = newProps;
+            if (componentRootNode.content !== undefined) {
+              newContent = componentRootNode.content;
             }
-            if (instantiatedNode.handlers) {
-              for (const [k, v] of Object.entries(instantiatedNode.handlers)) {
-                newHandlers[k] = (v as Handler).clone();
+
+            if (componentRootNode.css) {
+              node.css = componentRootNode.css.clone([], node);
+            }
+
+            if (componentRootNode.props) {
+              node.props = componentRootNode.props.clone([], node);
+            }
+
+            if (componentRootNode.handlers && Array.isArray(componentRootNode.handlers)) {
+              if (!node.handlers) node.handlers = [];
+              for (const h of componentRootNode.handlers) {
+                node.handlers.push(h.clone(node, this.phase));
               }
-              node.handlers = newHandlers;
             }
 
-            if (instantiatedNode.sourceComponents.size > 0 || instantiatedNode.targetComponents.size > 0) {
-              for (const [k, v] of instantiatedNode.sourceComponents) newSourceComponents.set(k, v);
-              for (const [k, v] of instantiatedNode.targetComponents) {
+            if (componentRootNode.placement && Array.isArray(componentRootNode.placement)) {
+              const clonedPlacements = componentRootNode.placement.map((p: Placement) => p.clone([], node, this.phase));
+              node.placement = clonedPlacements;
+            }
+
+            const initialComponentCount = (node.component ? node.component.length : 0);
+
+            if (componentRootNode.sourceComponents.size > 0 || componentRootNode.targetComponents.size > 0) {
+              for (const [k, v] of componentRootNode.sourceComponents) newSourceComponents.set(k, v);
+              for (const [k, v] of componentRootNode.targetComponents) {
                 if (!newTargetComponents.has(k) || newTargetComponents.get(k) !== v) {
                   newTargetComponents.set(k, v);
                 }
@@ -102,24 +114,26 @@ export class ComponentAssemblyWorker extends BaseWorker {
               node.setComponents([
                 ...Array.from(newSourceComponents.values()),
                 ...Array.from(newTargetComponents.values())
-              ]);
+              ], 2);
+            }
+
+            const finalComponentCount = (node.component ? node.component.length : 0);
+            if (finalComponentCount > initialComponentCount || (componentRootNode.targetComponents && componentRootNode.targetComponents.size > 0)) {
+              SlotAssemblyWorker.emitTo(node, _rollbackState || {}, false);
             }
           }
         }
       }
 
-
       if (newContent !== node.content) {
         node.content = newContent;
       }
     }
-
-    // afterAssembly moved to SlotAssemblyWorker
+    node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 2;
-    Supervisor.emitToPhase(node, _rollbackState || {}, 3);
 
     // Cascade updates to referencing nodes
     if (_rollbackState) {

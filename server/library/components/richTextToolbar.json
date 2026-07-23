@@ -6,7 +6,7 @@
       { "selector": ".rich-text-toolbar", "styles": { "display": "flex", "gap": "10px", "padding": "10px", "borderBottom": "1px solid #ccc", "background": "#f9f9f9", "flexWrap": "wrap" } }
     ]
   },
-  "content": [
+  "children": [
     { "type": "button", "content": "Bold", "component": [{"target": "handlers.click", "reference": "applyBold"}], "css": {"style": {"fontWeight": "bold"}} },
     { "type": "button", "content": "Italic", "component": [{"target": "handlers.click", "reference": "applyItalic"}], "css": {"style": {"fontStyle": "italic"}} },
     { "type": "button", "content": "Heading", "component": [{"target": "handlers.click", "reference": "applyHeading"}] },

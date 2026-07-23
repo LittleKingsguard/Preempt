@@ -13,7 +13,7 @@
   "component": [
     {"target": "handlers.afterAssembly", "reference": "AuthInitHandler"}
   ],
-  "content": [
+  "children": [
     {
       "type": "button",
       "content": "Sign In / Profile",
@@ -23,7 +23,7 @@
     {
       "type": "div",
       "css": { "classes": ["dropdown-menu"] },
-      "content": [
+      "children": [
         { "type": "a", "props": { "href": "/profile" }, "content": "Profile", "css": { "classes": ["dropdown-link"] } },
         { "type": "a", "props": { "href": "/inbox" }, "content": "Messages", "css": { "classes": ["dropdown-link"] } },
         { "type": "button", "content": "Logout", "css": { "classes": ["dropdown-btn-danger"] }, "component": [{"target": "handlers.click", "reference": "LogoutHandler"}] }

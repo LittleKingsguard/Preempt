@@ -1,15 +1,88 @@
 {
   "type": "div",
-  "component": [{"target": "handlers.onLoad", "reference": "fetchMessageThread"}],
-  "content": [
-    { "type": "button", "content": "Back to Inbox", "component": [{"target": "handlers.click", "reference": "backToInbox"}], "css": { "style": { "marginBottom": "1rem", "padding": "5px 10px", "cursor": "pointer" } } },
-    { "type": "div", "props": { "id": "thread-messages" }, "placement": { "placementName": "threadMessages" }, "css": { "style": { "height": "300px", "overflowY": "auto", "border": "1px solid #ccc", "padding": "1rem", "marginBottom": "1rem" } } },
+  "component": [
+    {
+      "target": "handlers.onLoad",
+      "reference": "fetchMessageThread"
+    }
+  ],
+  "children": [
+    {
+      "type": "button",
+      "content": "Back to Inbox",
+      "component": [
+        {
+          "target": "handlers.click",
+          "reference": "backToInbox"
+        }
+      ],
+      "css": {
+        "style": {
+          "marginBottom": "1rem",
+          "padding": "5px 10px",
+          "cursor": "pointer"
+        }
+      }
+    },
     {
       "type": "div",
-      "css": { "style": { "display": "flex", "gap": "10px" } },
-      "content": [
-        { "type": "input", "props": { "id": "new-message-input", "type": "text", "placeholder": "Type a message..." }, "css": { "style": { "flex": "1", "padding": "0.5rem" } } },
-        { "type": "button", "content": "Send", "component": [{"target": "handlers.click", "reference": "postMessage"}], "css": { "style": { "padding": "0.5rem 1rem", "cursor": "pointer" } } }
+      "props": {
+        "id": "thread-messages"
+      },
+      "placement": [
+        {
+          "placementName": "threadMessages"
+        }
+      ],
+      "css": {
+        "style": {
+          "height": "300px",
+          "overflowY": "auto",
+          "border": "1px solid #ccc",
+          "padding": "1rem",
+          "marginBottom": "1rem"
+        }
+      }
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "flex",
+          "gap": "10px"
+        }
+      },
+      "children": [
+        {
+          "type": "input",
+          "props": {
+            "id": "new-message-input",
+            "type": "text",
+            "placeholder": "Type a message..."
+          },
+          "css": {
+            "style": {
+              "flex": "1",
+              "padding": "0.5rem"
+            }
+          }
+        },
+        {
+          "type": "button",
+          "content": "Send",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "postMessage"
+            }
+          ],
+          "css": {
+            "style": {
+              "padding": "0.5rem 1rem",
+              "cursor": "pointer"
+            }
+          }
+        }
       ]
     }
   ]

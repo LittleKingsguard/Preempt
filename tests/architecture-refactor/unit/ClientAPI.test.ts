@@ -7,7 +7,7 @@ describe('ClientAPI', () => {
   let node;
 
   beforeEach(() => {
-    node = new Node({ type: 'div', props: { class: 'old' } });
+    node = new Node({ type: 'div', props: { class: 'old' } }, null, 0);
     node.receiveNextState = vi.fn();
   });
 

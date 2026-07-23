@@ -13,7 +13,7 @@ describe('Integration: Atomic Rendering Pipeline', () => {
   });
 
   it('Scenario: SSR to string + JSON hydration seamlessly', async () => {
-    const templateData = { type: 'div', props: { id: 'app' }, placement: 'root' };
+    const templateData = { type: 'div', props: { id: 'app' }, placement: [{ placementName: 'root' }] };
     const contentPayload = { props: { class: 'hydrated' } };
     
     // Simulate SSR Run
@@ -46,7 +46,7 @@ describe('Integration: Atomic Rendering Pipeline', () => {
     const templateData = { 
       type: 'div', 
       props: { id: 'layout' }, 
-      content: [{ type: 'main', targetPlacements: ['content'] }] 
+      content: [{ type: 'main', placement: [{ targetPlacement: ['content'] }] }] 
     };
     
     await Supervisor.process({ 
@@ -57,7 +57,7 @@ describe('Integration: Atomic Rendering Pipeline', () => {
     }, templateData, undefined);
     
     const rootNode = Supervisor.getRootNode();
-    const mainNode = rootNode?.children[0];
+    const mainNode = rootNode?.children[0]?.children[0] || rootNode?.children[0];
     expect(mainNode?.data.type).toBe('main');
 
     // 2. Fetch editor payload (Edit Mode enabled)

@@ -53,7 +53,7 @@ function compileCommentsToContent(commentRows: any[], defaultCommentComp: any): 
 
     return {
       ...defaultCommentComp,
-      placement: targetPlacement.length > 0 ? { targetPlacement } : undefined,
+      placement: targetPlacement.length > 0 ? [{ targetPlacement }] : undefined,
       component: [
         { reference: 'commentAuthor', value: commentRow.author_id },
         { reference: 'commentDate', value: new Date(commentRow.created_at).toISOString() },

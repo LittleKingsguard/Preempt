@@ -10,8 +10,8 @@ describe('ComponentAssemblyWorker', () => {
 
   beforeEach(() => {
     worker = new ComponentAssemblyWorker();
-    nodeA = new Node({ type: 'div', props: { someProp: 'value' } });
-    nodeB = new Node({ type: 'span' });
+    nodeA = new Node({ type: 'div', props: { someProp: 'value' } }, null, 0);
+    nodeB = new Node({ type: 'span' }, null, 0);
   });
 
   it('uses a Map for its queue and intercepts duplicates to preserve the original RollbackState', async () => {
@@ -80,7 +80,7 @@ describe('ComponentAssemblyWorker', () => {
     nodeA.data.props = { class: 'base-class' };
 
     // nodeB and nodeC are instances of the component
-    const nodeC = new Node({ type: 'MasterComponent' });
+    const nodeC = new Node({ type: 'MasterComponent' }, null, 0);
     nodeA.data.type = 'MasterComponent';
     nodeA.type = 'MasterComponent';
     nodeB.data.type = 'MasterComponent';

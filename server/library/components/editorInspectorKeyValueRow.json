@@ -1,7 +1,7 @@
 {
   "type": "div",
   "css": { "classes": ["inspector-field-row"] },
-  "content": [
+  "children": [
     { "type": "input", "props": { "placeholder": "key" }, "css": { "classes": ["inspector-input", "inspector-key"] }, "component": [{"reference": "keyRef", "target": "props.inputKey"}, {"reference": "keyVal", "target": "content"}] },
     { "type": "input", "props": { "placeholder": "value" }, "css": { "classes": ["inspector-input", "inspector-value"] }, "component": [{"reference": "valRef", "target": "props.inputKey"}, {"reference": "valVal", "target": "content"}] }
   ]

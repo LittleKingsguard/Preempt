@@ -12,7 +12,7 @@
         ]
     },
     "type": "div",
-    "content": [
+    "children": [
         {
             "css": {
                 "style": {
@@ -22,7 +22,7 @@
                 }
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "button",
                     "props": {
@@ -61,13 +61,13 @@
                 ]
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "form",
                     "props": {
                         "action": "#"
                     },
-                    "content": [
+                    "children": [
                         {
                             "css": {
                                 "style": {
@@ -140,13 +140,13 @@
                 ]
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "form",
                     "props": {
                         "action": "#"
                     },
-                    "content": [
+                    "children": [
                         {
                             "css": {
                                 "style": {
@@ -222,7 +222,7 @@
                 ]
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "h3",
                     "content": "Welcome"
@@ -249,13 +249,13 @@
                 ]
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "form",
                     "props": {
                         "action": "#"
                     },
-                    "content": [
+                    "children": [
                         {
                             "css": {
                                 "style": {
@@ -312,13 +312,13 @@
                 ]
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "type": "form",
                     "props": {
                         "action": "#"
                     },
-                    "content": [
+                    "children": [
                         {
                             "css": {
                                 "style": {
@@ -373,7 +373,7 @@
                 }
             },
             "type": "div",
-            "content": [
+            "children": [
                 {
                     "css": {
                         "style": {
@@ -405,7 +405,7 @@
                         "action": "#",
                         "data-handler": "VerifyEmailHandler"
                     },
-                    "content": [
+                    "children": [
                         {
                             "type": "input",
                             "props": {

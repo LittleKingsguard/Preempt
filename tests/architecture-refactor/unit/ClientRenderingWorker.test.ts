@@ -15,7 +15,7 @@ describe('ClientRenderingWorker', () => {
     // Save original document
     vi.stubGlobal('document', undefined);
 
-    const node = new Node({ type: 'div', props: { id: 'test' } });
+    const node = new Node({ type: 'div', props: { id: 'test' } }, null, 0);
     
     // Simulate what happens in a NodeJS environment
     // Assuming the static render method is exposed for testing
@@ -34,7 +34,7 @@ describe('ClientRenderingWorker', () => {
       props: { 'data-test': 'value' },
       css: { id: 'my-span', classes: ['foo', 'bar'], style: { color: 'red' } },
       content: 'Hello World'
-    });
+    }, null, 0);
 
     const el = ClientRenderingWorker.render(node);
 
@@ -52,9 +52,9 @@ describe('ClientRenderingWorker', () => {
   });
 
   it('constructs a DOM tree that mirrors the Node children tree', () => {
-    const rootNode = new Node({ type: 'div' });
-    const childNode1 = new Node({ type: 'p', content: 'Child 1' }, rootNode);
-    const childNode2 = new Node({ type: 'span', content: 'Child 2' }, rootNode);
+    const rootNode = new Node({ type: 'div' }, null, 0);
+    const childNode1 = new Node({ type: 'p', content: 'Child 1' }, rootNode, 0);
+    const childNode2 = new Node({ type: 'span', content: 'Child 2' }, rootNode, 0);
     rootNode.children = [childNode1, childNode2];
 
     const rootEl = ClientRenderingWorker.render(rootNode);
@@ -67,8 +67,8 @@ describe('ClientRenderingWorker', () => {
   });
 
   it('cleans up old unneeded child elements when nodes are removed', () => {
-    const rootNode = new Node({ type: 'div' });
-    const childNode1 = new Node({ type: 'p', content: 'Child 1' }, rootNode);
+    const rootNode = new Node({ type: 'div' }, null, 0);
+    const childNode1 = new Node({ type: 'p', content: 'Child 1' }, rootNode, 0);
     rootNode.children = [childNode1];
 
     const rootEl = ClientRenderingWorker.render(rootNode);
@@ -84,7 +84,7 @@ describe('ClientRenderingWorker', () => {
   });
   
   it('updates an existing element rather than recreating it if the tag matches', () => {
-    const node = new Node({ type: 'div', props: { class: 'old' } });
+    const node = new Node({ type: 'div', props: { class: 'old' } }, null, 0);
     const el1 = ClientRenderingWorker.render(node);
     
     // Modify node

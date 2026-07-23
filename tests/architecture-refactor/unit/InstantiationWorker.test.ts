@@ -9,7 +9,7 @@ describe('InstantiationWorker', () => {
 
   beforeEach(() => {
     worker = new InstantiationWorker();
-    node = new Node({ type: 'div' });
+    node = new Node({ type: 'div' }, null, 0);
     global.Supervisor = { emitToPhase: vi.fn() };
   });
 

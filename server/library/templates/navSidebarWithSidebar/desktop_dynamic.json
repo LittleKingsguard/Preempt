@@ -1,162 +1,202 @@
 {
-  "type": "div",
-  "css": {
-    "classes": [
-      "nav-sidebar-double-desktop"
-    ],
-    "cssDef": [
-      {
-        "selector": ".nav-sidebar-double-desktop",
-        "styles": {
-          "background": "#ffffff",
-          "color": "#333333",
-          "minHeight": "100vh",
-          "display": "flex",
-          "flexDirection": "column"
-        }
-      },
-      {
-        "selector": ".sidebar-left",
-        "styles": {
-          "width": "200px",
-          "padding": "1.5rem",
-          "borderRight": "1px solid #eaeaea"
-        }
-      },
-      {
-        "selector": ".sidebar-right",
-        "styles": {
-          "width": "250px",
-          "padding": "1.5rem",
-          "borderLeft": "1px solid #eaeaea"
-        }
-      },
-      {
-        "selector": "@media (prefers-color-scheme: dark)",
-        "styles": {
-          ".nav-sidebar-double-desktop": {
-            "background": "#121212",
-            "color": "#e0e0e0"
-          },
-          ".sidebar-left": {
-            "borderRight": "1px solid #333"
-          },
-          ".sidebar-right": {
-            "borderLeft": "1px solid #333"
-          }
-        }
-      }
-    ]
-  },
-  "content": [
-    {
-      "type": "div",
-      "component": [
+  "root": {
+    "type": "div",
+    "css": {
+      "classes": [
+        "nav-sidebar-double-desktop"
+      ],
+      "cssDef": [
         {
-          "target": "content",
-          "reference": "navBar"
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "header"
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "css": {
-        "style": {
-          "display": "flex",
-          "flex": "1",
-          "maxWidth": "1400px",
-          "margin": "0 auto",
-          "width": "100%"
-        }
-      },
-      "content": [
-        {
-          "type": "nav",
-          "css": {
-            "classes": [
-              "sidebar-left"
-            ]
-          },
-          "placement": {
-            "placementName": "sidebar_left"
+          "selector": ".nav-sidebar-double-desktop",
+          "styles": {
+            "background": "#ffffff",
+            "color": "#333333",
+            "minHeight": "100vh",
+            "display": "flex",
+            "flexDirection": "column"
           }
         },
         {
-          "type": "div",
-          "css": {
-            "style": {
-              "flex": "1",
-              "padding": "2rem"
+          "selector": ".sidebar-left",
+          "styles": {
+            "width": "200px",
+            "padding": "1.5rem",
+            "borderRight": "1px solid #eaeaea"
+          }
+        },
+        {
+          "selector": ".sidebar-right",
+          "styles": {
+            "width": "250px",
+            "padding": "1.5rem",
+            "borderLeft": "1px solid #eaeaea"
+          }
+        },
+        {
+          "selector": "@media (prefers-color-scheme: dark)",
+          "styles": {
+            ".nav-sidebar-double-desktop": {
+              "background": "#121212",
+              "color": "#e0e0e0"
+            },
+            ".sidebar-left": {
+              "borderRight": "1px solid #333"
+            },
+            ".sidebar-right": {
+              "borderLeft": "1px solid #333"
             }
+          }
+        }
+      ]
+    },
+    "children": [
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "navBar"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "header"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "style": {
+            "display": "flex",
+            "flex": "1",
+            "maxWidth": "1400px",
+            "margin": "0 auto",
+            "width": "100%"
+          }
+        },
+        "children": [
+          {
+            "type": "nav",
+            "css": {
+              "classes": [
+                "sidebar-left"
+              ]
+            },
+            "placement": [
+              {
+                "placementName": "sidebar_left"
+              }
+            ]
           },
-          "content": [
-            {
-              "type": "div",
-              "placement": {
-                "placementName": "article"
+          {
+            "type": "div",
+            "css": {
+              "style": {
+                "flex": "1",
+                "padding": "2rem"
               }
             },
+            "children": [
+              {
+                "type": "div",
+                "placement": [
+                  {
+                    "placementName": "article"
+                  }
+                ]
+              },
+              {
+                "type": "button",
+                "content": "Show Comments",
+                "component": [
+                  {
+                    "target": "handlers.onLoad",
+                    "reference": "toggleCommentsButton"
+                  },
+                  {
+                    "target": "handlers.click",
+                    "reference": "showComments"
+                  }
+                ],
+                "css": {
+                  "style": {
+                    "marginTop": "2rem",
+                    "padding": "10px 20px",
+                    "background": "#42b883",
+                    "color": "white",
+                    "border": "none",
+                    "borderRadius": "4px",
+                    "cursor": "pointer",
+                    "fontSize": "1rem",
+                    "fontWeight": "bold",
+                    "width": "100%"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "aside",
+            "css": {
+              "classes": [
+                "sidebar-right"
+              ]
+            },
+            "placement": [
+              {
+                "placementName": "sidebar_right"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "footer"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "classes": [
+            "preempt-modal-placement"
+          ],
+          "cssDef": [
             {
-              "type": "button",
-              "content": "Show Comments",
-              "component": [
-                {
-                  "target": "handlers.onLoad",
-                  "reference": "toggleCommentsButton"
-                },
-                {
-                  "target": "handlers.click",
-                  "reference": "showComments"
-                }
-              ],
-              "css": {
-                "style": {
-                  "marginTop": "2rem",
-                  "padding": "10px 20px",
-                  "background": "#42b883",
-                  "color": "white",
-                  "border": "none",
-                  "borderRadius": "4px",
-                  "cursor": "pointer",
-                  "fontSize": "1rem",
-                  "fontWeight": "bold",
-                  "width": "100%"
-                }
+              "selector": ".preempt-modal-placement",
+              "styles": {
+                "position": "fixed",
+                "top": "0",
+                "left": "0",
+                "width": "100%",
+                "height": "100%",
+                "background": "rgba(0, 0, 0, 0.5)",
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "zIndex": "9999"
               }
             }
           ]
         },
-        {
-          "type": "aside",
-          "css": {
-            "classes": [
-              "sidebar-right"
-            ]
-          },
-          "placement": {
-            "placementName": "sidebar_right"
+        "placement": [
+          {
+            "placementName": "modal"
           }
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "footer"
-        }
-      ]
-    },
+        ]
+      }
+    ]
+  },
+  "children": [
     {
       "type": "div",
       "css": {
@@ -170,11 +210,13 @@
           "reference": "adminDashboardLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "adminLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "adminLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -189,11 +231,13 @@
           "reference": "editContentLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -208,39 +252,13 @@
           "reference": "createArticleLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
-    },
-    {
-      "type": "div",
-      "css": {
-        "classes": [
-          "preempt-modal-placement"
-        ],
-        "cssDef": [
-          {
-            "selector": ".preempt-modal-placement",
-            "styles": {
-              "position": "fixed",
-              "top": "0",
-              "left": "0",
-              "width": "100%",
-              "height": "100%",
-              "background": "rgba(0, 0, 0, 0.5)",
-              "display": "flex",
-              "justifyContent": "center",
-              "alignItems": "center",
-              "zIndex": "9999"
-            }
-          }
-        ]
-      },
-      "placement": {
-        "placementName": "modal"
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     }
   ]
 }

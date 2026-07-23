@@ -1,6 +1,8 @@
 import { Supervisor } from "./Supervisor.js";
 import { Node } from "./Node.js";
-import type { NodeData, NodeQuery, ContentPayload, ComponentBinding } from "../types/NodeSchema.js";
+import { Props } from "./Props.js";
+import { Handler } from "./Handler.js";
+import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
 import { Placement } from "./Placement.js";
 import { Component } from "./Component.js";
 
@@ -28,15 +30,23 @@ export class ClientAPI {
   public getHandler(key: string, contextNode?: Node): Function | undefined {
     let current: Node | null | undefined = contextNode;
     while (current) {
-      if (current.handlers && current.handlers[key] && current.handlers[key].compiled) {
-        return current.handlers[key].compiled;
+      if (current.handlers && (current.handlers as any)[key] && (current.handlers as any)[key].compiled) {
+        return (current.handlers as any)[key].compiled;
       }
       
       const componentBinding = current.sourceComponents?.get(key);
-      if (componentBinding && typeof componentBinding.value === 'object' && componentBinding.value !== null && 'body' in componentBinding.value) {
-        const compiled = this.compileHandler(key, componentBinding.value.body as string);
-        if (compiled) {
-          return compiled;
+      if (componentBinding) {
+        const { resolvedValue } = componentBinding.resolveBinding();
+        if (resolvedValue) {
+          if (typeof resolvedValue === 'object' && resolvedValue !== null && 'compiled' in resolvedValue) {
+            return (resolvedValue as any).compiled;
+          }
+          if (typeof resolvedValue === 'string') {
+            const tempNode = new Node({ type: 'div' }, null, 0);
+            if (!tempNode.handlers) tempNode.handlers = [];
+            tempNode.handlers.push(new Handler({ name: key, body: resolvedValue }, tempNode, 0));
+            return this.getHandler(key, current);
+          }
         }
       }
       
@@ -78,11 +88,11 @@ export class ClientAPI {
     if (options.query.format === "content") {
       const extractPayload = (obj: any) => {
         if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-          if (obj.payload || (obj.content && !obj.type)) {
-            const { payload, content, ...rest } = obj;
+          if (obj.payload || ((obj.children || obj.content) && !obj.type)) {
+            const { payload, children, content, ...rest } = obj;
             Object.assign(combinedMetadata, rest);
             if (obj.payload) return obj.payload;
-            return obj.content;
+            return obj.children || obj.content;
           }
         }
         return obj;
@@ -99,7 +109,7 @@ export class ClientAPI {
         payloads = Array.isArray(ext) ? ext : [ext];
       }
 
-      nodes = payloads.map((item: any) => new Node(item, null));
+      nodes = payloads.map((item: any) => new Node(item, null, 0));
     } else {
       const templateJSON = JSON.stringify(options.defaultTemplate || {});
       nodes = data.map((item: any) => {
@@ -124,18 +134,16 @@ export class ClientAPI {
         } else if (Array.isArray(item)) {
           item.forEach((i: any) => parseToComponent(i));
         }
-        return new Node(nodeObj, null);
+        return new Node(nodeObj, null, 0);
       });
     }
 
     nodes.forEach((node: Node) => {
-      if (!node.data.props) node.data.props = {};
-      node.data.props.batchLabel = options.batchLabel;
-      if (!node.props) node.props = {};
+      if (!node.props) node.props = new Props({}, node);
       node.props.batchLabel = options.batchLabel;
       
       if (!node.data.placement) {
-        node.data.placement = [{ targetPlacement: [] }];
+        (node.data as any).placement = [{ targetPlacement: [] }];
       } else if (node.data.placement.length === 0) {
         node.data.placement.push({ targetPlacement: [] });
       }
@@ -147,8 +155,8 @@ export class ClientAPI {
       }
       dp0.targetPlacement.push(...options.placements);
       
-      if (!node.placement) node.placement = [new Placement({ targetPlacement: [] }, node)];
-      else if (node.placement.length === 0) node.placement.push(new Placement({ targetPlacement: [] }, node));
+      if (!node.placement) node.placement = [new Placement({ targetPlacement: [] }, node, 0)];
+      else if (node.placement.length === 0) node.placement.push(new Placement({ targetPlacement: [] }, node, 0));
       
       const nodePlacement = node.placement!;
       const np0 = nodePlacement[0]!;
@@ -231,15 +239,15 @@ export class ClientAPI {
 
       // Add handlers and inspectedNodeData to the templateData component list so they persist across reinstantiations
       if (Supervisor.instance && Supervisor.instance.templateData) {
-        const td = Supervisor.instance.templateData;
-        td.component = td.component || [];
+        const rootData = Supervisor.instance.templateData.root.data;
+        rootData.component = rootData.component || [];
         handlers.forEach((h: any) => {
-          if (!td.component!.some((c: any) => c.reference === h.name)) {
-            td.component!.push({ reference: h.name, value: h.body });
+          if (!rootData.component!.some((c: any) => c.reference === h.name)) {
+            rootData.component!.push({ reference: h.name, value: h.body });
           }
         });
-        if (!td.component!.some((c: any) => c.reference === "inspectedNodeData")) {
-          td.component!.push({ reference: "inspectedNodeData", value: "" });
+        if (!rootData.component!.some((c: any) => c.reference === "inspectedNodeData")) {
+          rootData.component!.push({ reference: "inspectedNodeData", value: "" });
         }
       }
 
@@ -248,11 +256,11 @@ export class ClientAPI {
       if (root) {
         handlers.forEach((h: any) => {
           if (!root.sourceComponents.has(h.name)) {
-            root.sourceComponents.set(h.name, new Component({ reference: h.name, value: h.body }, root));
+            root.sourceComponents.set(h.name, new Component({ reference: h.name, value: h.body }, root, 0));
           }
         });
         if (!root.sourceComponents.has("inspectedNodeData")) {
-          root.sourceComponents.set("inspectedNodeData", new Component({ reference: "inspectedNodeData", value: "" }, root));
+          root.sourceComponents.set("inspectedNodeData", new Component({ reference: "inspectedNodeData", value: "" }, root, 0));
         }
       }
 
@@ -261,20 +269,21 @@ export class ClientAPI {
           node.data = { type: node.type || "div" };
         }
         if (!node.data.handlers) {
-          node.data.handlers = {};
+          (node.data as any).handlers = {};
         }
         handlers.forEach((h: any) => {
+          const handlersMap = node.data.handlers as any;
           if (targetEvent) {
-            if (overwrite || node.data.handlers![targetEvent] === undefined) {
+            if (overwrite || handlersMap[targetEvent] === undefined) {
               console.log(`Inserting handler ${h.name} for explicit event ${targetEvent} into node`, node.data);
-              node.data.handlers![targetEvent] = { name: h.name, body: h.body };
+              handlersMap[targetEvent] = { name: h.name, body: h.body };
               if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
           } else {
             // Put raw handler body in data.handlers under its name
-            if (overwrite || node.data.handlers![h.name] === undefined) {
+            if (overwrite || handlersMap[h.name] === undefined) {
               console.log(`Inserting handler ${h.name} into node`, node.data);
-              node.data.handlers![h.name] = { name: h.name, body: h.body };
+              handlersMap[h.name] = { name: h.name, body: h.body };
               if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
 
@@ -283,9 +292,9 @@ export class ClientAPI {
             if (eventBinding && eventBinding.target) {
               eventBinding.value = { name: h.name, body: h.body };
               const eventName = eventBinding.target.substring(9);
-              if (overwrite || node.data.handlers![eventName] === undefined) {
+              if (overwrite || handlersMap[eventName] === undefined) {
                 console.log(`Inserting handler ${h.name} for event ${eventName} into node`, node.data);
-                node.data.handlers![eventName] = { name: h.name, body: h.body };
+                handlersMap[eventName] = { name: h.name, body: h.body };
                 if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
               }
             }

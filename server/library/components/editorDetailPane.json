@@ -63,11 +63,11 @@
       }
     ]
   },
-  "content": [
+  "children": [
     {
       "type": "div",
       "css": { "classes": ["editor-detail-pane-header"] },
-      "content": [
+      "children": [
         {
           "type": "h3",
           "css": { "classes": ["editor-detail-pane-title"] },
@@ -85,7 +85,7 @@
     {
       "type": "div",
       "css": { "classes": ["editor-detail-pane-actions"] },
-      "content": [
+      "children": [
         {
           "type": "button",
           "content": "Test Locally",

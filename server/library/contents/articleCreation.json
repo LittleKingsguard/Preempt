@@ -1,31 +1,118 @@
 {
   "type": "div",
-  "placement": { "targetPlacement": ["article"] },
-  "props": { "commentsAllowed": true },
-  "css": { 
-    "classes": ["article-creator-panel"],
+  "placement": [
+    {
+      "targetPlacement": [
+        "article"
+      ]
+    }
+  ],
+  "props": {
+    "commentsAllowed": true
+  },
+  "css": {
+    "classes": [
+      "article-creator-panel"
+    ],
     "cssDef": [
-      { "selector": ".article-creator-panel", "styles": { "padding": "2rem", "maxWidth": "800px", "margin": "0 auto", "fontFamily": "sans-serif" } },
-      { "selector": ".article-title", "styles": {"marginBottom": "1rem"} },
-      { "selector": ".article-editor-zone", "styles": { "minHeight": "400px", "border": "1px solid #ccc", "padding": "1rem", "marginTop": "1rem", "background": "#fff", "borderRadius": "4px", "outline": "none" } },
-      { "selector": ".article-publish-btn", "styles": { "marginTop": "1rem", "padding": "10px 20px", "background": "#42b883", "color": "#fff", "border": "none", "cursor": "pointer", "borderRadius": "4px", "fontSize": "1rem", "fontWeight": "bold" } }
+      {
+        "selector": ".article-creator-panel",
+        "styles": {
+          "padding": "2rem",
+          "maxWidth": "800px",
+          "margin": "0 auto",
+          "fontFamily": "sans-serif"
+        }
+      },
+      {
+        "selector": ".article-title",
+        "styles": {
+          "marginBottom": "1rem"
+        }
+      },
+      {
+        "selector": ".article-editor-zone",
+        "styles": {
+          "minHeight": "400px",
+          "border": "1px solid #ccc",
+          "padding": "1rem",
+          "marginTop": "1rem",
+          "background": "#fff",
+          "borderRadius": "4px",
+          "outline": "none"
+        }
+      },
+      {
+        "selector": ".article-publish-btn",
+        "styles": {
+          "marginTop": "1rem",
+          "padding": "10px 20px",
+          "background": "#42b883",
+          "color": "#fff",
+          "border": "none",
+          "cursor": "pointer",
+          "borderRadius": "4px",
+          "fontSize": "1rem",
+          "fontWeight": "bold"
+        }
+      }
     ]
   },
-  "content": [
-    { "type": "h1", "content": "Create New Article", "css": {"classes": ["article-title"]} },
-    { "type": "div", "component": [{"target": "type", "reference": "richTextToolbarComponent"}] },
-    { 
+  "children": [
+    {
+      "type": "h1",
+      "content": "Create New Article",
+      "css": {
+        "classes": [
+          "article-title"
+        ]
+      }
+    },
+    {
       "type": "div",
-      "props": { "id": "article-editor-zone", "contenteditable": "true" },
-      "css": { "classes": ["article-editor-zone"] },
+      "component": [
+        {
+          "target": "type",
+          "reference": "richTextToolbarComponent"
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "props": {
+        "id": "article-editor-zone",
+        "contenteditable": "true"
+      },
+      "css": {
+        "classes": [
+          "article-editor-zone"
+        ]
+      },
       "content": "Start typing here..."
     },
     {
       "type": "button",
       "content": "Publish Article",
-      "css": { "classes": ["article-publish-btn"] },
-      "component": [{"target": "handlers.click", "reference": "openPublishModal"}]
+      "css": {
+        "classes": [
+          "article-publish-btn"
+        ]
+      },
+      "component": [
+        {
+          "target": "handlers.click",
+          "reference": "openPublishModal"
+        }
+      ]
     },
-    { "type": "div", "component": [{"target": "type", "reference": "articlePublishModalComponent"}] }
+    {
+      "type": "div",
+      "component": [
+        {
+          "target": "type",
+          "reference": "articlePublishModalComponent"
+        }
+      ]
+    }
   ]
 }

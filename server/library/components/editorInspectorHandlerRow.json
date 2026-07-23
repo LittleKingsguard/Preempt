@@ -1,7 +1,7 @@
 {
   "type": "div",
   "css": { "classes": ["inspector-field-row"] },
-  "content": [
+  "children": [
     { "type": "input", "props": { "placeholder": "event", "data-array-key": "event" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "evtRef", "target": "props.inputKey"}, {"reference": "evtVal", "target": "content"}] },
     { "type": "input", "props": { "placeholder": "reference", "data-array-key": "reference" }, "css": { "classes": ["inspector-input"] }, "component": [{"reference": "refRef", "target": "props.inputKey"}, {"reference": "refVal", "target": "content"}] },
     { "type": "button", "content": "Edit", "props": { "data-target-type": "handler" }, "css": { "classes": ["editor-btn"] }, "component": [{"reference": "btnRef", "target": "props.data-target-ref"}, {"target": "handlers.click", "reference": "editorOpenDetailPane"}] }

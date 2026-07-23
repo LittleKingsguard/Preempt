@@ -13,7 +13,7 @@ export async function resolveEditorTemplateId(baseId: number, editorMode: string
     WHERE rt.id = $1 AND tag.name = 'editor'
     LIMIT 1
   `, [baseId]);
-  
+
   return editorTagCheck ? editorTagCheck.id : baseId;
 }
 
@@ -45,18 +45,17 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
   const handlerRows = await fetchTemplateHandlers(templateId, handlerSource, componentSource);
 
   if (handlerRows.length > 0) {
-    if (!payload.component) payload.component = [];
+    const targetPayload = payload.root || payload;
+    if (!targetPayload.component) targetPayload.component = [];
     handlerRows.forEach((h: any) => {
-      if (!validateUserRoles(user, h.approved_roles || [], h.author_id)) {
-        payload.component.push({
-          reference: h.name,
-          value: { name: h.name, body: h.body }
-        });
+      const val = !validateUserRoles(user, h.approved_roles || [], h.author_id)
+        ? { name: h.name, body: h.body }
+        : { name: h.name, body: "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');" };
+      const idx = targetPayload.component.findIndex((comp: any) => comp.reference === h.name);
+      if (idx >= 0) {
+        targetPayload.component[idx] = { reference: h.name, value: val };
       } else {
-        payload.component.push({
-          reference: h.name,
-          value: { name: h.name, body: "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');" }
-        });
+        targetPayload.component.push({ reference: h.name, value: val });
       }
     });
   }
@@ -68,20 +67,19 @@ export async function fetchTemplateComponents(templateId: number, componentSourc
 
 export async function populateTemplateComponents(payload: any, templateId: number, user: any, componentSource: IComponentSource): Promise<void> {
   const componentRows = await fetchTemplateComponents(templateId, componentSource);
-
+  console.log("populateTemplateComponents", componentRows, templateId);
   if (componentRows.length > 0) {
-    if (!payload.component) payload.component = [];
+    const targetPayload = payload.root || payload;
+    if (!targetPayload.component) targetPayload.component = [];
     componentRows.forEach((c: any) => {
-      if (!validateUserRoles(user, c.approved_roles || [], c.author_id)) {
-        payload.component.push({
-          reference: c.name,
-          value: c.payload
-        });
+      const val = !validateUserRoles(user, c.approved_roles || [], c.author_id)
+        ? c.payload
+        : { type: "div", css: { style: { display: "none" } } };
+      const idx = targetPayload.component.findIndex((comp: any) => comp.reference === c.name);
+      if (idx >= 0) {
+        targetPayload.component[idx] = { ...targetPayload.component[idx], reference: c.name, value: val };
       } else {
-        payload.component.push({
-          reference: c.name,
-          value: { type: "div", css: { style: { display: "none" } } }
-        });
+        targetPayload.component.push({ reference: c.name, value: val });
       }
     });
   }

@@ -1,15 +1,37 @@
 {
-  "tags": ["editor-tools", "structural"],
+  "tags": [
+    "editor-tools",
+    "structural"
+  ],
   "payload": {
     "type": "div",
-    "css": { "classes": ["preempt-editor-wrapper"] },
-    "placement": { "targetPlacement": ["article"] },
-    "handlers": { "stopPropagation": { "name": "stopPropagation", "event": "click", "body": "(event) => { event.stopPropagation(); }" } },
-    "content": [
+    "css": {
+      "classes": [
+        "preempt-editor-wrapper"
+      ]
+    },
+    "placement": [
+      {
+        "targetPlacement": [
+          "article"
+        ]
+      }
+    ],
+    "handlers": [
+      {
+        "name": "stopPropagation",
+        "event": "click",
+        "body": "(event) => { event.stopPropagation(); }"
+      }
+    ],
+    "children": [
       {
         "type": "div",
         "component": [
-          { "reference": "editor", "target": "type" }
+          {
+            "reference": "editor",
+            "target": "type"
+          }
         ]
       }
     ]

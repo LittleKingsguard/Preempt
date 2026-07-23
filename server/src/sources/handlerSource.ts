@@ -44,7 +44,7 @@ function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): 
   const payload = handlerRows.map(row => {
     return {
       ...defaultHandlerComp,
-      placement: { targetPlacement: [`handler-${row.id}`, "handlers"] },
+      placement: [{ targetPlacement: [`handler-${row.id}`, "handlers"] }],
       component: [
         { reference: 'handlerName', value: row.name },
         { reference: 'handlerAuthor', value: row.author_id },

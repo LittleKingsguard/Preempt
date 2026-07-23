@@ -1,9 +1,10 @@
 import { Supervisor } from './core/Supervisor'
 import { WebSocketClient } from './core/WebSocketClient'
 import { clientAPI } from './core/ClientAPI'
+import { Template } from './core/Template'
 import type { PipelineConfig } from './types/Pipeline'
 
-(window as any).Preempt = { Supervisor, WebSocketClient, clientAPI };
+(window as any).Preempt = { Supervisor, WebSocketClient, clientAPI, Template };
 const defaultConfig: PipelineConfig = {
   runInstantiation: true,
   runAssembly: true,
@@ -37,7 +38,8 @@ async function init() {
     (window as any).Preempt.contentData = data.content;
     (window as any).Preempt.pipelineConfig = pipelineConfig;
 
-    await Supervisor.process(pipelineConfig, data.template, data.content);
+    const template = new Template(data.template);
+    await Supervisor.process(pipelineConfig, template, data.content);
   } catch (err) {
     console.error("Initialization failed:", err);
     document.querySelector<HTMLDivElement>('#app')!.innerHTML = `<div>Error loading from backend: ${err}</div>`;

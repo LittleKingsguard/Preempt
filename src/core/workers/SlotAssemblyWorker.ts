@@ -1,18 +1,36 @@
 import { Node } from "../Node.js";
+import { Handler } from "../Handler.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import type { RollbackState, HandlerDef } from "../../types/NodeSchema.js";
-import { clientAPI } from "../ClientAPI.js";
 import { CloneUtils } from "../utils/CloneUtils.js";
-import { Handler } from "../Handler.js";
 import { Css } from "../Css.js";
 
 
+import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
+
 export class SlotAssemblyWorker extends BaseWorker {
+  public readonly phase = 3;
+
+  public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
+    if (!Supervisor.instance || !Supervisor.instance.slotAssemblyWorker) return;
+    const isMatch = (n: Node) => {
+      const hasSlotComponent = (n.targetComponents && Array.from(n.targetComponents.values()).some(c => c.target !== "type")) ||
+        (n.component && n.component.some(c => c.target !== "type"));
+      const hasHandlers = n.handlers && n.handlers.some(h => h.phase === "beforeAssembly" || h.phase === "afterAssembly");
+      return Boolean(hasSlotComponent || hasHandlers);
+    };
+    const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
+    for (const match of matchingNodes) {
+      if (match.isInTree && match.lastCompletedPhase !== 3) {
+        Supervisor.instance.slotAssemblyWorker.push(match, rollbackState);
+      }
+    }
+  }
+
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     // Phase 3: Slot Assembly
-    // Locks all other components (content, props, handlers, css)
 
     if (node.targetComponents.size === 0) {
       node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
@@ -31,21 +49,17 @@ export class SlotAssemblyWorker extends BaseWorker {
       return;
     }
 
-
-
-
     // Base collections that might be modified
     let newCss = node.css ? node.css.clone() : new Css();
     let newProps = node.props ? CloneUtils.deepClone(node.props) : {};
-    let newHandlers: Record<string, Handler> = {};
-    if (node.handlers) {
-      for (const [k, v] of Object.entries(node.handlers)) {
-        newHandlers[k] = v.clone();
-      }
-    }
+    let newHandlers: any = {};
 
     for (const binding of sortedComponents) {
-      if (!binding.target) continue;
+      binding.rollback = {
+        content: node.content,
+        props: CloneUtils.deepClone(node.props),
+        css: node.css ? node.css.clone() : undefined
+      };
 
       let { resolvedValue, resolvedBinding } = binding.resolveBinding();
 
@@ -59,46 +73,17 @@ export class SlotAssemblyWorker extends BaseWorker {
       } else if (typeof resolvedValue === "object" && resolvedValue !== null && binding.target.startsWith("handlers.")) {
         this.applyProperty(binding.target, resolvedValue as unknown as string | HandlerDef, node, newProps, newHandlers, newCss);
       } else if (binding.target === "content") {
-        if (Array.isArray(resolvedValue)) {
-          node.children = [];
-          for (let i = 0; i < resolvedValue.length; i++) {
-            const instantiatedNode = resolvedBinding?._instantiatedNodes?.[i];
-            if (instantiatedNode) {
-              const clonedChild = instantiatedNode.clone([], ['element', '_referencingNodes']);
-              clonedChild.parent = node;
-              node.nativeChildren.push(clonedChild);
-              node.invalidateChildrenCache();
-
-              const emitTree = (n: Node) => {
-                if (n.component) n.setComponents(n.component);
-                Supervisor.emitToPhase(n, {}, 2);
-                if (n.children) {
-                  for (const c of n.children) emitTree(c);
-                }
-              };
-              emitTree(clonedChild);
-            } else if (typeof resolvedValue[i] === "object" && resolvedValue[i] !== null) {
-              console.warn(`[SlotAssemblyWorker] Skipping raw NodeData for content slot on node ${node.css?.id}. Raw nodes must be properly instantiated into _instantiatedNodes before slot assembly.`);
-            }
-          }
-        } else if (typeof resolvedValue === "object" && resolvedValue !== null) {
+        if (Array.isArray(resolvedValue) || (typeof resolvedValue === "object" && resolvedValue !== null)) {
           node.content = undefined;
-          let instantiatedNode = resolvedBinding?._instantiatedNodes?.[0];
-          if (instantiatedNode) {
-            const clonedChild = instantiatedNode.clone([], ['element', '_referencingNodes']);
+          node.children = [];
+          const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, node.lastCompletedPhase || 0) : [];
+          for (const clonedChild of clonedChildren) {
             clonedChild.parent = node;
-            node.children = [clonedChild];
+            clonedChild.isInTree = node.isInTree;
+            node.nativeChildren.push(clonedChild);
+            node.invalidateChildrenCache();
 
-            const emitTree = (n: Node) => {
-              if (n.component) n.setComponents(n.component);
-              Supervisor.emitToPhase(n, {}, 2);
-              if (n.children) {
-                for (const c of n.children) emitTree(c);
-              }
-            };
-            emitTree(clonedChild);
-          } else {
-            console.warn(`[SlotAssemblyWorker] Skipping raw NodeData for content slot on node ${node.css?.id}. Raw nodes must be properly instantiated into _instantiatedNodes before slot assembly.`);
+            SlotAssemblyWorker.emitTo(clonedChild, _rollbackState || {}, false);
           }
         } else {
           node.content = String(resolvedValue);
@@ -109,7 +94,6 @@ export class SlotAssemblyWorker extends BaseWorker {
       }
     }
 
-    // Changes are emitted directly through onProcessSuccess
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
@@ -118,7 +102,7 @@ export class SlotAssemblyWorker extends BaseWorker {
     value: string | HandlerDef,
     node: Node,
     newProps: any,
-    newHandlers: any,
+    _newHandlers: any,
     newCss: any
   ): void {
     if (path === "content") {
@@ -130,15 +114,8 @@ export class SlotAssemblyWorker extends BaseWorker {
         node.props = newProps;
       }
     } else if (path.startsWith("handlers.")) {
-      const handlerName = path.substring(9);
-      const isDifferent = typeof value === 'string' 
-        ? node.handlers?.[handlerName]?.body !== value
-        : node.handlers?.[handlerName]?.body !== value.body || node.handlers?.[handlerName]?.name !== value.name || node.handlers?.[handlerName]?.event !== value.event;
-        
-      if (isDifferent) {
-        newHandlers[handlerName] = new Handler(value, handlerName);
-        node.handlers = newHandlers;
-      }
+      if (!node.handlers) node.handlers = [];
+      node.handlers.push(Handler.fromDef(value as any, node, node.lastCompletedPhase || 0, path));
     } else if (path.startsWith("css.style.")) {
       const styleName = path.substring(10);
       if (!newCss.style) newCss.style = {};
@@ -163,6 +140,5 @@ export class SlotAssemblyWorker extends BaseWorker {
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 3;
-    Supervisor.emitToPhase(node, _rollbackState || {}, 4);
   }
 }

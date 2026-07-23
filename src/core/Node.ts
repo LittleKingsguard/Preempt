@@ -1,13 +1,12 @@
 import type { NodeData, NodeQuery, ComponentBinding, NextState, RollbackState } from "../types/NodeSchema.js";
-import { StyleNode } from "./StyleNode.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
-import { PlacementWorker } from "./workers/PlacementWorker.js";
 import { NodeQueryUtils } from "./utils/NodeQueryUtils.js";
 import { Component } from "./Component.js";
 import { Handler } from "./Handler.js";
 import { Css } from "./Css.js";
 import { Placement } from "./Placement.js";
+import { Props } from "./Props.js";
 
 import { CloneUtils } from "./utils/CloneUtils.js";
 
@@ -22,7 +21,16 @@ export class Node {
     "source": ["src"]
   };
 
-  public data: NodeData;
+  private _data!: NodeData;
+
+  public get data(): NodeData {
+    return this._data;
+  }
+
+  public set data(_val: NodeData) {
+    console.error("[Node] Error: 'data' property is read-only and cannot be mutated or reassigned.");
+  }
+
   public _lastValidState?: RollbackState;
 
   public nativeChildren: Node[] = [];
@@ -60,21 +68,19 @@ export class Node {
   public placement: Placement[];
   public component?: Component[] | undefined;
   public content?: string | any | undefined;
-  public props: Record<string, any> = {};
-  public handlers?: Record<string, Handler> | undefined;
+  public props: Props;
+  public handlers?: Handler[] | undefined;
   public css: Css = new Css();
   public versions?: any[] | undefined;
   public lastCompletedPhase?: number | undefined;
+  public isInTree: boolean = false;
 
   public sourceComponents: Map<string, Component> = new Map();
   public targetComponents: Map<string, Component> = new Map();
 
-
   public _attachedListeners: { eventName: string, handlerFunc: EventListener }[] = [];
 
   public static globalMetadata: any = {};
-
-
   public static idCollisions = new Map<string, number>();
 
   public static generateObjectHash(obj: any): string {
@@ -105,11 +111,11 @@ export class Node {
     return baseId;
   }
 
-  public setComponents(components: ComponentBinding[] | undefined): void {
+  public setComponents(components: ComponentBinding[] | undefined, phase: number = 0): void {
     if (components === undefined) {
       delete this.component;
     } else {
-      let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this));
+      let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this, phase, false));
       this.sourceComponents.clear();
       this.targetComponents.clear();
       filtered.forEach(c => {
@@ -126,36 +132,21 @@ export class Node {
 
       if (filtered.length > 0) {
         this.component = filtered;
-        for (const binding of this.sourceComponents.values()) {
-          if (typeof binding.value === "object" && binding.value !== null) {
-            if ('body' in binding.value) {
-              const handlerName = (binding.value as any).name || binding.reference;
-              if (!this.handlers) this.handlers = {};
-              if (!this.handlers[handlerName]) {
-                this.handlers[handlerName] = new Handler({ name: handlerName, body: (binding.value as any).body });
-              } else {
-                this.handlers[handlerName].body = (binding.value as any).body;
-              }
-            } else {
-              binding._instantiatedNodes = [];
-            }
-          }
-        }
       } else {
         delete this.component;
       }
     }
   }
 
-  constructor(data: NodeData, parent?: Node | null) {
-    this.data = data;
-    this.parent = parent ?? null;
-    this.resolveVersion();
+  constructor(data: NodeData, parent: Node | null | undefined, phase: number, isInTree: boolean = false) {
+    this._data = data;
+    this.parent = parent;
+    this.isInTree = isInTree;
 
-    this.props = CloneUtils.deepClone(this.data.props) || {};
-    this.css = new Css(this.data.css || {}, this);
+    this.props = new Props(this._data.props || {}, this);
+    this.css = new Css(this._data.css || {}, this);
     if (!this.css.id) {
-      this.css.id = this.props.id || Node.generateObjectHash(this.data);
+      this.css.id = this.props.id || Node.generateObjectHash(this._data);
     }
     if (!this.props.id) {
       this.props.id = this.css.id;
@@ -168,66 +159,35 @@ export class Node {
       }
     }
 
+    this.type = this._data.type;
 
-
-
-
-    if (this.data.type !== undefined) this.type = this.data.type;
-    else this.type = 'div';
-
-    if (this.data.content !== undefined) {
-      this.content = this.data.content as string;
+    if (typeof this._data.content === 'string') {
+      this.content = this._data.content;
     }
 
-    if (this.data.handlers) {
-      this.handlers = {};
-      for (const [k, v] of Object.entries(this.data.handlers)) {
-        this.handlers[k] = new Handler(v, k);
+    if ((phase === 0 || phase === 99) && this._data.children && Array.isArray(this._data.children)) {
+      for (const childData of this._data.children) {
+        const childNode = new Node(childData, this, phase, this.isInTree);
+        this.nativeChildren.push(childNode);
       }
     }
 
-    this.setComponents(CloneUtils.deepClone(this.data.component));
+    if (this._data.handlers) {
+      this.handlers = this._data.handlers.map(h => new Handler(h, this, phase));
+    } else {
+      this.handlers = [];
+    }
 
+    this.setComponents(this._data.component, phase);
 
-    if (this.data.placement) {
-      const placements = Array.isArray(this.data.placement) ? this.data.placement : [this.data.placement];
-      this.placement = placements.map((p: any) => new Placement(p, this));
-      this.data.placement = placements as any;
+    if (this._data.placement) {
+      this.placement = this._data.placement.map((p: any) => new Placement(p, this, phase, this.isInTree));
     } else {
       this.placement = [];
-      this.data.placement = [];
     }
 
-    this.versions = CloneUtils.deepClone(this.data.versions);
-    if (this.versions === undefined) delete this.versions;
-
-    this.resolveVersion();
-  }
-
-  private resolveVersion(): void {
-    const targetVersion = this.props?.version || Node.globalMetadata?.version;
-    if (!targetVersion || typeof targetVersion.timestamp !== 'number' || !this.versions || this.versions.length === 0) {
-      return;
-    }
-
-    const targetTimestamp = targetVersion.timestamp;
-
-    const sortedVersions = [...this.versions].sort((a, b) => b.timestamp - a.timestamp);
-    const matchedVersion = sortedVersions.find(v => v.timestamp <= targetTimestamp);
-
-    if (matchedVersion) {
-      if (matchedVersion.content !== undefined) {
-        this.content = matchedVersion.content;
-      }
-      if (matchedVersion.props !== undefined) {
-        this.props = matchedVersion.props;
-      }
-      if (matchedVersion.component !== undefined) {
-        this.setComponents(matchedVersion.component);
-      }
-      if (matchedVersion.css !== undefined) {
-        this.css = matchedVersion.css;
-      }
+    if (this.isInTree && phase <= 5) {
+      Supervisor.emitToPhase(this, this, {}, 5); // Emit to Phase 5: ValidationWorker
     }
   }
 
@@ -282,6 +242,13 @@ export class Node {
       this.css.delete();
     }
 
+    if (this.props) {
+      if ((this.props as any).delete) {
+        (this.props as any).delete();
+      }
+      delete (this as any).props;
+    }
+
     if (this.component) {
       for (const c of this.component) {
         if (c && c.delete) {
@@ -291,7 +258,7 @@ export class Node {
     }
 
     if (this.handlers) {
-      for (const h of Object.values(this.handlers)) {
+      for (const h of this.handlers) {
         if (h && h.delete) {
           h.delete();
         }
@@ -308,7 +275,7 @@ export class Node {
     const changedKeys = Object.keys(nextState);
     if (changedKeys.length === 0) {
       if (explicitPhaseId !== undefined) {
-        if (Supervisor.instance && Supervisor.instance.activeLockedPhases && Supervisor.instance.activeLockedPhases.has(explicitPhaseId)) {
+        if (Supervisor.isPhaseLocked(explicitPhaseId)) {
           console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
           return;
         }
@@ -357,7 +324,7 @@ export class Node {
 
     let targetPhase = 5; // default to Validation
     if (explicitPhaseId !== undefined) {
-      if (Supervisor.instance && Supervisor.instance.activeLockedPhases && Supervisor.instance.activeLockedPhases.has(explicitPhaseId)) {
+      if (Supervisor.isPhaseLocked(explicitPhaseId)) {
         console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
         return;
       }
@@ -375,9 +342,23 @@ export class Node {
       }
     }
 
+    if (targetPhase <= 2) {
+      for (const comp of this.targetComponents.values()) {
+        if (comp.rollback !== undefined) {
+          Object.assign(this, comp.rollback);
+        }
+      }
+    } else if (targetPhase === 3) {
+      for (const comp of this.targetComponents.values()) {
+        if (comp.target !== "type" && comp.rollback !== undefined) {
+          Object.assign(this, comp.rollback);
+        }
+      }
+    }
+
     // Snapshot state
     if (!this._lastValidState) {
-      this._lastValidState = this.clone(['content', 'children', 'nativeChildren', '_childrenCache', 'parent', 'element']);
+      this._lastValidState = this.clone(['content', 'children', 'nativeChildren', '_childrenCache', 'parent', 'element'], [], null, 99);
       this._lastValidState.nativeChildren = [...this.nativeChildren];
     }
 
@@ -399,8 +380,6 @@ export class Node {
       const worker = Supervisor.instance.getWorkerForPhase(targetPhase);
       if (worker) worker.push(this, this._lastValidState);
     }
-
-
   }
 
   public rollback(rollbackState?: RollbackState): void {
@@ -416,9 +395,6 @@ export class Node {
     }
   }
 
-
-
-
   public isMatch(query: NodeQuery | ((node: Node) => boolean)): boolean {
     return NodeQueryUtils.isMatch(this, query);
   }
@@ -431,10 +407,10 @@ export class Node {
     return NodeQueryUtils.findNode(this, query, depth);
   }
 
-  public executeHandlers(phase: string, context: any, recursive: boolean = true): void {
-    if (this.handlers) {
-      for (const handler of Object.values(this.handlers)) {
-        if (handler.phase === phase || handler.event === phase || (!handler.phase && !handler.event && handler.name === phase)) {
+  public executeHandlers(target: string, context: any, recursive: boolean = true): void {
+    if (this.handlers && Array.isArray(this.handlers)) {
+      for (const handler of this.handlers) {
+        if (handler.phase === target || handler.event === target) {
           try {
             const fullContext = {
               ...context,
@@ -445,13 +421,9 @@ export class Node {
               clientAPI,
               supervisor: Supervisor.instance
             };
-
-            if (phase === "beforeRender" && handler.name === "CheckLoginHandler") {
-              console.log("EXECUTING CheckLoginHandler! fullContext.supervisor:", !!fullContext.supervisor, "userData:", fullContext.supervisor?.userData);
-            }
             handler.execute(null, fullContext);
           } catch (err) {
-            console.error(`Failed to execute ${phase} handler on node:`, err);
+            console.error(`Failed to execute ${target} handler on node:`, err);
           }
         }
       }
@@ -460,7 +432,7 @@ export class Node {
     if (recursive && this.children && Array.isArray(this.children)) {
       for (const child of this.children) {
         if (child) {
-          child.executeHandlers(phase, context, recursive);
+          child.executeHandlers(target, context, recursive);
         }
       }
     }
@@ -505,36 +477,39 @@ export class Node {
     return cleanData(this.data);
   }
 
-  public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = []): Node {
-    const clonedData = CloneUtils.deepClone(this.data);
-    const clonedNode = new Node(clonedData);
+  public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = [], newParent: Node | null, phase: number): Node {
+    const clonedData = this.data;
+    const targetPhase = phase;
+    let targetIsInTree = false;
+    if (newParent === null) {
+      targetIsInTree = true;
+    } else {
+      targetIsInTree = newParent.isInTree;
+    }
+    const clonedNode = new Node(clonedData, newParent, targetPhase, targetIsInTree);
 
     clonedNode.type = this.type;
-
 
     if (!ignoreProps.includes('css')) {
       clonedNode.css = this.css ? this.css.clone(ignoreProps, clonedNode) : new Css({}, clonedNode);
     }
     if (!ignoreProps.includes('placement')) {
-      clonedNode.placement = this.placement ? this.placement.map(p => p.clone(ignoreProps, clonedNode)) : [];
+      clonedNode.placement = this.placement ? this.placement.map(p => p.clone(ignoreProps, clonedNode, targetPhase)) : [];
     }
     if (!ignoreProps.includes('content')) {
       clonedNode.content = this.content ? this.content : undefined;
     }
     if (!ignoreProps.includes('props')) {
-      clonedNode.props = CloneUtils.deepClone(this.props);
+      clonedNode.props = this.props ? this.props.clone(ignoreProps, clonedNode) : new Props({}, clonedNode);
     }
     if (!ignoreProps.includes('handlers')) {
-      if (this.handlers) {
-        clonedNode.handlers = {};
-        for (const [k, v] of Object.entries(this.handlers)) {
-          clonedNode.handlers[k] = v.clone();
-        }
+      if (this.handlers && Array.isArray(this.handlers)) {
+        clonedNode.handlers = this.handlers.map(h => h.clone(clonedNode, targetPhase));
       }
     }
     if (!ignoreProps.includes('component')) {
       if (this.component) {
-        clonedNode.component = this.component.map(c => c.clone(ignoreProps, clonedNode));
+        clonedNode.component = this.component.map(c => c.clone(ignoreProps, clonedNode, targetPhase));
       }
     }
 
@@ -542,11 +517,7 @@ export class Node {
 
     // clone native children
     if (!ignoreProps.includes('children') && !ignoreProps.includes('nativeChildren')) {
-      clonedNode.nativeChildren = this.nativeChildren.map(c => {
-        const clonedChild = c.clone(ignoreProps, shallowCopyProps);
-        clonedChild.parent = clonedNode;
-        return clonedChild;
-      });
+      clonedNode.nativeChildren = this.nativeChildren.map(c => c.clone(ignoreProps, shallowCopyProps, clonedNode, targetPhase));
       clonedNode.invalidateChildrenCache();
     }
 

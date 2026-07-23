@@ -52,7 +52,7 @@ function compileMessagesToContent(messageRows: any[], defaultMessageComp: any): 
 
     return {
       ...defaultMessageComp,
-      placement: targetPlacement.length > 0 ? { targetPlacement } : undefined,
+      placement: targetPlacement.length > 0 ? [{ targetPlacement }] : undefined,
       component: [
         { reference: 'messageAuthor', value: messageRow.author_id },
         { reference: 'messageDate', value: new Date(messageRow.created_at).toISOString() },

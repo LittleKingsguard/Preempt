@@ -10,11 +10,11 @@
       }
     ]
   },
-  "content": [
+  "children": [
     {
       "type": "div",
       "css": { "style": { "display": "flex", "justifyContent": "center", "gap": "20px", "marginBottom": "1rem" } },
-      "content": [
+      "children": [
         { "type": "a", "props": { "href": "/contact" }, "content": "Contact Us", "css": { "style": { "color": "inherit" } } },
         { "type": "a", "props": { "href": "/privacy" }, "content": "Privacy Policy", "css": { "style": { "color": "inherit" } } },
         { "type": "a", "props": { "href": "/terms" }, "content": "Terms of Service", "css": { "style": { "color": "inherit" } } }

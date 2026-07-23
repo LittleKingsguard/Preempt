@@ -1,6 +1,8 @@
 import type { PipelineConfig } from "../types/Pipeline.js";
 import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
+import { Template } from "./Template.js";
+import { Payload } from "./Payload.js";
 import { StyleNode } from "./StyleNode.js";
 import { InstantiationWorker } from "./workers/InstantiationWorker.js";
 import { PlacementWorker } from "./workers/PlacementWorker.js";
@@ -9,8 +11,10 @@ import { SlotAssemblyWorker } from "./workers/SlotAssemblyWorker.js";
 import { PreprocessingWorker } from "./workers/PreprocessingWorker.js";
 
 import { ValidationWorker } from "./workers/ValidationWorker.js";
-import { ClientRenderingWorker } from "./workers/ClientRenderingWorker.js";
-import { SSRRenderingWorker } from "./workers/SSRRenderingWorker.js";
+import { ClientElementCreationWorker } from "./workers/ClientElementCreationWorker.js";
+import { ClientTreeAssemblyWorker } from "./workers/ClientTreeAssemblyWorker.js";
+import { SSRElementCreationWorker } from "./workers/SSRElementCreationWorker.js";
+import { SSRTreeAssemblyWorker } from "./workers/SSRTreeAssemblyWorker.js";
 import { PostprocessingWorker } from "./workers/PostprocessingWorker.js";
 import { clientAPI } from "./ClientAPI.js";
 
@@ -26,7 +30,6 @@ export class Supervisor {
     'content': 4,
     'children': 4,
     'handlers': 4,
-    'versions': 4,
     'props': 5,
     'css': 5,
     'type': 5
@@ -44,6 +47,8 @@ export class Supervisor {
   public slotAssemblyWorker: SlotAssemblyWorker;
   public preprocessingWorker: PreprocessingWorker;
   public validationWorker: ValidationWorker;
+  public elementCreationWorker: any;
+  public treeAssemblyWorker: any;
   public renderingWorker: any;
   public postprocessingWorker: PostprocessingWorker;
 
@@ -57,19 +62,22 @@ export class Supervisor {
   }
 
   public config: PipelineConfig;
-  public rootNode: Node | null = null;
-  public contentNodes: Map<string | ContentPayload, Node[]> = new Map();
+  public get rootNode(): Node | null {
+    return this.templateData ? this.templateData.root : null;
+  }
+  public contentNodes: Map<string | ContentPayload | Template, Node[]> = new Map();
   private isMonitoring: boolean = false;
-  private mountElementId: string;
+  public mountElementId: string;
   private hasInstantiated: boolean = false;
   public userData?: UserData;
   public serverApi?: any;
-  public templateData: NodeData | null = null;
+  public templateData!: Template;
   public contentData: ContentPayload[] = [];
 
-  private constructor(config: PipelineConfig, mountElementId: string = "app") {
+  private constructor(config: PipelineConfig, templateData: Template, mountElementId: string = "app") {
     this.config = config;
     this.mountElementId = mountElementId;
+    this.templateData = templateData;
     Supervisor.instance = this;
     this.instantiationWorker = new InstantiationWorker(this);
     this.placementWorker = new PlacementWorker(this);
@@ -79,12 +87,16 @@ export class Supervisor {
     this.validationWorker = new ValidationWorker(this);
 
     if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
-      this.renderingWorker = new SSRRenderingWorker(this);
+      this.elementCreationWorker = new SSRElementCreationWorker(this);
+      this.treeAssemblyWorker = new SSRTreeAssemblyWorker(this);
     } else {
-      this.renderingWorker = new ClientRenderingWorker(this);
+      this.elementCreationWorker = new ClientElementCreationWorker(this);
+      this.treeAssemblyWorker = new ClientTreeAssemblyWorker(this);
     }
+    this.renderingWorker = this.elementCreationWorker;
 
     this.postprocessingWorker = new PostprocessingWorker(this);
+    Supervisor.flushPendingEmits();
   }
 
   public getWorkerForPhase(phaseId: number): any {
@@ -95,22 +107,52 @@ export class Supervisor {
       case 3: return this.slotAssemblyWorker;
       case 4: return this.preprocessingWorker;
       case 5: return this.validationWorker;
-      case 6: return this.renderingWorker;
-      case 7: return this.postprocessingWorker;
+      case 6: return this.elementCreationWorker;
+      case 7: return this.treeAssemblyWorker;
+      case 8: return this.postprocessingWorker;
       default: return undefined;
     }
   }
 
-  public static emitToPhase(node: Node, rollbackState: any, phaseId: number): void {
+  public static activeLockedPhases: Set<number> = new Set<number>();
+  public static pendingEmits: { caller: any; node: Node; rollbackState: any; phaseId: number }[] = [];
+
+  public static lockPhase(phaseId: number): void {
+    if (phaseId === 2) {
+      // Component assembly locks on slot completion (Phase 3 completion)
+      return;
+    }
+    Supervisor.activeLockedPhases.add(phaseId);
+    if (phaseId === 3) {
+      // Slot assembly completion also locks component assembly (Phase 2)
+      Supervisor.activeLockedPhases.add(2);
+    }
+  }
+
+  public static isPhaseLocked(phaseId: number): boolean {
+    return Supervisor.activeLockedPhases.has(phaseId);
+  }
+
+  public static emitToPhase(caller: any, node: Node, rollbackState: any, phaseId: number): void {
+    console.log(`[Supervisor.emitToPhase] Phase ${phaseId} emitted for node ${node.css?.id || 'unknown'} by:`, caller);
     if (Supervisor.instance) {
-      const worker = Supervisor.instance.getWorkerForPhase(phaseId);
-      if (worker) {
-        if (phaseId === 0 && typeof worker.pushRaw === 'function') {
-          worker.pushRaw(node.data, node);
-        } else {
+      if (!Supervisor.isPhaseLocked(phaseId)) {
+        const worker = Supervisor.instance.getWorkerForPhase(phaseId);
+        if (worker && typeof worker.push === 'function') {
           worker.push(node, rollbackState);
         }
       }
+    } else {
+      Supervisor.pendingEmits.push({ caller, node, rollbackState, phaseId });
+    }
+  }
+
+  public static flushPendingEmits(): void {
+    if (!Supervisor.instance) return;
+    const emits = [...Supervisor.pendingEmits];
+    Supervisor.pendingEmits = [];
+    for (const emit of emits) {
+      Supervisor.emitToPhase(emit.caller, emit.node, emit.rollbackState, emit.phaseId);
     }
   }
 
@@ -126,41 +168,7 @@ export class Supervisor {
   // TODO: This method needs to be refactored to decouple editor-specific cleaning logic from the core Supervisor.
   public static exportRootNode(): NodeData | null {
     if (Supervisor.instance && Supervisor.instance.rootNode) {
-      const exported = Supervisor.instance.rootNode.exportToJson();
-
-      // TODO: Refactor editor artifact cleaning. This should be handled by a dedicated editor post-processor rather than hardcoded here.
-      // Clean out dynamically injected editor components from the export
-      const cleanEditorArtifacts = (data: any) => {
-        if (!data) return;
-
-        // Remove EditorInspectHandler from component bindings
-        if (Array.isArray(data.component)) {
-          data.component = data.component.filter((c: any) => c.reference !== "EditorInspectHandler");
-          if (data.component.length === 0) delete data.component;
-        }
-
-        // Remove PreemptEditor nodes from content arrays
-        if (Array.isArray(data.content)) {
-          data.content = data.content.filter((n: any) => {
-            return !(n.component && n.component.some((c: any) => c.reference === "PreemptEditor"));
-          });
-          if (data.content.length === 0) {
-            delete data.content;
-          } else {
-            data.content.forEach((child: any) => cleanEditorArtifacts(child));
-          }
-        } else if (typeof data.content === 'object' && data.content !== null) {
-          if (data.content.component && data.content.component.some((c: any) => c.reference === "PreemptEditor")) {
-            delete data.content;
-          } else {
-            cleanEditorArtifacts(data.content);
-          }
-        }
-      };
-
-      cleanEditorArtifacts(exported);
-
-      return exported;
+      return Supervisor.instance.rootNode.exportToJson();
     }
     return null;
   }
@@ -169,10 +177,11 @@ export class Supervisor {
     if (Supervisor.instance) {
       Supervisor.instance.hasInstantiated = false;
     }
+    Supervisor.pendingEmits = [];
     Node.idCollisions.clear();
   }
 
-  public static async process(config: PipelineConfig, templateData?: NodeData, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
+  public static async process(config: PipelineConfig, templateData: Template, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
       // Exit only if no contentData is provided *and* there is no existing contentData on the singleton
@@ -184,7 +193,7 @@ export class Supervisor {
     }
 
     if (Supervisor.instance) {
-      if (templateData) Supervisor.instance.templateData = templateData;
+      Supervisor.instance.templateData = templateData;
       if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       Supervisor.instance.pauseMonitoring();
       // Safely copy userData if present
@@ -193,12 +202,16 @@ export class Supervisor {
         Supervisor.instance.userData = firstPayload.userData;
       }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
+      Supervisor.instance.templateData.root.css.id = Supervisor.instance.mountElementId;
+      Supervisor.instance.templateData.root.props.id = Supervisor.instance.mountElementId;
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        Supervisor.instance.templateData.root.element = document.getElementById(Supervisor.instance.mountElementId);
+      }
       const result = await Supervisor.instance.runPipeline();
       Supervisor.instance.resumeMonitoring();
       return result;
     } else {
-      Supervisor.instance = new Supervisor(config);
-      if (templateData) Supervisor.instance.templateData = templateData;
+      Supervisor.instance = new Supervisor(config, templateData);
       if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
       // Safely copy userData if present
       const firstPayload = Supervisor.instance.contentData?.[0];
@@ -206,6 +219,11 @@ export class Supervisor {
         Supervisor.instance.userData = firstPayload.userData;
       }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
+      Supervisor.instance.templateData.root.css.id = Supervisor.instance.mountElementId;
+      Supervisor.instance.templateData.root.props.id = Supervisor.instance.mountElementId;
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        Supervisor.instance.templateData.root.element = document.getElementById(Supervisor.instance.mountElementId);
+      }
       const result = await Supervisor.instance.runPipeline();
       if (!Supervisor.instance.config.runMonitoring) {
         Supervisor.instance.close();
@@ -214,6 +232,12 @@ export class Supervisor {
       }
       if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
       return result;
+    }
+  }
+
+  public static clearLockedPhases(): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.activeLockedPhases.clear();
     }
   }
 
@@ -273,7 +297,9 @@ export class Supervisor {
 
     Supervisor.mergePayloads(Supervisor.instance.contentData, payloads);
 
-    // We need to re-evaluate the components and content roots
+    Supervisor.clearLockedPhases();
+
+    // Re-evaluate content nodes using Payload class
     payloads.forEach(newPayload => {
       const key = newPayload.metadata?.batchLabel || newPayload;
       const existingNodes = Supervisor.instance!.contentNodes.get(key) || [];
@@ -284,27 +310,16 @@ export class Supervisor {
         });
       }
 
-      const nodesForPayload: Node[] = [];
-      Supervisor.instance!.contentNodes.set(key, nodesForPayload);
-
-      let contentArray: NodeData[] = [];
-      if ((newPayload as any).type) contentArray = [newPayload as unknown as NodeData];
-      else if (newPayload.content && Array.isArray(newPayload.content)) contentArray = newPayload.content;
-
-      contentArray.forEach(data => {
-        if (Supervisor.instance?.instantiationWorker && (Supervisor.instance.instantiationWorker as any).pushRaw) {
-          (Supervisor.instance.instantiationWorker as any).pushRaw(data, null, (newNode: Node) => {
-            nodesForPayload.push(newNode);
-          });
-        }
-      });
+      const payloadObj = newPayload instanceof Payload ? newPayload : new Payload(newPayload);
+      const contentNodes = payloadObj.assembleContentNodes();
+      Supervisor.instance!.contentNodes.set(key, contentNodes);
     });
 
     if (Supervisor.currentStage === 'monitoring') {
       Supervisor.instance.pauseMonitoring();
       await Supervisor.instance.runPipeline();
       Supervisor.instance.resumeMonitoring();
-      if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
+      Supervisor.clearLockedPhases();
     }
   }
 
@@ -345,7 +360,7 @@ export class Supervisor {
     return result;
   }
 
-  private async runPipeline(): Promise<string | void> {
+  public async runPipeline(): Promise<string | void> {
     if (this.config.runInstantiation && !this.hasInstantiated) {
       Supervisor.currentStage = 'instantiation';
       await this.instantiate();
@@ -366,6 +381,7 @@ export class Supervisor {
         if (worker && worker.hasEvents()) {
           Supervisor.currentStage = this.getStageNameForPhase(phaseId);
           await worker.processQueue();
+          Supervisor.lockPhase(phaseId);
           queueDrained = false;
           break; // Restart loop to prioritize lowest phase IDs again
         }
@@ -387,8 +403,9 @@ export class Supervisor {
       case 3: return 'slotAssembly';
       case 4: return 'preprocessing';
       case 5: return 'validation';
-      case 6: return 'render';
-      case 7: return 'postprocessing';
+      case 6: return 'elementCreation';
+      case 7: return 'treeAssembly';
+      case 8: return 'postprocessing';
       default: return 'unknown';
     }
   }
@@ -397,52 +414,22 @@ export class Supervisor {
     await this.clearInternalState();
     console.log("Stage: Instantiation");
 
-    // Generate initial nodes from data
-    if (this.templateData || this.contentData.length > 0 || !this.rootNode) {
-      const allComponents = this.contentData.flatMap(c => {
-        const componentsFromPayload = c.component || [];
-        const componentsFromContentRoots = (Array.isArray(c.content) ? c.content : [c.content]).flatMap((node: any) => {
-          return (node?.component || []).filter((comp: any) => comp.value !== undefined && comp.value !== null);
-        });
-        return [...componentsFromPayload, ...componentsFromContentRoots];
-      });
-      const mountPointData: NodeData = {
-        type: "div",
-        props: { id: this.mountElementId },
-        content: this.templateData ? [this.templateData] : undefined,
-        component: allComponents.length > 0 ? allComponents : undefined,
-      };
-      if (this.instantiationWorker && (this.instantiationWorker as any).pushRaw) {
-        (this.instantiationWorker as any).pushRaw(mountPointData, this.rootNode, (node: Node) => {
-          this.rootNode = node;
-          if (this.rootNode) this.rootNode.parent = null;
-        });
-      }
+    // Generate initial nodes from data via Template & Payload
+    this.contentNodes.clear();
+
+    if (this.templateData.children && this.templateData.children.length > 0) {
+      this.contentNodes.set(this.templateData, [...this.templateData.children]);
     }
 
-    this.contentNodes.clear();
     if (this.contentData && this.contentData.length > 0) {
       this.contentData.forEach(payload => {
         const key = payload.metadata?.batchLabel || payload;
-        const nodesForPayload: Node[] = [];
+        const payloadObj = payload instanceof Payload ? payload : new Payload(payload);
+        const nodesForPayload = payloadObj.assembleContentNodes();
         this.contentNodes.set(key, nodesForPayload);
-
-        let allContentForPayload: NodeData[] = [];
-        if ((payload as any).type) allContentForPayload = [payload as unknown as NodeData];
-        else if (payload.content && Array.isArray(payload.content)) allContentForPayload = payload.content;
-
-        allContentForPayload.forEach((data: any) => {
-          if (this.instantiationWorker && (this.instantiationWorker as any).pushRaw) {
-            (this.instantiationWorker as any).pushRaw(data, null, (node: Node) => {
-              nodesForPayload.push(node);
-            });
-          }
-        });
       });
     }
 
-
-    await this.instantiationWorker.processQueue();
     this.hasInstantiated = true;
   }
 
@@ -453,7 +440,7 @@ export class Supervisor {
     const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
   }
-
+  //TODO: Shift backend responsibilities of this to SSR functions and delete this method.
   public executeHandlers(phase: string): void {
     if (this.config.isValidationRun) return;
     if (this.rootNode) {
@@ -497,5 +484,3 @@ export class Supervisor {
     Node.globalMetadata = {};
   }
 }
-
-(globalThis as any).Supervisor = Supervisor;

@@ -20,6 +20,7 @@ function extractReferences(payload: any) {
 
   const traverse = (node: any) => {
     if (!node) return;
+    if (node.root) traverse(node.root);
     if (node.component && Array.isArray(node.component)) {
       for (const comp of node.component) {
         if (comp.reference) {
@@ -33,16 +34,29 @@ function extractReferences(payload: any) {
     }
     
     if (node.handlers) {
-       for (const key of Object.keys(node.handlers)) {
-         const val = node.handlers[key];
-         if (typeof val === 'string' && val.trim().length > 0 && !val.trim().startsWith('(')) {
-           handlers.add(val.trim());
-         } else if (typeof val === 'object' && val !== null && val.name) {
-           handlers.add(val.name);
+       if (Array.isArray(node.handlers)) {
+         for (const h of node.handlers) {
+           if (typeof h === 'string' && h.trim().length > 0 && !h.trim().startsWith('(')) {
+             handlers.add(h.trim());
+           } else if (typeof h === 'object' && h !== null && h.name) {
+             handlers.add(h.name);
+           }
+         }
+       } else {
+         for (const key of Object.keys(node.handlers)) {
+           const val = node.handlers[key];
+           if (typeof val === 'string' && val.trim().length > 0 && !val.trim().startsWith('(')) {
+             handlers.add(val.trim());
+           } else if (typeof val === 'object' && val !== null && val.name) {
+             handlers.add(val.name);
+           }
          }
        }
     }
 
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(traverse);
+    }
     if (node.content && Array.isArray(node.content)) {
       node.content.forEach(traverse);
     } else if (node.content && typeof node.content === 'object') {
@@ -78,11 +92,18 @@ export async function loadLibraryData(adminUser: any) {
       const allHandlers = await Handler.getAll(pgHandlerSource, adminUser) as Handler[];
       const existing = allHandlers.find(h => h.name === name);
       
+      let phase: string | undefined;
+      let event: string | undefined;
+      const phaseMatch = body.match(/@phase\s+([a-zA-Z0-9_]+)/);
+      if (phaseMatch) phase = phaseMatch[1];
+      const eventMatch = body.match(/@event\s+([a-zA-Z0-9_]+)/);
+      if (eventMatch) event = eventMatch[1];
+
       if (existing && !('error' in existing)) {
-        await (existing as Handler).update(adminUser, { name, body });
+        await (existing as Handler).update(adminUser, { name, body, phase, event });
         await (existing as Handler).approve(adminUser, true);
       } else {
-        const handlerRes = await Handler.create(pgHandlerSource, adminUser, { name, body });
+        const handlerRes = await Handler.create(pgHandlerSource, adminUser, { name, body, phase, event });
         if (handlerRes && !('error' in handlerRes)) {
           await (handlerRes as any).handler.approve(adminUser, true);
         }

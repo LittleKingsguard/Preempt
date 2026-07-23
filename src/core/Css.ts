@@ -1,5 +1,3 @@
-import type { CssDef } from "../types/NodeSchema.js";
-import { CloneUtils } from "./utils/CloneUtils.js";
 import { StyleNode } from "./StyleNode.js";
 import type { Node } from "./Node.js";
 

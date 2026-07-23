@@ -35,7 +35,7 @@ function compileUserGroupsToContent(groupRows: any[], defaultGroupComp: any): IC
   const payload = groupRows.map(row => {
     return {
       ...defaultGroupComp,
-      placement: { targetPlacement: [`usergroup-${row.id}`, "usergroups"] },
+      placement: [{ targetPlacement: [`usergroup-${row.id}`, "usergroups"] }],
       component: [
         { reference: 'groupName', value: row.name },
         { reference: 'groupId', value: row.id.toString() }

@@ -31,11 +31,12 @@ export class NodeQueryUtils {
     }
 
     if (query.handlers) {
-      if (!node.handlers) return false;
+      if (!node.handlers || !Array.isArray(node.handlers)) return false;
       for (const [k, v] of Object.entries(query.handlers)) {
-        if (!node.handlers[k]) return false;
-        if (typeof v === 'string' && node.handlers[k].body !== v) return false;
-        if (typeof v !== 'string' && (node.handlers[k].body !== (v as any).body || node.handlers[k].name !== (v as any).name)) return false;
+        const handlerObj = node.handlers.find(h => h.name === k || h.event === k || h.phase === k);
+        if (!handlerObj) return false;
+        if (typeof v === 'string' && handlerObj.body !== v) return false;
+        if (typeof v !== 'string' && (handlerObj.body !== (v as any).body || handlerObj.name !== (v as any).name)) return false;
       }
     }
 
@@ -49,6 +50,13 @@ export class NodeQueryUtils {
         });
         if (!match) return false;
       }
+    }
+
+    if (query.hasNonTypeTargetComponents) {
+      const hasNonTypeTarget =
+        (node.targetComponents && Array.from(node.targetComponents.values()).some(c => c.target !== undefined && c.target !== "type")) ||
+        (node.component && node.component.some(c => c.target !== undefined && c.target !== "type"));
+      if (!hasNonTypeTarget) return false;
     }
 
     return true;

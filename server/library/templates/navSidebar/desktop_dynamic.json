@@ -1,151 +1,189 @@
 {
-  "type": "div",
-  "component": [
-    {
-      "reference": "userAuthComponent"
-    },
-    {
-      "reference": "articleTitle"
-    },
-    {
-      "reference": "articleSubtitle"
-    }
-  ],
-  "css": {
-    "classes": [
-      "nav-sidebar-desktop"
-    ],
-    "cssDef": [
+  "root": {
+    "type": "div",
+    "component": [
       {
-        "selector": ".nav-sidebar-desktop",
-        "styles": {
-          "background": "#ffffff",
-          "color": "#333333",
-          "minHeight": "100vh",
-          "display": "flex",
-          "flexDirection": "column"
-        }
+        "reference": "userAuthComponent"
       },
       {
-        "selector": ".nav-sidebar-sidebar",
-        "styles": {
-          "width": "250px",
-          "padding": "2rem",
-          "borderRight": "1px solid #eaeaea"
-        }
+        "reference": "articleTitle"
       },
       {
-        "selector": "@media (prefers-color-scheme: dark)",
-        "styles": {
-          ".nav-sidebar-desktop": {
-            "background": "#121212",
-            "color": "#e0e0e0"
-          },
-          ".nav-sidebar-sidebar": {
-            "borderRight": "1px solid #333"
-          }
-        }
+        "reference": "articleSubtitle"
       }
-    ]
-  },
-  "content": [
-    {
-      "type": "div",
-      "component": [
+    ],
+    "css": {
+      "classes": [
+        "nav-sidebar-desktop"
+      ],
+      "cssDef": [
         {
-          "target": "content",
-          "reference": "navBar"
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "header"
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "css": {
-        "style": {
-          "display": "flex",
-          "flex": "1",
-          "maxWidth": "1200px",
-          "margin": "0 auto",
-          "width": "100%"
-        }
-      },
-      "content": [
-        {
-          "type": "nav",
-          "css": {
-            "classes": [
-              "nav-sidebar-sidebar"
-            ]
-          },
-          "placement": {
-            "placementName": "sidebar"
+          "selector": ".nav-sidebar-desktop",
+          "styles": {
+            "background": "#ffffff",
+            "color": "#333333",
+            "minHeight": "100vh",
+            "display": "flex",
+            "flexDirection": "column"
           }
         },
         {
-          "type": "div",
-          "css": {
-            "style": {
-              "flex": "1",
-              "padding": "2rem"
+          "selector": ".nav-sidebar-sidebar",
+          "styles": {
+            "width": "250px",
+            "padding": "2rem",
+            "borderRight": "1px solid #eaeaea"
+          }
+        },
+        {
+          "selector": "@media (prefers-color-scheme: dark)",
+          "styles": {
+            ".nav-sidebar-desktop": {
+              "background": "#121212",
+              "color": "#e0e0e0"
+            },
+            ".nav-sidebar-sidebar": {
+              "borderRight": "1px solid #333"
             }
+          }
+        }
+      ]
+    },
+    "children": [
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "navBar"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "header"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "style": {
+            "display": "flex",
+            "flex": "1",
+            "maxWidth": "1200px",
+            "margin": "0 auto",
+            "width": "100%"
+          }
+        },
+        "children": [
+          {
+            "type": "nav",
+            "css": {
+              "classes": [
+                "nav-sidebar-sidebar"
+              ]
+            },
+            "placement": [
+              {
+                "placementName": "sidebar"
+              }
+            ]
           },
-          "content": [
-            {
-              "type": "div",
-              "placement": {
-                "placementName": "article"
+          {
+            "type": "div",
+            "css": {
+              "style": {
+                "flex": "1",
+                "padding": "2rem"
               }
             },
+            "children": [
+              {
+                "type": "div",
+                "placement": [
+                  {
+                    "placementName": "article"
+                  }
+                ]
+              },
+              {
+                "type": "button",
+                "content": "Show Comments",
+                "component": [
+                  {
+                    "target": "handlers.onLoad",
+                    "reference": "toggleCommentsButton"
+                  },
+                  {
+                    "target": "handlers.click",
+                    "reference": "showComments"
+                  }
+                ],
+                "css": {
+                  "style": {
+                    "marginTop": "2rem",
+                    "padding": "10px 20px",
+                    "background": "#42b883",
+                    "color": "white",
+                    "border": "none",
+                    "borderRadius": "4px",
+                    "cursor": "pointer",
+                    "fontSize": "1rem",
+                    "fontWeight": "bold",
+                    "width": "100%"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "component": [
+          {
+            "target": "content",
+            "reference": "footer"
+          }
+        ]
+      },
+      {
+        "type": "div",
+        "css": {
+          "classes": [
+            "preempt-modal-placement"
+          ],
+          "cssDef": [
             {
-              "type": "button",
-              "content": "Show Comments",
-              "component": [
-                {
-                  "target": "handlers.onLoad",
-                  "reference": "toggleCommentsButton"
-                },
-                {
-                  "target": "handlers.click",
-                  "reference": "showComments"
-                }
-              ],
-              "css": {
-                "style": {
-                  "marginTop": "2rem",
-                  "padding": "10px 20px",
-                  "background": "#42b883",
-                  "color": "white",
-                  "border": "none",
-                  "borderRadius": "4px",
-                  "cursor": "pointer",
-                  "fontSize": "1rem",
-                  "fontWeight": "bold",
-                  "width": "100%"
-                }
+              "selector": ".preempt-modal-placement",
+              "styles": {
+                "position": "fixed",
+                "top": "0",
+                "left": "0",
+                "width": "100%",
+                "height": "100%",
+                "background": "rgba(0, 0, 0, 0.5)",
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "zIndex": "9999"
               }
             }
           ]
-        }
-      ]
-    },
-    {
-      "type": "div",
-      "component": [
-        {
-          "target": "content",
-          "reference": "footer"
-        }
-      ]
-    },
+        },
+        "placement": [
+          {
+            "placementName": "modal"
+          }
+        ]
+      }
+    ]
+  },
+  "children": [
     {
       "type": "div",
       "css": {
@@ -159,11 +197,13 @@
           "reference": "adminDashboardLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "adminLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "adminLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -178,11 +218,13 @@
           "reference": "editContentLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     },
     {
       "type": "div",
@@ -197,39 +239,13 @@
           "reference": "createArticleLink"
         }
       ],
-      "placement": {
-        "targetPlacement": [
-          "contributorLinks"
-        ]
-      }
-    },
-    {
-      "type": "div",
-      "css": {
-        "classes": [
-          "preempt-modal-placement"
-        ],
-        "cssDef": [
-          {
-            "selector": ".preempt-modal-placement",
-            "styles": {
-              "position": "fixed",
-              "top": "0",
-              "left": "0",
-              "width": "100%",
-              "height": "100%",
-              "background": "rgba(0, 0, 0, 0.5)",
-              "display": "flex",
-              "justifyContent": "center",
-              "alignItems": "center",
-              "zIndex": "9999"
-            }
-          }
-        ]
-      },
-      "placement": {
-        "placementName": "modal"
-      }
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
     }
   ]
 }

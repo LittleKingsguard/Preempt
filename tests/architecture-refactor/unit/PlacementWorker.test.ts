@@ -10,8 +10,8 @@ describe('PlacementWorker', () => {
 
   beforeEach(() => {
     worker = new PlacementWorker();
-    nodeA = new Node({ type: 'div', placement: 'header' });
-    nodeB = new Node({ type: 'span', targetPlacements: ['header'] });
+    nodeA = new Node({ type: 'div', placement: 'header' }, null, 0);
+    nodeB = new Node({ type: 'span', targetPlacements: ['header'] }, null, 0);
     Node.clearPlacements();
   });
 
@@ -39,7 +39,7 @@ describe('PlacementWorker', () => {
     // nodeA changes its placement to 'footer'
     nodeA.data.placement = 'footer';
     
-    const nodeC = new Node({ type: 'div', targetPlacements: ['footer'] });
+    const nodeC = new Node({ type: 'div', targetPlacements: ['footer'] }, null, 0);
     nodeC.receiveNextState = vi.fn();
     Node.sourcePlacements = { 'footer': [nodeC] };
     

@@ -87,6 +87,9 @@ function extractComponentRefs(payload: any): string[] {
         }
       }
     }
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach(traverse);
+    }
     if (node.content && Array.isArray(node.content)) {
       node.content.forEach(traverse);
     } else if (node.content && typeof node.content === 'object') {

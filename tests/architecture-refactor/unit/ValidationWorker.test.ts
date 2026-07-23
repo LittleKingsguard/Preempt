@@ -9,7 +9,7 @@ describe('ValidationWorker', () => {
 
   beforeEach(() => {
     worker = new ValidationWorker();
-    node = new Node({ type: 'img', props: { src: 'test.png', alt: 'test' } });
+    node = new Node({ type: 'img', props: { src: 'test.png', alt: 'test' } }, null, 0, true);
   });
 
   it('emits event to next phase if validation passes', async () => {
@@ -30,14 +30,14 @@ describe('ValidationWorker', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     // Optimistic bad update missing alt tag
-    node.data.props = { src: 'test.png' }; 
-    node.props = { src: 'test.png' }; // Needed since we bypass receiveNextState in tests
+    (node as any)._data = { ...node.data, props: { src: 'test.png' } };
+    node.props = new Props({ src: 'test.png' }, node); // Needed since we bypass receiveNextState in tests
     
     worker.push(node, originalRollbackState);
     
     await worker.processQueue();
 
-    expect(node.data.props.alt).toBe('old');
+    expect(node.props.alt).toBe('old');
     consoleSpy.mockRestore();
   });
 });

@@ -8,7 +8,7 @@
       { "selector": ".header-subtitle", "styles": { "fontSize": "1.25rem", "margin": "0" } }
     ]
   },
-  "content": [
+  "children": [
     { "type": "h1", "content": "Welcome to Preempt", "component": [{"target": "content", "reference": "articleTitle"}], "css": { "classes": ["header-title"] } },
     { "type": "p", "content": "A high-performance SSR component framework.", "component": [{"target": "content", "reference": "articleSubtitle"}], "css": { "classes": ["header-subtitle"] } }
   ]

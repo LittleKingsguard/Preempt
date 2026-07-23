@@ -1,48 +1,265 @@
 {
   "type": "div",
-  "props": { "data-base-mode": "editor-mode-content" },
+  "props": {
+    "data-base-mode": "editor-mode-content"
+  },
   "css": {
-    "classes": ["preempt-editor-panel", "editor-mode-content"],
+    "classes": [
+      "preempt-editor-panel",
+      "editor-mode-content"
+    ],
     "cssDef": [
-      { "selector": ".preempt-editor-panel", "styles": {
-        "gap": "10px", "right": "10px", "border": "1px solid #444", "bottom": "10px",
-        "zIndex": "9999", "display": "flex", "padding": "10px", "position": "fixed",
-        "alignItems": "flex-end", "background": "#222", "borderRadius": "5px", "flexDirection": "column"
-      } },
-      { "selector": ".editor-btn", "styles": {
-        "padding": "5px 10px", "borderRadius": "3px", "cursor": "pointer", "border": "1px solid #555", "background": "#444", "color": "#fff"
-      } },
-      { "selector": ".editor-btn-danger", "styles": {
-        "background": "#d9534f", "color": "white", "border": "none"
-      } },
-      { "selector": ".editor-btn-primary", "styles": {
-        "background": "#007BFF", "color": "white", "border": "none"
-      } },
-      { "selector": ".editor-mode-content .btn-save-template", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-content .btn-save-component", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-template .btn-save-content", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-template .btn-save-component", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-component .btn-save-content", "styles": { "display": "none" } },
-      { "selector": ".editor-mode-component .btn-save-template", "styles": { "display": "none" } },
-      { "selector": ".inspector-details", "styles": { "background": "#333", "padding": "5px", "borderRadius": "4px", "marginBottom": "5px" } },
-      { "selector": ".inspector-summary", "styles": { "cursor": "pointer", "fontWeight": "bold", "color": "#ccc", "userSelect": "none" } },
-      { "selector": ".inspector-field-row", "styles": { "display": "flex", "gap": "5px", "marginTop": "5px", "alignItems": "center" } },
-      { "selector": ".inspector-input", "styles": { "flex": "1", "background": "#222", "color": "#fff", "border": "1px solid #555", "padding": "3px 5px", "borderRadius": "3px", "fontFamily": "monospace", "minWidth": "0" } },
-      { "selector": ".inspector-label", "styles": { "width": "80px", "fontSize": "11px", "color": "#aaa", "overflow": "hidden", "textOverflow": "ellipsis" } }
+      {
+        "selector": ".preempt-editor-panel",
+        "styles": {
+          "gap": "10px",
+          "right": "10px",
+          "border": "1px solid #444",
+          "bottom": "10px",
+          "zIndex": "9999",
+          "display": "flex",
+          "padding": "10px",
+          "position": "fixed",
+          "alignItems": "flex-end",
+          "background": "#222",
+          "borderRadius": "5px",
+          "flexDirection": "column"
+        }
+      },
+      {
+        "selector": ".editor-btn",
+        "styles": {
+          "padding": "5px 10px",
+          "borderRadius": "3px",
+          "cursor": "pointer",
+          "border": "1px solid #555",
+          "background": "#444",
+          "color": "#fff"
+        }
+      },
+      {
+        "selector": ".editor-btn-danger",
+        "styles": {
+          "background": "#d9534f",
+          "color": "white",
+          "border": "none"
+        }
+      },
+      {
+        "selector": ".editor-btn-primary",
+        "styles": {
+          "background": "#007BFF",
+          "color": "white",
+          "border": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-content .btn-save-template",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-content .btn-save-component",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-template .btn-save-content",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-template .btn-save-component",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-component .btn-save-content",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".editor-mode-component .btn-save-template",
+        "styles": {
+          "display": "none"
+        }
+      },
+      {
+        "selector": ".inspector-details",
+        "styles": {
+          "background": "#333",
+          "padding": "5px",
+          "borderRadius": "4px",
+          "marginBottom": "5px"
+        }
+      },
+      {
+        "selector": ".inspector-summary",
+        "styles": {
+          "cursor": "pointer",
+          "fontWeight": "bold",
+          "color": "#ccc",
+          "userSelect": "none"
+        }
+      },
+      {
+        "selector": ".inspector-field-row",
+        "styles": {
+          "display": "flex",
+          "gap": "5px",
+          "marginTop": "5px",
+          "alignItems": "center"
+        }
+      },
+      {
+        "selector": ".inspector-input",
+        "styles": {
+          "flex": "1",
+          "background": "#222",
+          "color": "#fff",
+          "border": "1px solid #555",
+          "padding": "3px 5px",
+          "borderRadius": "3px",
+          "fontFamily": "monospace",
+          "minWidth": "0"
+        }
+      },
+      {
+        "selector": ".inspector-label",
+        "styles": {
+          "width": "80px",
+          "fontSize": "11px",
+          "color": "#aaa",
+          "overflow": "hidden",
+          "textOverflow": "ellipsis"
+        }
+      }
     ]
   },
-  "content": [
+  "children": [
     {
       "type": "div",
-      "css": { "style": { "gap": "10px", "display": "flex", "flexWrap": "wrap" } },
-      "content": [
-        { "type": "input", "props": { "id": "template-tags", "placeholder": "Tags (comma separated)" }, "css": { "style": { "padding": "5px" } } },
-        { "type": "button", "content": "Save as New Content", "component": [{"target": "handlers.click", "reference": "saveAsNewContent"}], "css": {"classes": ["editor-btn", "btn-save-content"]} },
-        { "type": "button", "content": "Save as New Template", "component": [{"target": "handlers.click", "reference": "saveAsNewTemplate"}], "css": {"classes": ["editor-btn", "btn-save-template"]} },
-        { "type": "button", "content": "Save as New Component", "component": [{"target": "handlers.click", "reference": "saveAsNewComponent"}], "css": {"classes": ["editor-btn", "btn-save-component"]} },
-        { "type": "button", "content": "Commit Modifications to Component", "component": [{"target": "handlers.click", "reference": "commitComponentChanges"}], "css": {"classes": ["editor-btn", "btn-save-component", "editor-btn-primary"]} },
-        { "type": "button", "content": "Commit Modifications to Original", "component": [{"target": "handlers.click", "reference": "saveNodeChanges"}], "css": {"classes": ["editor-btn", "editor-btn-primary"]} },
-        { "type": "button", "content": "Discard Edits", "component": [{"target": "handlers.click", "reference": "discardNodeChanges"}], "css": {"classes": ["editor-btn"]} }
+      "css": {
+        "style": {
+          "gap": "10px",
+          "display": "flex",
+          "flexWrap": "wrap"
+        }
+      },
+      "children": [
+        {
+          "type": "input",
+          "props": {
+            "id": "template-tags",
+            "placeholder": "Tags (comma separated)"
+          },
+          "css": {
+            "style": {
+              "padding": "5px"
+            }
+          }
+        },
+        {
+          "type": "button",
+          "content": "Save as New Content",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "saveAsNewContent"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn",
+              "btn-save-content"
+            ]
+          }
+        },
+        {
+          "type": "button",
+          "content": "Save as New Template",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "saveAsNewTemplate"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn",
+              "btn-save-template"
+            ]
+          }
+        },
+        {
+          "type": "button",
+          "content": "Save as New Component",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "saveAsNewComponent"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn",
+              "btn-save-component"
+            ]
+          }
+        },
+        {
+          "type": "button",
+          "content": "Commit Modifications to Component",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "commitComponentChanges"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn",
+              "btn-save-component",
+              "editor-btn-primary"
+            ]
+          }
+        },
+        {
+          "type": "button",
+          "content": "Commit Modifications to Original",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "saveNodeChanges"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn",
+              "editor-btn-primary"
+            ]
+          }
+        },
+        {
+          "type": "button",
+          "content": "Discard Edits",
+          "component": [
+            {
+              "target": "handlers.click",
+              "reference": "discardNodeChanges"
+            }
+          ],
+          "css": {
+            "classes": [
+              "editor-btn"
+            ]
+          }
+        }
       ]
     },
     {
@@ -50,47 +267,158 @@
       "css": {
         "id": "editor-inspector-display",
         "style": {
-          "color": "#fff", "width": "400px", "margin": "0", "fontSize": "12px",
-          "overflow": "auto", "maxHeight": "500px", "background": "#111", "padding": "10px", "borderRadius": "4px", "display": "flex", "flexDirection": "column", "gap": "5px"
+          "color": "#fff",
+          "width": "400px",
+          "margin": "0",
+          "fontSize": "12px",
+          "overflow": "auto",
+          "maxHeight": "500px",
+          "background": "#111",
+          "padding": "10px",
+          "borderRadius": "4px",
+          "display": "flex",
+          "flexDirection": "column",
+          "gap": "5px"
         }
       },
-      "placement": { "placementName": "editor-inspector-display" },
-      "content": [
+      "placement": [
+        {
+          "placementName": "editor-inspector-display"
+        }
+      ],
+      "children": [
         {
           "type": "div",
-          "css": { "id": "inspector-components-panel", "classes": ["inspector-panel-wrapper"], "style": { "display": "flex", "flexDirection": "column", "gap": "5px" } },
-          "content": [
-            { "type": "div", "component": [{ "reference": "editorInspectorProps", "target": "type" }] },
-            { "type": "div", "component": [{ "reference": "editorInspectorCss", "target": "type" }] },
-            { "type": "div", "component": [{ "reference": "editorInspectorChildren", "target": "type" }] },
-            { "type": "div", "component": [{ "reference": "editorInspectorComponents", "target": "type" }] },
-            { "type": "div", "component": [{ "reference": "editorInspectorHandlers", "target": "type" }] },
-            { "type": "div", "component": [{ "reference": "editorInspectorPlacements", "target": "type" }] }
+          "css": {
+            "id": "inspector-components-panel",
+            "classes": [
+              "inspector-panel-wrapper"
+            ],
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": "5px"
+            }
+          },
+          "children": [
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorProps",
+                  "target": "type"
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorCss",
+                  "target": "type"
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorChildren",
+                  "target": "type"
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorComponents",
+                  "target": "type"
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorHandlers",
+                  "target": "type"
+                }
+              ]
+            },
+            {
+              "type": "div",
+              "component": [
+                {
+                  "reference": "editorInspectorPlacements",
+                  "target": "type"
+                }
+              ]
+            }
           ]
         }
       ]
     },
     {
       "type": "component",
-      "props": { "name": "articlePublishModal" }
+      "props": {
+        "name": "articlePublishModal"
+      }
     },
     {
       "type": "div",
-      "css": { "style": { "display": "none" } },
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
       "component": [
-        { "reference": "editorInspectorComponentRow" },
-        { "reference": "editorInspectorHandlerRow" },
-        { "reference": "editorInspectorValueRow" },
-        { "reference": "editorInspectorKeyValueRow" },
-        { "reference": "editorInspectorChildRow" },
-        { "reference": "editorSelectParent", "target": "handlers.click" },
-        { "reference": "editorSelectNode", "target": "handlers.click" },
-        { "reference": "editorDetailPane" },
-        { "reference": "editorTestDetailPane", "target": "handlers.click" },
-        { "reference": "editorSaveDetailPane", "target": "handlers.click" },
-        { "reference": "editorCloseDetailPane", "target": "handlers.click" },
-        { "reference": "editorOpenDetailPane", "target": "handlers.click" },
-        { "reference": "editorUpdateNodeProp", "target": "handlers.click" }
+        {
+          "reference": "editorInspectorComponentRow"
+        },
+        {
+          "reference": "editorInspectorHandlerRow"
+        },
+        {
+          "reference": "editorInspectorValueRow"
+        },
+        {
+          "reference": "editorInspectorKeyValueRow"
+        },
+        {
+          "reference": "editorInspectorChildRow"
+        },
+        {
+          "reference": "editorSelectParent",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorSelectNode",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorDetailPane"
+        },
+        {
+          "reference": "editorTestDetailPane",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorSaveDetailPane",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorCloseDetailPane",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorOpenDetailPane",
+          "target": "handlers.click"
+        },
+        {
+          "reference": "editorUpdateNodeProp",
+          "target": "handlers.click"
+        }
       ]
     }
   ]

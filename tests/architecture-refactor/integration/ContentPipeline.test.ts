@@ -14,7 +14,7 @@ describe('Content Pipeline Integration', () => {
     const template = {
       type: 'main',
       children: [
-        { type: 'div', placement: { placementName: 'content-slot' } }
+        { type: 'div', placement: [{ placementName: 'content-slot' }] }
       ]
     };
     
@@ -25,14 +25,14 @@ describe('Content Pipeline Integration', () => {
     const payload1 = {
       metadata: { batchLabel: 'post-1' },
       content: [
-        { type: 'article', content: 'Version 1', targetPlacements: ['content-slot'] }
+        { type: 'article', content: 'Version 1', placement: [{ targetPlacement: ['content-slot'] }] }
       ]
     };
     
     await Supervisor.injectContent(payload1);
     
     // Verify node exists with initial content
-    const articleNodes = Supervisor.getContentNodes();
+    const articleNodes = Supervisor.getContentNodes().filter(n => n.type === 'article');
     expect(articleNodes.length).toBe(1);
     expect(articleNodes[0].content).toBe('Version 1');
     const oldNode = articleNodes[0];
@@ -41,7 +41,7 @@ describe('Content Pipeline Integration', () => {
     const payload2 = {
       metadata: { batchLabel: 'post-1' },
       content: [
-        { type: 'article', content: 'Version 2', targetPlacements: ['content-slot'] }
+        { type: 'article', content: 'Version 2', placement: [{ targetPlacement: ['content-slot'] }] }
       ]
     };
     

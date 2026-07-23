@@ -1,17 +1,69 @@
 {
   "type": "details",
-  "css": { "classes": ["inspector-details"] },
-  "content": [
-    { "type": "summary", "content": "Handlers", "css": { "classes": ["inspector-summary"] } },
+  "css": {
+    "classes": [
+      "inspector-details"
+    ]
+  },
+  "children": [
+    {
+      "type": "summary",
+      "content": "Handlers",
+      "css": {
+        "classes": [
+          "inspector-summary"
+        ]
+      }
+    },
     {
       "type": "div",
-      "content": [
-        { "type": "div", "css": { "id": "inspector-handlers-fields", "classes": ["fields-container"] }, "placement": { "placementName": "inspector-handlers-fields" } },
+      "children": [
         {
           "type": "div",
-          "content": [
-            { "type": "button", "content": "Add Handler", "props": { "data-add-type": "handler", "data-target-id": "inspector-handlers-fields" }, "handlers": { "editorAddField": { "name": "editorAddField", "event": "click" } } },
-            { "type": "button", "content": "Update", "props": { "data-prop-path": "handlers", "data-struct": "array_of_objects", "data-target-id": "inspector-handlers-fields" }, "handlers": { "editorUpdateNodeProp": { "name": "editorUpdateNodeProp", "event": "click" } } }
+          "css": {
+            "id": "inspector-handlers-fields",
+            "classes": [
+              "fields-container"
+            ]
+          },
+          "placement": [
+            {
+              "placementName": "inspector-handlers-fields"
+            }
+          ]
+        },
+        {
+          "type": "div",
+          "children": [
+            {
+              "type": "button",
+              "content": "Add Handler",
+              "props": {
+                "data-add-type": "handler",
+                "data-target-id": "inspector-handlers-fields"
+              },
+              "handlers": [
+                {
+                  "name": "editorAddField",
+                  "event": "click"
+                }
+              ]
+            },
+            {
+              "type": "button",
+              "content": "Update",
+              "props": {
+                "data-prop-path": "handlers",
+                "data-struct": "array_of_objects",
+                "data-target-id": "inspector-handlers-fields"
+              },
+              "handlers": [
+                {
+                  "name": "editorUpdateNodeProp",
+                  "event": "click"
+                }
+              ]
+            }
           ]
         }
       ]

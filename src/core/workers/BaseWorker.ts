@@ -5,6 +5,7 @@ import { Supervisor } from "../Supervisor.js";
 export abstract class BaseWorker {
   protected queue: Map<Node, RollbackState | undefined> = new Map();
   protected supervisor: Supervisor;
+  public abstract readonly phase: number;
 
   constructor(supervisor: Supervisor) {
     this.supervisor = supervisor;
@@ -29,6 +30,11 @@ export abstract class BaseWorker {
 
       for (const [node, rollbackState] of currentQueue.entries()) {
         try {
+          if (node.lastCompletedPhase === this.phase) {
+            console.log(`[${this.constructor.name}] Skipping node (already completed phase ${this.phase}): ${node.type} | ID: ${node.css?.id || 'unknown'}`);
+            continue;
+          }
+          console.log(`[${this.constructor.name}] Processing node: ${node.type} | ID: ${node.css?.id || node.props?.id || 'unknown'}`, node);
           await this.processNode(node, rollbackState);
           this.onProcessSuccess(node, rollbackState);
         } catch (err) {

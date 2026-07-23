@@ -38,7 +38,7 @@ function compileSettingsToContent(settingRows: any[], defaultSettingComp: any): 
     }
     return {
       ...defaultSettingComp,
-      placement: { targetPlacement: [`setting-${row.key}`, "settings"] },
+      placement: [{ targetPlacement: [`setting-${row.key}`, "settings"] }],
       component: [
         { reference: 'settingKey', value: row.key },
         { reference: 'settingValue', value: displayValue }

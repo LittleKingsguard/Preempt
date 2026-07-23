@@ -9,25 +9,14 @@ export class Payload implements ContentPayload {
   public component?: Component[] | undefined;
   public content: NodeData[];
 
-  constructor(data: Partial<ContentPayload> | string | NodeData | NodeData[], parent?: Node) {
-    if (typeof data === 'string') {
-      this.content = [{ type: 'text', content: data }];
-    } else if (Array.isArray(data)) {
-      this.content = CloneUtils.deepClone(data);
-    } else if (data && typeof data === 'object' && ('type' in data) && !('content' in data && Array.isArray((data as any).content) && (data as any).type === undefined)) {
-      // It's a NodeData object
-      this.content = [CloneUtils.deepClone(data)];
-    } else {
-      // It's a ContentPayload object
-      const payload = data as Partial<ContentPayload>;
-      this.metadata = payload.metadata ? CloneUtils.deepClone(payload.metadata) : undefined;
-      this.userData = payload.userData ? CloneUtils.deepClone(payload.userData) : undefined;
-      this.component = payload.component ? payload.component.map(c => {
-        if (!parent) throw new Error("Parent node is required to initialize components in Content");
-        return new Component(c, parent);
-      }) : undefined;
-      this.content = payload.content ? CloneUtils.deepClone(payload.content) : [];
-    }
+  constructor(data: Partial<ContentPayload>, parent?: Node) {
+    this.metadata = data.metadata ? CloneUtils.deepClone(data.metadata) : undefined;
+    this.userData = data.userData ? CloneUtils.deepClone(data.userData) : undefined;
+    this.component = data.component ? data.component.map(c => {
+      if (!parent) throw new Error("Parent node is required to initialize components in Content");
+      return c instanceof Component ? c : new Component(c, parent, 0);
+    }) : undefined;
+    this.content = data.content ? CloneUtils.deepClone(data.content) : [];
   }
 
   public clone(ignoreProps: string[] = [], newParent?: Node): Payload {
@@ -36,16 +25,16 @@ export class Payload implements ContentPayload {
       userData: ignoreProps.includes('userData') ? undefined : this.userData,
       component: ignoreProps.includes('component') ? undefined : this.component?.map(c => {
         if (!newParent) throw new Error("New parent node is required to clone components in Content");
-        return c.clone(ignoreProps, newParent);
+        return c.clone(ignoreProps, newParent, 99);
       }),
       content: ignoreProps.includes('content') ? [] : this.content
     }, newParent);
   }
 
-  public assembleContentNodes(parent?: Node): Node[] {
+  public assembleContentNodes(_parent?: Node): Node[] {
     const nodes: Node[] = [];
     for (const data of this.content) {
-      nodes.push(new Node(data, parent));
+      nodes.push(new Node(data, undefined, 0));
     }
     return nodes;
   }

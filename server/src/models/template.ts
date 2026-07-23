@@ -55,7 +55,7 @@ export class Template {
   }
 
   static async create(source: IContentSource = pgTemplateSource, authorId: string, payload: any, tags: string[], groupId: number | null = null) {
-    const virtualNode = new Node(payload);
+    const virtualNode = new Node(payload, null, 0);
     if (!virtualNode.isValid) {
       return { error: "Validation Error", status: 400 };
     }
@@ -72,7 +72,7 @@ export class Template {
   }
 
   async update(user: any, payload: any, tags: string[], groupId: number | null = null): Promise<{ error: string, status: number } | { template: Template }> {
-    const virtualNode = new Node(payload);
+    const virtualNode = new Node(payload, null, 0);
     if (!virtualNode.isValid) {
       return { error: "Validation Error", status: 400 };
     }
@@ -93,7 +93,7 @@ export class Template {
   }
 
   static async stage(source: IContentSource = pgTemplateSource, user: any, payload: any, originalId: number | null, batchId: number, tags: string[] = [], groupId: number | null = null) {
-    const virtualNode = new Node(payload);
+    const virtualNode = new Node(payload, null, 0);
     if (!virtualNode.isValid) {
       return { error: "Validation Error", status: 400 };
     }

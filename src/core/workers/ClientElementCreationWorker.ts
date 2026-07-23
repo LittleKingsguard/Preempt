@@ -5,8 +5,9 @@ import { Supervisor } from "../Supervisor.js";
 import { clientAPI } from "../ClientAPI.js";
 import { StyleNode } from "../StyleNode.js";
 
-export class ClientRenderingWorker extends BaseWorker {
+export class ClientElementCreationWorker extends BaseWorker {
   public readonly phase = 6;
+
   public static renderStyles(): void {
     if (typeof document === 'undefined') return;
     let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
@@ -28,6 +29,7 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
   }
+
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
 
@@ -38,34 +40,31 @@ export class ClientRenderingWorker extends BaseWorker {
     await super.processQueue();
 
     if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
-      ClientRenderingWorker.renderStyles();
-    }
-
-    if (this.supervisor.config?.runRendering !== false) {
-      this.supervisor.executeHandlers("afterRender");
+      ClientElementCreationWorker.renderStyles();
     }
   }
 
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
-    if (node.parent === undefined) return;
-    console.log(`[ClientRenderingWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
-
-    // Phase 6: Rendering
-    node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
-    
-    if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
-      this.renderNode(node);
+    if (node.parent === undefined || !node.isInTree) {
+      console.error(`[ClientElementCreationWorker] Error: Node reached Element Creation phase with parent === undefined or isInTree === false`, node);
+      return;
     }
-    
-    node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
+    console.log(`[ClientElementCreationWorker] Creating element for node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
+
+    // Phase 6: Element Creation
+    node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
+
+    if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
+      this.createElement(node);
+    }
   }
 
-  private renderNode(node: Node): HTMLElement | null {
+  private createElement(node: Node): HTMLElement | null {
     if (typeof document === 'undefined') return null;
 
     let oldElement = node.element;
 
-    if (!oldElement && !node.parent) {
+    if (!oldElement && node.parent === null) {
       const mountId = (node.props?.id as string) || node.css?.id || 'app';
       oldElement = document.getElementById(mountId);
     }
@@ -107,11 +106,11 @@ export class ClientRenderingWorker extends BaseWorker {
              const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
              let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
              if (fn) {
-               if (fn.length === 1) {
-                  fn(context);
-               } else {
-                  fn(event, context);
-               }
+                if (fn.length === 1) {
+                   fn(context);
+                } else {
+                   fn(event, context);
+                }
              }
           };
           el.addEventListener(eventName, handlerFunc);
@@ -167,57 +166,11 @@ export class ClientRenderingWorker extends BaseWorker {
       }
     }
 
-    const activeChildElements = new Set<HTMLElement>();
-    if (node.children && Array.isArray(node.children)) {
-      for (let i = 0; i < node.children.length; i++) {
-        const child = node.children[i];
-        if (!child) continue;
-
-        if (!child.element) {
-          this.push(child);
-        } else {
-          activeChildElements.add(child.element);
-          if (child.element.parentNode !== el) {
-            el.appendChild(child.element);
-          }
-          
-          const expectedNode = el.children[i];
-          if (expectedNode !== child.element) {
-             el.insertBefore(child.element, expectedNode || null);
-          }
-        }
-      }
-    }
-
-    const domChildren = Array.from(el.children);
-    for (const domChild of domChildren) {
-      if (!activeChildElements.has(domChild as HTMLElement)) {
-        domChild.remove();
-      }
-    }
-
-    if (oldElement && oldElement !== el) {
-      if (oldElement.parentNode) {
-        oldElement.replaceWith(el);
-      } else {
-        oldElement.remove();
-      }
-    }
-
-    if (node.parent) {
-      if (!node.parent.element) {
-        this.push(node.parent);
-      } else if (el.parentNode !== node.parent.element) {
-        node.parent.element.appendChild(el);
-      }
-    } else if (!el.parentNode) {
-      document.body.appendChild(el);
-    }
-
     return el;
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 6;
+    Supervisor.emitToPhase(this, node, _rollbackState || {}, 7);
   }
 }

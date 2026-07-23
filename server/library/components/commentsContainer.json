@@ -1,13 +1,36 @@
 {
   "type": "div",
-  "css": { "style": { "marginTop": "3rem", "borderTop": "2px solid #eee", "paddingTop": "2rem" } },
-  "component": [{"target": "handlers.onLoad", "reference": "fetchComments"}],
-  "content": [
-    { "type": "h2", "content": "Comments", "css": {"style": {"marginBottom": "1.5rem"}} },
+  "css": {
+    "style": {
+      "marginTop": "3rem",
+      "borderTop": "2px solid #eee",
+      "paddingTop": "2rem"
+    }
+  },
+  "component": [
+    {
+      "target": "handlers.onLoad",
+      "reference": "fetchComments"
+    }
+  ],
+  "children": [
+    {
+      "type": "h2",
+      "content": "Comments",
+      "css": {
+        "style": {
+          "marginBottom": "1.5rem"
+        }
+      }
+    },
     {
       "type": "div",
-      "css": {"style": {"marginBottom": "2rem"}},
-      "content": [
+      "css": {
+        "style": {
+          "marginBottom": "2rem"
+        }
+      },
+      "children": [
         {
           "type": "textarea",
           "props": {
@@ -51,8 +74,14 @@
     },
     {
       "type": "div",
-      "props": { "id": "comments-list" },
-      "placement": { "placementName": "commentsList" }
+      "props": {
+        "id": "comments-list"
+      },
+      "placement": [
+        {
+          "placementName": "commentsList"
+        }
+      ]
     }
   ]
 }

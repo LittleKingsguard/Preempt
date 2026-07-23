@@ -1,13 +1,82 @@
 {
   "type": "div",
-  "placement": { "targetPlacement": ["article"] },
-  "css": { "style": { "padding": "2rem", "maxWidth": "800px", "margin": "0 auto", "fontFamily": "sans-serif" } },
-  "content": [
-    { "type": "div", "props": { "id": "profile-details" }, "content": [
-      { "type": "h2", "content": "USERNAME_PLACEHOLDER", "component": [{"target": "content", "reference": "username"}], "css": { "style": { "marginBottom": "1rem" } } },
-      { "type": "p", "content": "ROLE_PLACEHOLDER", "component": [{"target": "content", "reference": "role"}], "css": { "style": { "marginBottom": "0.5rem" } } },
-      { "type": "p", "content": "HOMEPAGE_PLACEHOLDER", "component": [{"target": "content", "reference": "home_page"}], "css": { "style": { "marginBottom": "0.5rem" } } },
-      { "type": "div", "component": [{"target": "content", "reference": "message_button"}] }
-    ] }
+  "placement": [
+    {
+      "targetPlacement": [
+        "article"
+      ]
+    }
+  ],
+  "css": {
+    "style": {
+      "padding": "2rem",
+      "maxWidth": "800px",
+      "margin": "0 auto",
+      "fontFamily": "sans-serif"
+    }
+  },
+  "children": [
+    {
+      "type": "div",
+      "props": {
+        "id": "profile-details"
+      },
+      "children": [
+        {
+          "type": "h2",
+          "content": "USERNAME_PLACEHOLDER",
+          "component": [
+            {
+              "target": "content",
+              "reference": "username"
+            }
+          ],
+          "css": {
+            "style": {
+              "marginBottom": "1rem"
+            }
+          }
+        },
+        {
+          "type": "p",
+          "content": "ROLE_PLACEHOLDER",
+          "component": [
+            {
+              "target": "content",
+              "reference": "role"
+            }
+          ],
+          "css": {
+            "style": {
+              "marginBottom": "0.5rem"
+            }
+          }
+        },
+        {
+          "type": "p",
+          "content": "HOMEPAGE_PLACEHOLDER",
+          "component": [
+            {
+              "target": "content",
+              "reference": "home_page"
+            }
+          ],
+          "css": {
+            "style": {
+              "marginBottom": "0.5rem"
+            }
+          }
+        },
+        {
+          "type": "div",
+          "component": [
+            {
+              "target": "content",
+              "reference": "message_button"
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

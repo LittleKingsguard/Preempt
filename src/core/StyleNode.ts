@@ -1,6 +1,5 @@
 import type { CssDef } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
-import { CloneUtils } from "./utils/CloneUtils.js";
 
 export class StyleNode {
   public static cssDefs: Map<string, StyleNode> = new Map();
@@ -16,7 +15,7 @@ export class StyleNode {
   }
 
   public clone(parent: Node | null = null): StyleNode {
-    return new StyleNode(CloneUtils.deepClone(this.data), parent);
+    return new StyleNode(this.data, parent);
   }
 
   public static append(node: StyleNode): void {

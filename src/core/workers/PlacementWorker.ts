@@ -1,39 +1,26 @@
 import { Node } from "../Node.js";
 import { Placement } from "../Placement.js";
 import { BaseWorker } from "./BaseWorker.js";
-import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 
 export class PlacementWorker extends BaseWorker {
+  public readonly phase = 1;
+
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+    console.log(`[PlacementWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
     // Phase 1: Placement
 
     if (!node.placement) return;
 
     for (const placement of node.placement) {
-      // 1. If it provides a placement location dynamically
-      if (placement.placementName && !Placement.placementArray.includes(placement)) {
-        placement.append();
-      }
-
-      // 2. If it targets a placement
       if (placement.targetPlacement) {
-        let placed = false;
-        
         for (const target of placement.targetPlacement) {
-          if (!Placement.sourcePlacements[target]) {
-            Placement.sourcePlacements[target] = [];
-          }
-          if (!Placement.sourcePlacements[target].includes(placement)) {
-            Placement.sourcePlacements[target].push(placement);
-          }
-
-          if (!placed) {
-            const targetPlacement = Placement.placementArray.find(p => p.placementName === target);
-            if (targetPlacement) {
+          const targetPlacements = Placement.placementMap.get(target) || [];
+          if (targetPlacements.length > 0) {
+            for (const targetPlacement of targetPlacements) {
               targetPlacement.placeInto(node);
-              placed = true;
             }
+            break;
           }
         }
       }
@@ -46,20 +33,6 @@ export class PlacementWorker extends BaseWorker {
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 1;
-    let isAttached = false;
-    let current: Node | null | undefined = node;
-    
-    while (current !== undefined) {
-      if (current === null) {
-        isAttached = true;
-        break;
-      }
-      current = current.parent;
-    }
-
-    if (isAttached) {
-      Supervisor.emitToPhase(node, _rollbackState || {}, 2); // emit to Content
-    }
   }
 
   protected onProcessError(node: Node, error: Error, _rollbackState?: RollbackState): void {

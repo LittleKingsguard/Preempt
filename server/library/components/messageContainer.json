@@ -1,7 +1,22 @@
 {
   "type": "div",
-  "component": [{"target": "handlers.onLoad", "reference": "fetchMessageLists"}],
-  "content": [
-    { "type": "div", "props": { "id": "message-lists" }, "placement": { "placementName": "messageList" } }
+  "component": [
+    {
+      "target": "handlers.onLoad",
+      "reference": "fetchMessageLists"
+    }
+  ],
+  "children": [
+    {
+      "type": "div",
+      "props": {
+        "id": "message-lists"
+      },
+      "placement": [
+        {
+          "placementName": "messageList"
+        }
+      ]
+    }
   ]
 }

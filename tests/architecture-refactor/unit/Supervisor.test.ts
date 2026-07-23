@@ -24,7 +24,7 @@ describe('Supervisor - Orchestrator', () => {
     // Register worker (by overriding instance worker for phase 1 - Placement)
     Supervisor.instance.placementWorker = mockWorker;
     
-    const node = new Node({ type: 'div' });
+    const node = new Node({ type: 'div' }, null, 0);
     
     // Route event (emitToPhase equivalent is pushing to the specific worker queue)
     Supervisor.instance.placementWorker.push(node, { old: 'state' });
@@ -84,7 +84,7 @@ describe('Supervisor - Orchestrator', () => {
   });
 
   it('clears node phase locks when entering closed or monitoring state', async () => {
-    const node = new Node({ type: 'div' });
+    const node = new Node({ type: 'div' }, null, 0);
     node._lockedPhases = new Set([1, 2, 3]);
     
     await Supervisor.process({ runRendering: true, runMonitoring: true }, { type: 'div' }, {});

@@ -4,7 +4,27 @@ import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 
 export class ValidationWorker extends BaseWorker {
+  public readonly phase = 5;
+
+  public static emitTo(node: Node, rollbackState: RollbackState = {}): void {
+    if (!Supervisor.instance || !Supervisor.instance.validationWorker) return;
+    const worker = Supervisor.instance.validationWorker;
+    const emitRecursive = (n: Node) => {
+      if (n.isInTree && n.lastCompletedPhase !== 5) {
+        worker.push(n, rollbackState);
+      }
+      if (n.children && Array.isArray(n.children)) {
+        for (const child of n.children) {
+          if (child) emitRecursive(child);
+        }
+      }
+    };
+    emitRecursive(node);
+  }
+
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+    if (!node.isInTree) return;
+    console.log(`[ValidationWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
     // Phase 5: Validation
     node.executeHandlers("beforeValidate", { supervisor: this.supervisor }, false);
     
@@ -17,8 +37,9 @@ export class ValidationWorker extends BaseWorker {
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+    if (!node.isInTree) return;
     node.lastCompletedPhase = 5;
-    Supervisor.emitToPhase(node, _rollbackState || {}, 6);
+    Supervisor.emitToPhase(this, node, _rollbackState || {}, 6);
   }
 
   public static validateNode(node: Node): boolean {

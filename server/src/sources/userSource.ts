@@ -35,7 +35,7 @@ function compileUsersToContent(userRows: any[], defaultUserComp: any): IContentD
   const payload = userRows.map(row => {
     return {
       ...defaultUserComp,
-      placement: { targetPlacement: [`user-${row.username}`, "users"] },
+      placement: [{ targetPlacement: [`user-${row.username}`, "users"] }],
       component: [
         { reference: 'userUsername', value: row.username },
         { reference: 'userEmail', value: row.email }

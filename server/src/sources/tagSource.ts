@@ -32,7 +32,7 @@ function compileTagsToContent(tagRows: any[], defaultTagComp: any): IContentData
   const payload = tagRows.map(row => {
     return {
       ...defaultTagComp,
-      placement: { targetPlacement: [`tag-${row.name}`, "tags"] },
+      placement: [{ targetPlacement: [`tag-${row.name}`, "tags"] }],
       component: [
         { reference: 'tagName', value: row.name }
       ]

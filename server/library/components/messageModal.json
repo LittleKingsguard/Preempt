@@ -1,14 +1,69 @@
 {
   "type": "div",
-  "css": { 
-    "style": { "position": "fixed", "bottom": "20px", "right": "20px", "width": "350px", "height": "500px", "background": "white", "boxShadow": "0 0 10px rgba(0,0,0,0.2)", "borderRadius": "8px", "display": "flex", "flexDirection": "column", "zIndex": "1000" }
+  "css": {
+    "style": {
+      "position": "fixed",
+      "bottom": "20px",
+      "right": "20px",
+      "width": "350px",
+      "height": "500px",
+      "background": "white",
+      "boxShadow": "0 0 10px rgba(0,0,0,0.2)",
+      "borderRadius": "8px",
+      "display": "flex",
+      "flexDirection": "column",
+      "zIndex": "1000"
+    }
   },
-  "content": [
-    { "type": "div", "css": { "style": { "background": "#0070f3", "color": "white", "padding": "10px", "cursor": "pointer", "display": "flex", "justifyContent": "space-between", "borderTopLeftRadius": "8px", "borderTopRightRadius": "8px" } }, "component": [{"target": "handlers.click", "reference": "toggleMessageModal"}], "content": [
-        { "type": "span", "content": "Messages" },
-        { "type": "span", "content": "[-]" }
+  "children": [
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "background": "#0070f3",
+          "color": "white",
+          "padding": "10px",
+          "cursor": "pointer",
+          "display": "flex",
+          "justifyContent": "space-between",
+          "borderTopLeftRadius": "8px",
+          "borderTopRightRadius": "8px"
+        }
+      },
+      "component": [
+        {
+          "target": "handlers.click",
+          "reference": "toggleMessageModal"
+        }
+      ],
+      "children": [
+        {
+          "type": "span",
+          "content": "Messages"
+        },
+        {
+          "type": "span",
+          "content": "[-]"
+        }
       ]
     },
-    { "type": "div", "props": { "id": "modal-message-container" }, "placement": { "placementName": "modalMessageContainer" }, "css": { "style": { "flex": "1", "overflowY": "auto", "padding": "10px" } } }
+    {
+      "type": "div",
+      "props": {
+        "id": "modal-message-container"
+      },
+      "placement": [
+        {
+          "placementName": "modalMessageContainer"
+        }
+      ],
+      "css": {
+        "style": {
+          "flex": "1",
+          "overflowY": "auto",
+          "padding": "10px"
+        }
+      }
+    }
   ]
 }

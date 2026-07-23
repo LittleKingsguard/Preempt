@@ -16,7 +16,7 @@
     metadata[kKey] = key;
     metadata[vKey] = typeof node.props[key] === "object" ? JSON.stringify(node.props[key]) : node.props[key];
     contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-props-fields"] },
+      placement: [{ targetPlacement: ["inspector-props-fields"] }],
       component: [
         { reference: "editorInspectorKeyValueRow", target: "type" },
         { reference: "keyRef", value: kKey },
@@ -35,7 +35,7 @@
     metadata[kKey] = key;
     metadata[vKey] = typeof node.css?.style?.[key] === "object" ? JSON.stringify(node.css.style[key]) : node.css?.style?.[key];
     contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-css-fields"] },
+      placement: [{ targetPlacement: ["inspector-css-fields"] }],
       component: [
         { reference: "editorInspectorKeyValueRow", target: "type" },
         { reference: "keyRef", value: kKey },
@@ -52,7 +52,7 @@
     const vKey = `insp_class_${index}_v`;
     metadata[vKey] = cls;
     contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-css-classes-fields"] },
+      placement: [{ targetPlacement: ["inspector-css-classes-fields"] }],
       component: [
         { reference: "editorInspectorValueRow", target: "type" },
         { reference: "valRef", value: vKey },
@@ -122,7 +122,7 @@
         type: "details",
         props: { open: "true" },
         css: { classes: ["inspector-details"] },
-        placement: { targetPlacement: ["inspector-components-fields"] },
+        placement: [{ targetPlacement: ["inspector-components-fields"] }],
         content: [
           { type: "summary", content: `Def: ${comp.reference}`, css: { classes: ["inspector-summary"] } },
           {
@@ -182,7 +182,7 @@
 
       contentNodesBatch.push({
         type: "div", css: { classes: ["inspector-field-row"], style: { padding: "5px", background: "#333", borderRadius: "4px" } },
-        placement: { targetPlacement: ["inspector-components-fields"] },
+        placement: [{ targetPlacement: ["inspector-components-fields"] }],
         content: contentRow
       });
     }
@@ -198,7 +198,7 @@
     const hRef = typeof hData === 'object' && hData !== null && 'name' in hData ? hData.name : hData;
     metadata[refKey] = hRef;
     contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-handlers-fields"] },
+      placement: [{ targetPlacement: ["inspector-handlers-fields"] }],
       component: [
         { reference: "editorInspectorHandlerRow", target: "type" },
         { reference: "evtRef", value: evtKey },
@@ -216,7 +216,7 @@
     const vKey = `insp_place_${index}_v`;
     metadata[vKey] = place;
     contentNodesBatch.push({
-      placement: { targetPlacement: ["inspector-placements-fields"] },
+      placement: [{ targetPlacement: ["inspector-placements-fields"] }],
       component: [
         { reference: "editorInspectorValueRow", target: "type" },
         { reference: "valRef", value: vKey },
@@ -229,7 +229,7 @@
   if (node.children && node.children.length > 0) {
     node.children.forEach((child, idx) => {
       contentNodesBatch.push({
-        placement: { targetPlacement: ["inspector-children-fields"] },
+        placement: [{ targetPlacement: ["inspector-children-fields"] }],
         component: [
           { reference: "editorInspectorChildRow", target: "type" },
           { reference: "labelRef", value: `${idx}: ${child.type || child.data?.type || 'text'}` },
@@ -247,7 +247,7 @@
       type: "details",
       props: { open: "true" },
       css: { classes: ["inspector-details"] },
-      placement: { targetPlacement: ["editor-inspector-display"] },
+      placement: [{ targetPlacement: ["editor-inspector-display"] }],
       content: [
         { type: "summary", content: "General", css: { classes: ["inspector-summary"] } },
         {
@@ -277,7 +277,7 @@
       contentNodesBatch.push({
         type: "details",
         css: { classes: ["inspector-details"] },
-        placement: { targetPlacement: ["editor-inspector-display"] },
+        placement: [{ targetPlacement: ["editor-inspector-display"] }],
         content: [
           { type: "summary", content: "Content (Text)", css: { classes: ["inspector-summary"] } },
           {
