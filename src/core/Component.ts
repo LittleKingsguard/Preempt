@@ -49,7 +49,7 @@ export class Component implements ComponentBinding {
         }
         if (nodes.length > 0) this._instantiatedNodes = nodes;
       } else if (typeof this.value === 'object' && 'type' in this.value) {
-        this._instantiatedNodes = [new Node(this.value as NodeData, null, 99, false)];
+        this._instantiatedNodes = [new Node(this.value as NodeData, undefined, 99, false)];
       }
     }
 
@@ -135,32 +135,14 @@ export class Component implements ComponentBinding {
     }
 
     const targetPhase = phase;
-    const pass2Phase = targetPhase > 0 ? targetPhase : 99;
 
     const clones = this._instantiatedNodes.map(node => {
-      // Pass 1: Clone node ignoring children, nativeChildren, and placement
-      const clonedNode = node.clone(
-        ['children', 'nativeChildren', 'placement'],
+      return node.clone(
+        [],
         ['element', '_referencingNodes'],
         referencingNode,
         targetPhase
       );
-
-      // Pass 2: Manually clone children and placements in a separate pass with placement-blocking phase
-      if (node.nativeChildren && node.nativeChildren.length > 0) {
-        clonedNode.nativeChildren = node.nativeChildren.map((child: Node) =>
-          child.clone([], ['element', '_referencingNodes'], clonedNode, pass2Phase)
-        );
-        clonedNode.invalidateChildrenCache();
-      }
-
-      if (node.placement && node.placement.length > 0) {
-        clonedNode.placement = node.placement.map((p: any) =>
-          p.clone([], clonedNode, pass2Phase)
-        );
-      }
-
-      return clonedNode;
     });
 
     this._clonedChildren.push(...clones);

@@ -78,10 +78,7 @@ export class SlotAssemblyWorker extends BaseWorker {
           node.children = [];
           const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, node.lastCompletedPhase || 0) : [];
           for (const clonedChild of clonedChildren) {
-            clonedChild.parent = node;
             clonedChild.isInTree = node.isInTree;
-            node.nativeChildren.push(clonedChild);
-            node.invalidateChildrenCache();
 
             SlotAssemblyWorker.emitTo(clonedChild, _rollbackState || {}, false);
           }

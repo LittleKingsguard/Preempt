@@ -345,6 +345,7 @@ export class Supervisor {
 
     if (rerunConfig.runInstantiation) {
       Supervisor.resetInstantiation();
+      await Supervisor.instance.clearInternalState();
     }
 
     Supervisor.instance.pauseMonitoring();
@@ -411,7 +412,6 @@ export class Supervisor {
   }
 
   private async instantiate(): Promise<void> {
-    await this.clearInternalState();
     console.log("Stage: Instantiation");
 
     // Generate initial nodes from data via Template & Payload

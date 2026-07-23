@@ -22,23 +22,23 @@ export class Template {
 
   constructor(data: TemplateData) {
     const rootData = data.root;
+    const templateComponents = [
+      ...(Array.isArray(data.component) ? data.component : []),
+      ...(rootData && Array.isArray(rootData.component) ? rootData.component : [])
+    ];
+    this.component = deduplicateComponents(templateComponents);
+
+    if (rootData) {
+      rootData.component = this.component;
+    }
+
     const rootNode = new Node(rootData, null, 0, true);
 
     const childrenData = Array.isArray(data.children) ? data.children : [];
     const childNodes = childrenData.map((c: any) => c instanceof Node ? c : new Node(c, undefined, 0, false));
-    const templateComponents = [
-      ...(Array.isArray(data.component) ? data.component : []),
-      ...(rootData && Array.isArray(rootData.component) ? rootData.component : []),
-      ...(rootNode && Array.isArray(rootNode.component) ? rootNode.component : [])
-    ];
 
     this.root = rootNode;
     this.children = childNodes;
-    this.component = deduplicateComponents(templateComponents);
-
-    if (this.component.length > 0) {
-      this.root.setComponents(this.component, 0);
-    }
   }
   //Clone does not emit events by default in this case.
   public clone(ignoreProps: string[] = []): Template {

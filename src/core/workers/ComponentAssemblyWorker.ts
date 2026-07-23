@@ -72,9 +72,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
             // Clone children explicitly from componentRootNode.nativeChildren
             if (componentRootNode.nativeChildren && componentRootNode.nativeChildren.length > 0) {
               for (const child of componentRootNode.nativeChildren) {
-                const clonedChild = child.clone([], [], node, this.phase);
-                node.nativeChildren.push(clonedChild);
-                node.invalidateChildrenCache();
+                child.clone([], [], node, this.phase);
               }
             }
 

@@ -53,10 +53,12 @@ export class Placement implements PlacementConfig {
     }
 
     const clonedNode = node.clone([], [], this.parent, 99);
-    clonedNode.parent = this.parent;
-    this.parent.invalidateChildrenCache();
-
     this._referencingNodes.add(clonedNode);
+    const idx = this.parent.nativeChildren.indexOf(clonedNode);
+    if (idx !== -1) {
+      this.parent.nativeChildren.splice(idx, 1);
+    }
+    this.parent.invalidateChildrenCache();
   }
 
   public append(phase: number): void {
