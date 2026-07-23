@@ -65,14 +65,25 @@ export class Supervisor {
   public get rootNode(): Node | null {
     return this.templateData ? this.templateData.root : null;
   }
-  public contentNodes: Map<string | ContentPayload | Template, Node[]> = new Map();
+  public get contentNodes(): Map<Payload | Template, Node[]> {
+    const map = new Map<Payload | Template, Node[]>();
+    if (this.templateData && this.templateData.children && this.templateData.children.length > 0) {
+      map.set(this.templateData, [...this.templateData.children]);
+    }
+    if (this.contentData && this.contentData.size > 0) {
+      this.contentData.forEach(payloadObj => {
+        map.set(payloadObj, [...payloadObj.content]);
+      });
+    }
+    return map;
+  }
   private isMonitoring: boolean = false;
   public mountElementId: string;
   private hasInstantiated: boolean = false;
   public userData?: UserData;
   public serverApi?: any;
   public templateData!: Template;
-  public contentData: ContentPayload[] = [];
+  public contentData: Set<Payload> = new Set();
 
   private constructor(config: PipelineConfig, templateData: Template, mountElementId: string = "app") {
     this.config = config;
@@ -184,9 +195,8 @@ export class Supervisor {
   public static async process(config: PipelineConfig, templateData: Template, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
-      // Exit only if no contentData is provided *and* there is no existing contentData on the singleton
-      if (!contentData && (!Supervisor.instance?.contentData || Supervisor.instance.contentData.length === 0)) {
-        console.warn('process called without contentData and no existing instance content; exiting early.');
+      if (!templateData && (!Supervisor.instance || !Supervisor.instance.templateData)) {
+        console.warn('process called without templateData and no existing instance template; exiting early.');
         return;
       }
       // If an instance already has contentData, continue processing
@@ -194,10 +204,13 @@ export class Supervisor {
 
     if (Supervisor.instance) {
       Supervisor.instance.templateData = templateData;
-      if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
+      if (contentData) {
+        const payloads = Array.isArray(contentData) ? contentData : [contentData];
+        Supervisor.instance.contentData = new Set(payloads.map(p => new Payload(p)));
+      }
       Supervisor.instance.pauseMonitoring();
       // Safely copy userData if present
-      const firstPayload = Supervisor.instance.contentData?.[0];
+      const firstPayload = Array.from(Supervisor.instance.contentData)[0];
       if (firstPayload?.userData) {
         Supervisor.instance.userData = firstPayload.userData;
       }
@@ -212,9 +225,12 @@ export class Supervisor {
       return result;
     } else {
       Supervisor.instance = new Supervisor(config, templateData);
-      if (contentData) Supervisor.instance.contentData = Array.isArray(contentData) ? contentData : [contentData];
+      if (contentData) {
+        const payloads = Array.isArray(contentData) ? contentData : [contentData];
+        Supervisor.instance.contentData = new Set(payloads.map(p => new Payload(p)));
+      }
       // Safely copy userData if present
-      const firstPayload = Supervisor.instance.contentData?.[0];
+      const firstPayload = Array.from(Supervisor.instance.contentData)[0];
       if (firstPayload?.userData) {
         Supervisor.instance.userData = firstPayload.userData;
       }
@@ -241,18 +257,22 @@ export class Supervisor {
     }
   }
 
-  private static mergePayloads(existingData: ContentPayload[], newPayloads: ContentPayload[]): void {
-    newPayloads.forEach(newPayload => {
+  private static mergePayloads(existingData: Set<Payload>, newPayloads: ContentPayload[]): void {
+    newPayloads.forEach(rawPayload => {
+      const newPayload = new Payload(rawPayload);
       if (newPayload.metadata?.batchLabel) {
-        const existingIndex = existingData.findIndex(p => p.metadata?.batchLabel === newPayload.metadata!.batchLabel);
-        if (existingIndex > -1) {
-          existingData[existingIndex] = newPayload;
-        } else {
-          existingData.push(newPayload);
+        let matched: Payload | null = null;
+        for (const p of existingData) {
+          if (p.metadata?.batchLabel === newPayload.metadata.batchLabel) {
+            matched = p;
+            break;
+          }
         }
-      } else {
-        existingData.push(newPayload);
+        if (matched) {
+          existingData.delete(matched);
+        }
       }
+      existingData.add(newPayload);
     });
   }
 
@@ -267,7 +287,8 @@ export class Supervisor {
       }
 
       const payloads = Array.isArray(payload) ? payload : [payload];
-      Supervisor.mergePayloads(existingContentData, payloads);
+      const dataset = new Set(existingContentData.map(p => new Payload(p)));
+      Supervisor.mergePayloads(dataset, payloads);
 
       await Supervisor.process({
         isValidationRun: false,
@@ -278,7 +299,7 @@ export class Supervisor {
         runRendering: true,
         runPostprocessing: true,
         runMonitoring: true
-      }, templateData, existingContentData);
+      }, templateData, Array.from(dataset));
       return;
     }
 
@@ -292,28 +313,23 @@ export class Supervisor {
 
     // Merge into contentData
     if (!Supervisor.instance.contentData) {
-      Supervisor.instance.contentData = [];
+      Supervisor.instance.contentData = new Set();
     }
+
+    // Clear tracking arrays on existing nodes before re-evaluating
+    const contentNodesMap = Supervisor.instance.contentNodes;
+    payloads.forEach(rawPayload => {
+      const batchLabel = rawPayload.metadata?.batchLabel;
+      for (const [key, nodes] of contentNodesMap.entries()) {
+        if (key instanceof Payload && (key === rawPayload || (batchLabel && key.metadata?.batchLabel === batchLabel))) {
+          nodes.forEach(node => node.clearTrackingArrays());
+        }
+      }
+    });
 
     Supervisor.mergePayloads(Supervisor.instance.contentData, payloads);
 
     Supervisor.clearLockedPhases();
-
-    // Re-evaluate content nodes using Payload class
-    payloads.forEach(newPayload => {
-      const key = newPayload.metadata?.batchLabel || newPayload;
-      const existingNodes = Supervisor.instance!.contentNodes.get(key) || [];
-
-      if (existingNodes.length > 0) {
-        existingNodes.forEach(node => {
-          node.clearTrackingArrays();
-        });
-      }
-
-      const payloadObj = newPayload instanceof Payload ? newPayload : new Payload(newPayload);
-      const contentNodes = payloadObj.assembleContentNodes();
-      Supervisor.instance!.contentNodes.set(key, contentNodes);
-    });
 
     if (Supervisor.currentStage === 'monitoring') {
       Supervisor.instance.pauseMonitoring();
@@ -413,31 +429,15 @@ export class Supervisor {
 
   private async instantiate(): Promise<void> {
     console.log("Stage: Instantiation");
-
-    // Generate initial nodes from data via Template & Payload
-    this.contentNodes.clear();
-
-    if (this.templateData.children && this.templateData.children.length > 0) {
-      this.contentNodes.set(this.templateData, [...this.templateData.children]);
-    }
-
-    if (this.contentData && this.contentData.length > 0) {
-      this.contentData.forEach(payload => {
-        const key = payload.metadata?.batchLabel || payload;
-        const payloadObj = payload instanceof Payload ? payload : new Payload(payload);
-        const nodesForPayload = payloadObj.assembleContentNodes();
-        this.contentNodes.set(key, nodesForPayload);
-      });
-    }
-
     this.hasInstantiated = true;
   }
 
   private async clearInternalState(): Promise<void> {
     StyleNode.clear();
     PlacementWorker.restoreAllPlacements();
-    Node.globalMetadata = Object.assign({}, ...this.contentData.map(c => c.metadata || {}));
-    const payloadWithUser = this.contentData.find(c => c.userData || c.metadata?.user);
+    const payloadArray = Array.from(this.contentData);
+    Node.globalMetadata = Object.assign({}, ...payloadArray.map(c => c.metadata || {}));
+    const payloadWithUser = payloadArray.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
   }
   //TODO: Shift backend responsibilities of this to SSR functions and delete this method.

@@ -166,7 +166,7 @@ export class ClientAPI {
 
     if (Supervisor.instance) {
       if (!Supervisor.instance.contentData) {
-        Supervisor.instance.contentData = [];
+        Supervisor.instance.contentData = new Set();
       }
       const allComponents: any[] = [];
       nodes.forEach((n: Node) => {

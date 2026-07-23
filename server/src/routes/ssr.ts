@@ -9,6 +9,7 @@ import { pgUserSource } from "../sources/userSource.js";
 import { Setting } from "../models/settings.js";
 import { Supervisor } from "../../../src/core/Supervisor.js";
 import { Template } from "../../../src/core/Template.js";
+import type { ContentPayload } from "../../../src/types/NodeSchema.js";
 import path from "path";
 import fs from "fs";
 import { authenticateToken } from "../middleware/auth.js";
@@ -50,9 +51,19 @@ async function renderAndSendHtml(res: any, contentData: any) {
   }
 
   let htmlOutput = "";
+  let payloadObj: ContentPayload = contentData.payload;
+  if (!payloadObj || !Array.isArray(payloadObj.content)) {
+    payloadObj = {
+      content: Array.isArray(contentData.payload) ? contentData.payload : (contentData.payload ? [contentData.payload] : []),
+      metadata: (contentData as any).metadata || contentData.payload?.metadata,
+      userData: (contentData as any).userData || contentData.payload?.userData,
+      component: contentData.payload?.component
+    };
+  }
+
   if (serverConfig.runInstantiation) {
     const template = new Template(contentData.template_payload);
-    htmlOutput = (await Supervisor.process(serverConfig, template, contentData.payload, serverApi)) as string || "";
+    htmlOutput = (await Supervisor.process(serverConfig, template, payloadObj, serverApi)) as string || "";
   }
 
   let html = fs.readFileSync(distPath, "utf-8");
@@ -69,7 +80,7 @@ async function renderAndSendHtml(res: any, contentData: any) {
 
   const payloadScript = `<script id="preempt-initial-data" type="application/json">${JSON.stringify({
     template: contentData.template_payload,
-    content: contentData.payload,
+    content: payloadObj,
     clientConfig: clientConfig
   })}</script>`;
 

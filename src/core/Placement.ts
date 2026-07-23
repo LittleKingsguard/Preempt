@@ -52,7 +52,7 @@ export class Placement implements PlacementConfig {
       current = current.parent;
     }
 
-    const clonedNode = node.clone([], [], this.parent, 99);
+    const clonedNode = node.clone([], [], this.parent, 2);
     this._referencingNodes.add(clonedNode);
     const idx = this.parent.nativeChildren.indexOf(clonedNode);
     if (idx !== -1) {
