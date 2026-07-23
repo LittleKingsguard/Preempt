@@ -75,13 +75,13 @@ export class SlotAssemblyWorker extends BaseWorker {
       } else if (binding.target === "content") {
         if (Array.isArray(resolvedValue) || (typeof resolvedValue === "object" && resolvedValue !== null)) {
           node.content = undefined;
-          node.children = [];
-          const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, node.lastCompletedPhase || 0) : [];
-          for (const clonedChild of clonedChildren) {
-            clonedChild.isInTree = node.isInTree;
-
-            SlotAssemblyWorker.emitTo(clonedChild, _rollbackState || {}, false);
-          }
+          const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, 2) : [];
+          void clonedChildren;
+          // for (const clonedChild of clonedChildren) {
+          //   clonedChild.isInTree = node.isInTree;
+          // 
+          //   SlotAssemblyWorker.emitTo(clonedChild, _rollbackState || {}, false);
+          // }
         } else {
           node.content = String(resolvedValue);
           node.children = [];
