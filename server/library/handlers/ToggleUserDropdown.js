@@ -12,16 +12,16 @@
   const dropdownNode = container.findNode({ classes: ["dropdown-menu"] });
   
   if (dropdownNode) {
-    // Ensure CSS style object exists before mutating
-    dropdownNode.css = dropdownNode.css || {};
-    dropdownNode.css.style = dropdownNode.css.style || {};
-    
-    // Toggle the JSON data state directly to survive pipeline re-renders
-    const isCurrentlyBlock = dropdownNode.css.style.display === "block";
-    dropdownNode.css.style.display = isCurrentlyBlock ? "none" : "block";
-    
-    // Disable render optimization and flush state
-    dropdownNode.hasChangedSinceRender = true;
-    dropdownNode.render();
+    const currentCss = dropdownNode.css || {};
+    const currentStyle = currentCss.style || {};
+    const isCurrentlyBlock = currentStyle.display === "block";
+    const newDisplay = isCurrentlyBlock ? "none" : "block";
+
+    dropdownNode.receiveNextState({
+      css: {
+        ...currentCss,
+        style: { ...currentStyle, display: newDisplay }
+      }
+    });
   }
 }

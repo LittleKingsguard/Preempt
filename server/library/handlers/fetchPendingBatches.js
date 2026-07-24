@@ -8,23 +8,20 @@ async (event, context) => {
     if (!listNode) return;
 
     if (!res.ok) {
-      listNode.content = "Failed to load batches.";
-      listNode.hasChangedSinceRender = true;
-      listNode.render();
+      listNode.receiveNextState({ content: "Failed to load batches.", children: [] });
       return;
     }
 
     const data = await res.json();
     const batches = data.batches || [];
 
-    listNode.children = [];
-    listNode.content = [];
+    const newChildren = [];
 
     if (batches.length === 0) {
-      listNode.addChild({ type: "p", content: "No pending batches." });
+      newChildren.push({ type: "p", content: "No pending batches." });
     } else {
       batches.forEach(batch => {
-        listNode.addChild({
+        newChildren.push({
           type: "div",
           css: { style: { padding: "15px", border: "1px solid #ccc", marginBottom: "15px", borderRadius: "5px", background: "#fafafa" } },
           content: [
@@ -56,8 +53,7 @@ async (event, context) => {
       });
     }
 
-    listNode.hasChangedSinceRender = true;
-    listNode.render();
+    listNode.receiveNextState({ children: newChildren, content: undefined });
   } catch (err) {
     console.error("Error fetching batches:", err);
   }

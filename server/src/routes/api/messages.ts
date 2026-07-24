@@ -99,7 +99,21 @@ router.get('/:messageListId', authenticateToken, async (req: any, res) => {
     format
   });
   
-  res.json(messages);
+  if (format === 'raw' || !Array.isArray(messages)) {
+    return res.json(messages);
+  }
+
+  const formatted = messages.map((m: any) => {
+    const rawPayload = m.payload || m;
+    const contentArr = Array.isArray(rawPayload) ? rawPayload : (rawPayload.content && Array.isArray(rawPayload.content) ? rawPayload.content : [rawPayload]);
+    return {
+      metadata: m.metadata || rawPayload.metadata || {},
+      userData: m.userData || req.user,
+      component: m.component || rawPayload.component || [],
+      content: contentArr
+    };
+  });
+  res.json(formatted);
 });
 
 // Create a message

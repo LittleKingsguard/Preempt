@@ -2,17 +2,23 @@
   console.log("Executing handler: showComments", context?.node?.data?.type, context?.node?.css?.id, context?.node?.css?.classes);
   const container = context.node.parent;
   
-  // Hide the button
-  context.node.css = context.node.css || {};
-  context.node.css.style = context.node.css.style || {};
-  context.node.css.style.display = "none";
-  context.node.hasChangedSinceRender = true;
-
-  // Add the commentsContainer component
-  container.addChild({
-    type: "component",
-    props: { name: "commentsContainer" }
+  const buttonCss = context.node.css || {};
+  const buttonStyle = buttonCss.style || {};
+  context.node.receiveNextState({
+    css: {
+      ...buttonCss,
+      style: { ...buttonStyle, display: "none" }
+    }
   });
 
-  container.render();
+  const existingChildren = container.children || [];
+  container.receiveNextState({
+    children: [
+      ...existingChildren,
+      {
+        type: "component",
+        props: { name: "commentsContainer" }
+      }
+    ]
+  });
 }

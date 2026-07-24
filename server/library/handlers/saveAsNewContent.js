@@ -8,11 +8,14 @@
   
   const modalNode = container.findNode({ classes: ["publish-modal-overlay"] });
   if (modalNode) {
-    modalNode.css = modalNode.css || {};
-    modalNode.css.style = modalNode.css.style || {};
-    modalNode.css.style.display = "flex";
-    modalNode.hasChangedSinceRender = true;
-    modalNode.render();
+    const currentCss = modalNode.css || {};
+    const currentStyle = currentCss.style || {};
+    modalNode.receiveNextState({
+      css: {
+        ...currentCss,
+        style: { ...currentStyle, display: "flex" }
+      }
+    });
   } else {
     alert("Publish modal component not found.");
   }

@@ -1,9 +1,7 @@
 import { Supervisor } from "./Supervisor.js";
 import { Node } from "./Node.js";
-import { Props } from "./Props.js";
 import { Handler } from "./Handler.js";
 import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
-import { Placement } from "./Placement.js";
 import { Component } from "./Component.js";
 
 export class ClientAPI {
@@ -78,116 +76,64 @@ export class ClientAPI {
     options: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate?: NodeData, placements: string[] },
     next?: () => void
   ): Promise<void> {
+    Supervisor.clearLockedPhases();
     const queryParams = new URLSearchParams(options.query as any).toString();
     const queryURL = queryParams ? `${options.url}?${queryParams}` : options.url;
     const response = await fetch(queryURL, { method: "GET", headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
     const data = await response.json();
-    let nodes: Node[] = [];
-    let combinedMetadata: any = {};
-
-    if (options.query.format === "content") {
-      const extractPayload = (obj: any) => {
-        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-          if (obj.payload || ((obj.children || obj.content) && !obj.type)) {
-            const { payload, children, content, ...rest } = obj;
-            Object.assign(combinedMetadata, rest);
-            if (obj.payload) return obj.payload;
-            return obj.children || obj.content;
-          }
-        }
-        return obj;
+    let contentPayload: ContentPayload;
+    if (data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.content)) {
+      contentPayload = {
+        metadata: data.metadata ? { ...data.metadata } : {},
+        userData: data.userData,
+        component: data.component ? [...data.component] : [],
+        content: [...data.content]
       };
-
-      let payloads: any[] = [];
-      if (Array.isArray(data)) {
-        payloads = data.flatMap((item: any) => {
-          const ext = extractPayload(item);
-          return Array.isArray(ext) ? ext : [ext];
-        });
-      } else {
-        const ext = extractPayload(data);
-        payloads = Array.isArray(ext) ? ext : [ext];
-      }
-
-      nodes = payloads.map((item: any) => new Node(item, null, 0));
     } else {
-      const templateJSON = JSON.stringify(options.defaultTemplate || {});
-      nodes = data.map((item: any) => {
-        const nodeObj: any = JSON.parse(templateJSON);
-        if (!nodeObj.component) nodeObj.component = [];
-        const parseToComponent = (itm: object | string) => {
-          if (typeof itm === 'string') {
-            nodeObj.component.push({ reference: 'data', value: itm });
-          } else {
-            Object.keys(itm).forEach((key) => {
-              const existingComponent = nodeObj.component.find((c: any) => c.reference === key);
-              if (existingComponent) {
-                existingComponent.value = (itm as any)[key];
-              } else {
-                nodeObj.component.push({ reference: key, value: (itm as any)[key] });
-              }
-            });
-          }
-        };
-        if (typeof item === 'object' && !Array.isArray(item)) {
-          parseToComponent(item);
-        } else if (Array.isArray(item)) {
-          item.forEach((i: any) => parseToComponent(i));
-        }
-        return new Node(nodeObj, null, 0);
-      });
+      let rawItems: NodeData[] = [];
+      if (Array.isArray(data)) {
+        rawItems = data.flatMap((item: any) => {
+          if (item && typeof item === 'object' && Array.isArray(item.content)) return item.content;
+          return [item];
+        });
+      } else if (data && typeof data === 'object' && Array.isArray(data.content)) {
+        rawItems = data.content;
+      } else {
+        rawItems = [data];
+      }
+      contentPayload = {
+        metadata: {},
+        component: [],
+        content: rawItems
+      };
     }
 
-    nodes.forEach((node: Node) => {
-      if (!node.props) node.props = new Props({}, node);
-      node.props.batchLabel = options.batchLabel;
-      
-      if (!node.data.placement) {
-        (node.data as any).placement = [{ targetPlacement: [] }];
-      } else if (node.data.placement.length === 0) {
-        node.data.placement.push({ targetPlacement: [] });
+    contentPayload.metadata = { ...contentPayload.metadata, batchLabel: options.batchLabel };
+
+    contentPayload.content.forEach((item: NodeData) => {
+      if (!item.props) item.props = {};
+      item.props.batchLabel = options.batchLabel;
+
+      if (!item.placement) {
+        item.placement = [{ targetPlacement: [...options.placements] }];
+      } else {
+        if (item.placement.length === 0) {
+          item.placement.push({ targetPlacement: [...options.placements] });
+        } else {
+          item.placement.forEach(p => {
+            if (!p.targetPlacement) p.targetPlacement = [];
+            p.targetPlacement.push(...options.placements);
+          });
+        }
       }
-      
-      const dataPlacement = node.data.placement!;
-      const dp0 = dataPlacement[0]!;
-      if (!dp0.targetPlacement) {
-        dp0.targetPlacement = [];
-      }
-      dp0.targetPlacement.push(...options.placements);
-      
-      if (!node.placement) node.placement = [new Placement({ targetPlacement: [] }, node, 0)];
-      else if (node.placement.length === 0) node.placement.push(new Placement({ targetPlacement: [] }, node, 0));
-      
-      const nodePlacement = node.placement!;
-      const np0 = nodePlacement[0]!;
-      if (!np0.targetPlacement) np0.targetPlacement = [];
-      np0.targetPlacement.push(...options.placements);
     });
 
     if (Supervisor.instance) {
       if (!Supervisor.instance.contentData) {
         Supervisor.instance.contentData = new Set();
       }
-      const allComponents: any[] = [];
-      nodes.forEach((n: Node) => {
-        if (n.sourceComponents.size > 0 || n.targetComponents.size > 0) {
-          allComponents.push(...Array.from(n.sourceComponents.values()), ...Array.from(n.targetComponents.values()));
-        }
-        if (n.data?.component) {
-          allComponents.push(...n.data.component);
-        }
-      });
-      if (combinedMetadata.template && combinedMetadata.template.component) {
-        allComponents.push(...combinedMetadata.template.component);
-      }
-      console.log(`[DEBUG] fetchContent gathered allComponents for batch ${options.batchLabel}:`, allComponents.map(c => c.reference));
-      const newPayload: ContentPayload = {
-        metadata: { ...combinedMetadata, batchLabel: options.batchLabel },
-        content: nodes.map(n => n.exportToJson()) as NodeData[],
-        component: allComponents
-      };
       
-      await Supervisor.injectContent(newPayload);
+      await Supervisor.injectContent(contentPayload);
     }
 
     if (next) {

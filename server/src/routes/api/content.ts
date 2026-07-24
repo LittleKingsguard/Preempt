@@ -40,9 +40,14 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const contentData = (contentRes as any).content;
+    const rawContent = contentData.payload;
+    const contentArray = Array.isArray(rawContent) ? rawContent : (rawContent ? [rawContent] : []);
+
     const responsePayload: any = {
-      content: contentData.payload,
-      metadata: contentData.metadata
+      content: contentArray,
+      metadata: contentData.metadata || {},
+      userData: user || contentData.userData,
+      component: contentData.component || contentData.payload?.component || []
     };
     if (contentData.headers) {
       responsePayload.headers = contentData.headers;
@@ -79,7 +84,18 @@ router.get("/", authenticateToken, async (req, res) => {
       return res.json(rows);
     }
     const contents = await Content.getLatest(pgContentSource, criteria, user);
-    res.json(contents);
+    const formatted = contents.map((c: any) => {
+      const rawPayload = c.payload;
+      const contentArr = Array.isArray(rawPayload) ? rawPayload : (rawPayload ? [rawPayload] : []);
+      return {
+        id: c.id,
+        content: contentArr,
+        metadata: c.metadata || {},
+        userData: c.userData || user,
+        component: c.component || rawPayload?.component || []
+      };
+    });
+    res.json(formatted);
   } catch (err) {
     logger.error({ err }, "An error occurred");
     res.status(500).json({ error: "Internal server error" });

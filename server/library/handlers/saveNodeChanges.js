@@ -6,12 +6,11 @@ async (event, context) => {
   try {
     const updatedData = JSON.parse(display.innerText);
     if (window.Preempt && window.Preempt.inspectedNode) {
-        window.Preempt.inspectedNode.data = updatedData;
-        window.Preempt.inspectedNode.hasChangedSinceRender = true;
+        window.Preempt.inspectedNode.receiveNextState(updatedData);
         await window.Preempt.Supervisor.process(
+          window.Preempt.pipelineConfig || window.Preempt.config,
           window.Preempt.templateData, 
-          window.Preempt.contentData, 
-          window.Preempt.pipelineConfig
+          window.Preempt.contentData
         );
         alert("Changes applied to node.");
     } else {

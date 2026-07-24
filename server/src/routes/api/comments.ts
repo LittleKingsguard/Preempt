@@ -44,7 +44,22 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
     hide_pattern: 'Overlook',
     format
   });
-  res.json(comments);
+  
+  if (format === 'raw' || !Array.isArray(comments)) {
+    return res.json(comments);
+  }
+
+  const formatted = comments.map((c: any) => {
+    const rawPayload = c.payload || c;
+    const contentArr = Array.isArray(rawPayload) ? rawPayload : (rawPayload.content && Array.isArray(rawPayload.content) ? rawPayload.content : [rawPayload]);
+    return {
+      metadata: c.metadata || rawPayload.metadata || {},
+      userData: c.userData || req.user,
+      component: c.component || rawPayload.component || [],
+      content: contentArr
+    };
+  });
+  res.json(formatted);
 });
 
 // Create a comment

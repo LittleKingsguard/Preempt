@@ -47,13 +47,11 @@ async (event, context) => {
               if (node.targetComponents) {
                 if (!Array.from(node.targetComponents.values()).some(c => c.reference === "EditorInspectHandler")) {
                   node.targetComponents.set(binding.target, binding);
-                  node.hasChangedSinceRender = true;
                 }
               } else {
                 if (!node.component) node.component = [];
                 if (!node.component.some(c => c.reference === "EditorInspectHandler")) {
                   node.component.push(binding);
-                  node.hasChangedSinceRender = true;
                 }
               }
             }
@@ -77,7 +75,6 @@ async (event, context) => {
           }
         };
         injectInspect(root);
-        root.applyComponentsTree();
       }
     }`;
   }

@@ -23,24 +23,22 @@ async (event, context) => {
     }
       const listNode = context.node.findNode({ props: { id: "directory-list" } });
       if (listNode) {
-        listNode.children = [];
-        listNode.content = [];
-        
+        const newChildren = [];
         if (articles.length === 0) {
-          listNode.addChild({ type: "p", content: "No articles found." });
+          newChildren.push({ type: "p", content: "No articles found." });
         } else {
           articles.forEach(article => {
-            listNode.addChild({
+            newChildren.push({
               type: "div",
               css: { style: { padding: "1rem", border: "1px solid #ccc", borderRadius: "4px" } },
               content: [
-                { type: "h3", content: "Article " + article.id, css: {style: {margin: "0 0 0.5rem 0"}} },
+                { type: "h3", content: "Article " + article.id, css: { style: { margin: "0 0 0.5rem 0" } } },
                 { type: "a", props: { href: "/article/" + article.id }, content: "Read More" }
               ]
             });
           });
         }
-        listNode.render();
+        listNode.receiveNextState({ children: newChildren, content: undefined });
       }
   } catch (err) {
     console.error("Error fetching directory:", err);

@@ -29,15 +29,15 @@ async (event, context) => {
         }
         
         await window.Preempt.Supervisor.process(
+          window.Preempt.config || window.Preempt.pipelineConfig,
           window.Preempt.templateData,
-          window.Preempt.contentData,
-          window.Preempt.config || window.Preempt.pipelineConfig
+          window.Preempt.contentData
         );
       } else {
-        container.children = [];
-        container.content = [];
-        container.addChild({ type: "p", content: "No comments yet. Be the first to comment!" });
-        container.render();
+        container.receiveNextState({
+          children: [{ type: "p", content: "No comments yet. Be the first to comment!" }],
+          content: undefined
+        });
       }
     }
   } catch (err) {

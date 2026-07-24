@@ -37,8 +37,8 @@ export class Supervisor {
 
   public static isPropertyLocked(propertyName: string): boolean {
     const phaseId = Supervisor.propertyToPhaseMap[propertyName];
-    if (phaseId === undefined || !Supervisor.instance) return false;
-    return Supervisor.instance.activeLockedPhases.has(phaseId);
+    if (phaseId === undefined) return false;
+    return Supervisor.isPhaseLocked(phaseId);
   }
 
   public instantiationWorker: InstantiationWorker;
@@ -54,11 +54,8 @@ export class Supervisor {
 
   public ssrResult?: string | undefined;
 
-  public activeLockedPhases: Set<number> = new Set();
-
   public isPropertyLocked(propertyName: string): boolean {
-    const phaseId = Supervisor.propertyToPhaseMap[propertyName];
-    return phaseId !== undefined && this.activeLockedPhases.has(phaseId);
+    return Supervisor.isPropertyLocked(propertyName);
   }
 
   public config: PipelineConfig;
@@ -248,15 +245,13 @@ export class Supervisor {
       } else {
         Supervisor.instance.monitor();
       }
-      if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
+      Supervisor.activeLockedPhases.clear();
       return result;
     }
   }
 
   public static clearLockedPhases(): void {
-    if (Supervisor.instance) {
-      Supervisor.instance.activeLockedPhases.clear();
-    }
+    Supervisor.activeLockedPhases.clear();
   }
 
   private static mergePayloads(existingData: Set<Payload>, newPayloads: ContentPayload[]): void {
@@ -487,7 +482,7 @@ export class Supervisor {
 
   private close(): void {
     Supervisor.currentStage = 'closed';
-    if (Supervisor.instance) Supervisor.instance.activeLockedPhases.clear();
+    Supervisor.activeLockedPhases.clear();
     Supervisor.instance = null;
     Node.globalMetadata = {};
   }

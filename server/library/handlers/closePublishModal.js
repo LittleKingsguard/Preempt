@@ -7,10 +7,13 @@
   if (!container) return;
   const modalNode = container.findNode({ classes: ["publish-modal-overlay"] });
   if (modalNode) {
-    modalNode.css = modalNode.css || {};
-    modalNode.css.style = modalNode.css.style || {};
-    modalNode.css.style.display = "none";
-    modalNode.hasChangedSinceRender = true;
-    modalNode.render();
+    const currentCss = modalNode.css || {};
+    const currentStyle = currentCss.style || {};
+    modalNode.receiveNextState({
+      css: {
+        ...currentCss,
+        style: { ...currentStyle, display: "none" }
+      }
+    });
   }
 }

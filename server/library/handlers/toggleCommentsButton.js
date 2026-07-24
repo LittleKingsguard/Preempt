@@ -4,10 +4,13 @@
   const commentsAllowed = window.Preempt.contentData.props && window.Preempt.contentData.props.commentsAllowed;
   
   if (!commentsAllowed) {
-    context.node.css = context.node.css || {};
-    context.node.css.style = context.node.css.style || {};
-    context.node.css.style.display = "none";
-    context.node.hasChangedSinceRender = true;
-    context.node.render();
+    const currentCss = context.node.css || {};
+    const currentStyle = currentCss.style || {};
+    context.node.receiveNextState({
+      css: {
+        ...currentCss,
+        style: { ...currentStyle, display: "none" }
+      }
+    });
   }
 }
