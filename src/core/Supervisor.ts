@@ -124,6 +124,48 @@ export class Supervisor {
 
   public static activeLockedPhases: Set<number> = new Set<number>();
   public static pendingEmits: { caller: any; node: Node; rollbackState: any; phaseId: number }[] = [];
+  public static isPipelineScheduled: boolean = false;
+  public static isPipelineRunning: boolean = false;
+  public static pipelinePromise: Promise<string | void> | null = null;
+
+  public static schedulePipeline(): Promise<string | void> {
+    if (Supervisor.pipelinePromise) {
+      return Supervisor.pipelinePromise;
+    }
+
+    Supervisor.isPipelineScheduled = true;
+    const scheduleMicrotask = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (cb: () => void) => Promise.resolve().then(cb);
+
+    Supervisor.pipelinePromise = new Promise<string | void>((resolve, reject) => {
+      scheduleMicrotask(async () => {
+        Supervisor.isPipelineScheduled = false;
+        try {
+          if (!Supervisor.instance) {
+            resolve();
+            return;
+          }
+          let result: string | void = undefined;
+          if (Supervisor.currentStage === 'monitoring') {
+            Supervisor.instance.pauseMonitoring();
+            result = await Supervisor.instance.runPipeline();
+            Supervisor.instance.resumeMonitoring();
+            Supervisor.clearLockedPhases();
+          } else if (Supervisor.currentStage !== 'closed') {
+            result = await Supervisor.instance.runPipeline();
+          }
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        } finally {
+          Supervisor.pipelinePromise = null;
+        }
+      });
+    });
+
+    return Supervisor.pipelinePromise;
+  }
 
   public static lockPhase(phaseId: number): void {
     if (phaseId === 2) {
@@ -148,6 +190,7 @@ export class Supervisor {
         if (worker && typeof worker.push === 'function') {
           worker.push(node, rollbackState);
           console.log(`[Supervisor.emitToPhase] Phase ${phaseId} emitted for node ${node.css?.id || 'unknown'} by:`, caller);
+          Supervisor.schedulePipeline();
         }
       } else {
         console.warn(`[Supervisor.emitToPhase] Failed attempt to emit to Phase ${phaseId} for node ${node.css?.id || 'unknown'} by:`, caller, `(Phase ${phaseId} is locked)`);
@@ -187,6 +230,9 @@ export class Supervisor {
     if (Supervisor.instance) {
       Supervisor.instance.hasInstantiated = false;
     }
+    Supervisor.isPipelineScheduled = false;
+    Supervisor.isPipelineRunning = false;
+    Supervisor.pipelinePromise = null;
     Supervisor.pendingEmits = [];
     Node.idCollisions.clear();
   }
@@ -213,11 +259,15 @@ export class Supervisor {
       if (firstPayload?.userData) {
         Supervisor.instance.userData = firstPayload.userData;
       }
-      if (serverApi) Supervisor.instance.serverApi = serverApi;
-      Supervisor.instance.templateData.root.css.id = Supervisor.instance.mountElementId;
-      Supervisor.instance.templateData.root.props.id = Supervisor.instance.mountElementId;
-      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        Supervisor.instance.templateData.root.element = document.getElementById(Supervisor.instance.mountElementId);
+      if (Supervisor.instance.templateData?.root) {
+        const rootNode = Supervisor.instance.templateData.root as any;
+        if (!rootNode.css) rootNode.css = {};
+        rootNode.css.id = Supervisor.instance.mountElementId;
+        if (!rootNode.props) rootNode.props = {};
+        rootNode.props.id = Supervisor.instance.mountElementId;
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          rootNode.element = document.getElementById(Supervisor.instance.mountElementId);
+        }
       }
       const result = await Supervisor.instance.runPipeline();
       Supervisor.instance.resumeMonitoring();
@@ -234,10 +284,15 @@ export class Supervisor {
         Supervisor.instance.userData = firstPayload.userData;
       }
       if (serverApi) Supervisor.instance.serverApi = serverApi;
-      Supervisor.instance.templateData.root.css.id = Supervisor.instance.mountElementId;
-      Supervisor.instance.templateData.root.props.id = Supervisor.instance.mountElementId;
-      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        Supervisor.instance.templateData.root.element = document.getElementById(Supervisor.instance.mountElementId);
+      if (Supervisor.instance.templateData?.root) {
+        const rootNode = Supervisor.instance.templateData.root as any;
+        if (!rootNode.css) rootNode.css = {};
+        rootNode.css.id = Supervisor.instance.mountElementId;
+        if (!rootNode.props) rootNode.props = {};
+        rootNode.props.id = Supervisor.instance.mountElementId;
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+          rootNode.element = document.getElementById(Supervisor.instance.mountElementId);
+        }
       }
       const result = await Supervisor.instance.runPipeline();
       if (!Supervisor.instance.config.runMonitoring) {
@@ -327,13 +382,7 @@ export class Supervisor {
     Supervisor.mergePayloads(Supervisor.instance.contentData, payloads);
 
     Supervisor.clearLockedPhases();
-
-    if (Supervisor.currentStage === 'monitoring') {
-      Supervisor.instance.pauseMonitoring();
-      await Supervisor.instance.runPipeline();
-      Supervisor.instance.resumeMonitoring();
-      Supervisor.clearLockedPhases();
-    }
+    await Supervisor.schedulePipeline();
   }
 
   public static async rerun(configOverride?: Partial<PipelineConfig>): Promise<string | void> {
@@ -375,43 +424,48 @@ export class Supervisor {
   }
 
   public async runPipeline(): Promise<string | void> {
-    if (this.config.runInstantiation && !this.hasInstantiated) {
-      Supervisor.currentStage = 'instantiation';
-      await this.instantiate();
-      this.executeHandlers("afterInstantiate");
-    }
+    Supervisor.isPipelineRunning = true;
+    try {
+      if (this.config.runInstantiation && !this.hasInstantiated) {
+        Supervisor.currentStage = 'instantiation';
+        await this.instantiate();
+        this.executeHandlers("afterInstantiate");
+      }
 
-    if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
-      this.executeHandlers("onDBLoad");
-    }
+      if (typeof window === 'undefined' || (globalThis as any).process?.env?.IS_SSR_TEST === 'true') {
+        this.executeHandlers("onDBLoad");
+      }
 
-    // Priority Queue Draining Loop
-    let queueDrained = false;
-    while (!queueDrained) {
-      queueDrained = true;
-      // Process in order 0 to 7
-      for (let phaseId = 0; phaseId <= 7; phaseId++) {
-        const worker = this.getWorkerForPhase(phaseId);
-        if (worker && worker.hasEvents()) {
-          Supervisor.currentStage = this.getStageNameForPhase(phaseId);
-          // Lock prior phases when starting a higher phase queue
-          for (let p = 0; p < phaseId; p++) {
-            Supervisor.lockPhase(p);
+      // Priority Queue Draining Loop
+      let queueDrained = false;
+      while (!queueDrained) {
+        queueDrained = true;
+        // Process in order 0 to 7
+        for (let phaseId = 0; phaseId <= 8; phaseId++) {
+          const worker = this.getWorkerForPhase(phaseId);
+          if (worker && worker.hasEvents()) {
+            Supervisor.currentStage = this.getStageNameForPhase(phaseId);
+            // Lock prior phases when starting a higher phase queue
+            for (let p = 0; p < phaseId; p++) {
+              Supervisor.lockPhase(p);
+            }
+            if (phaseId === 1 || phaseId === 6 || phaseId === 7) {
+              Supervisor.lockPhase(phaseId);
+            }
+            await worker.processQueue();
+            queueDrained = false;
+            break; // Restart loop to prioritize lowest phase IDs again
           }
-          if (phaseId === 1 || phaseId === 6 || phaseId === 7) {
-            Supervisor.lockPhase(phaseId);
-          }
-          await worker.processQueue();
-          queueDrained = false;
-          break; // Restart loop to prioritize lowest phase IDs again
         }
       }
-    }
 
-    if (this.ssrResult !== undefined) {
-      const result = this.ssrResult;
-      this.ssrResult = undefined;
-      return result;
+      if (this.ssrResult !== undefined) {
+        const result = this.ssrResult;
+        this.ssrResult = undefined;
+        return result;
+      }
+    } finally {
+      Supervisor.isPipelineRunning = false;
     }
   }
 
@@ -462,6 +516,7 @@ export class Supervisor {
 
   private monitor(): void {
     Supervisor.currentStage = 'monitoring';
+    Supervisor.clearLockedPhases();
     this.executeHandlers("beforeMonitor");
     this.isMonitoring = true;
     console.log("Stage: Monitoring started, state:", this.isMonitoring);
@@ -475,6 +530,7 @@ export class Supervisor {
 
   private resumeMonitoring(): void {
     Supervisor.currentStage = 'monitoring';
+    Supervisor.clearLockedPhases();
     this.executeHandlers("onResume");
     this.isMonitoring = true;
     console.log("Monitoring resumed, state:", this.isMonitoring);

@@ -4,6 +4,7 @@ import { Supervisor } from "../Supervisor.js";
 
 export abstract class BaseWorker {
   protected queue: Map<Node, RollbackState | undefined> = new Map();
+  protected isProcessing: boolean = false;
   protected supervisor: Supervisor;
   public abstract readonly phase: number;
 
@@ -18,17 +19,20 @@ export abstract class BaseWorker {
   }
 
   public hasEvents(): boolean {
-    return this.queue.size > 0;
+    return this.queue.size > 0 || this.isProcessing;
   }
 
   public async processQueue(): Promise<void> {
+    this.isProcessing = true;
     let iter = 0;
-    while (this.hasEvents()) {
-      if (++iter > 500) { console.error("INFINITE LOOP IN WORKER", this.constructor.name); break; }
-      const currentQueue = new Map(this.queue);
-      this.queue.clear();
+    try {
+      while (this.queue.size > 0) {
+        if (++iter > 500) { console.error("INFINITE LOOP IN WORKER", this.constructor.name); break; }
+        const nextItem = this.queue.entries().next().value;
+        if (!nextItem) break;
+        const [node, rollbackState] = nextItem;
+        this.queue.delete(node);
 
-      for (const [node, rollbackState] of currentQueue.entries()) {
         try {
           if (node.lastCompletedPhase === this.phase) {
             console.log(`[${this.constructor.name}] Skipping node (already completed phase ${this.phase}): ${node.type} | ID: ${node.css?.id || 'unknown'}`);
@@ -42,6 +46,8 @@ export abstract class BaseWorker {
           node.rollback(rollbackState);
         }
       }
+    } finally {
+      this.isProcessing = false;
     }
   }
 
