@@ -1,3 +1,4 @@
+import './core/utils/Logger.js'
 import { Supervisor } from './core/Supervisor'
 import { WebSocketClient } from './core/WebSocketClient'
 import { clientAPI } from './core/ClientAPI'
