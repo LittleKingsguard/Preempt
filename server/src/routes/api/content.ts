@@ -40,22 +40,34 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const contentData = (contentRes as any).content;
-    const rawContent = contentData.payload;
-    const contentArray = Array.isArray(rawContent) ? rawContent : (rawContent ? [rawContent] : []);
+    const rawPayload = contentData.payload;
+
+    let contentNodes: any[] = [];
+    let components: any[] = [];
+
+    if (Array.isArray(rawPayload)) {
+      contentNodes = rawPayload;
+    } else if (rawPayload && typeof rawPayload === 'object') {
+      if (Array.isArray(rawPayload.component)) components.push(...rawPayload.component);
+      if (Array.isArray(rawPayload.content)) {
+        contentNodes = rawPayload.content;
+      } else {
+        contentNodes = [rawPayload];
+      }
+    }
+
+    if (contentData.component && Array.isArray(contentData.component)) {
+      components.push(...contentData.component);
+    }
 
     const responsePayload: any = {
-      content: contentArray,
+      content: contentNodes,
       metadata: contentData.metadata || {},
       userData: user || contentData.userData,
-      component: contentData.component || contentData.payload?.component || []
+      component: components
     };
     if (contentData.headers) {
       responsePayload.headers = contentData.headers;
-    }
-
-    if (clientTemplateId !== contentData.resolved_template_id) {
-      responsePayload.template = contentData.template_payload;
-      responsePayload.templateId = contentData.resolved_template_id;
     }
 
     res.json(responsePayload);
@@ -86,13 +98,30 @@ router.get("/", authenticateToken, async (req, res) => {
     const contents = await Content.getLatest(pgContentSource, criteria, user);
     const formatted = contents.map((c: any) => {
       const rawPayload = c.payload;
-      const contentArr = Array.isArray(rawPayload) ? rawPayload : (rawPayload ? [rawPayload] : []);
+      let contentNodes: any[] = [];
+      let components: any[] = [];
+
+      if (Array.isArray(rawPayload)) {
+        contentNodes = rawPayload;
+      } else if (rawPayload && typeof rawPayload === 'object') {
+        if (Array.isArray(rawPayload.component)) components.push(...rawPayload.component);
+        if (Array.isArray(rawPayload.content)) {
+          contentNodes = rawPayload.content;
+        } else {
+          contentNodes = [rawPayload];
+        }
+      }
+
+      if (c.component && Array.isArray(c.component)) {
+        components.push(...c.component);
+      }
+
       return {
         id: c.id,
-        content: contentArr,
+        content: contentNodes,
         metadata: c.metadata || {},
         userData: c.userData || user,
-        component: c.component || rawPayload?.component || []
+        component: components
       };
     });
     res.json(formatted);

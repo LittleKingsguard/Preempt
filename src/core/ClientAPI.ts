@@ -82,6 +82,7 @@ export class ClientAPI {
     const response = await fetch(queryURL, { method: "GET", headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } });
     const data = await response.json();
     let contentPayload: ContentPayload;
+
     if (data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.content)) {
       contentPayload = {
         metadata: data.metadata ? { ...data.metadata } : {},
@@ -91,24 +92,31 @@ export class ClientAPI {
       };
     } else {
       let rawItems: NodeData[] = [];
+      let extraComponents: any[] = [];
       if (Array.isArray(data)) {
         rawItems = data.flatMap((item: any) => {
-          if (item && typeof item === 'object' && Array.isArray(item.content)) return item.content;
+          if (item && typeof item === 'object') {
+            if (item.component && Array.isArray(item.component)) extraComponents.push(...item.component);
+            if (Array.isArray(item.content)) return item.content;
+          }
           return [item];
         });
-      } else if (data && typeof data === 'object' && Array.isArray(data.content)) {
-        rawItems = data.content;
+      } else if (data && typeof data === 'object') {
+        if (data.component && Array.isArray(data.component)) extraComponents.push(...data.component);
+        if (Array.isArray(data.content)) {
+          rawItems = data.content;
+        } else {
+          rawItems = [data];
+        }
       } else {
         rawItems = [data];
       }
       contentPayload = {
         metadata: {},
-        component: [],
+        component: extraComponents,
         content: rawItems
       };
     }
-
-    contentPayload.metadata = { ...contentPayload.metadata, batchLabel: options.batchLabel };
 
     contentPayload.content.forEach((item: NodeData) => {
       if (!item.props) item.props = {};

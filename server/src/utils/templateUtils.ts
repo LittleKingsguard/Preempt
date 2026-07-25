@@ -41,22 +41,27 @@ export async function fetchTemplateHandlers(templateId: number, handlerSource: I
   return Array.from(handlerMap.values());
 }
 
+export function upsertComponentReference(payload: any, reference: string, value: any): void {
+  if (!payload) return;
+  const targetPayload = payload.root || payload;
+  if (!targetPayload.component) targetPayload.component = [];
+  const idx = targetPayload.component.findIndex((comp: any) => comp.reference === reference);
+  if (idx >= 0) {
+    targetPayload.component[idx] = { ...targetPayload.component[idx], reference, value };
+  } else {
+    targetPayload.component.push({ reference, value });
+  }
+}
+
 export async function populateTemplateHandlers(payload: any, templateId: number, user: any, handlerSource: IHandlerSource, componentSource: IComponentSource): Promise<void> {
   const handlerRows = await fetchTemplateHandlers(templateId, handlerSource, componentSource);
 
   if (handlerRows.length > 0) {
-    const targetPayload = payload.root || payload;
-    if (!targetPayload.component) targetPayload.component = [];
     handlerRows.forEach((h: any) => {
       const val = !validateUserRoles(user, h.approved_roles || [], h.author_id)
         ? { name: h.name, body: h.body }
         : { name: h.name, body: "console.warn('Handler ' + " + JSON.stringify(h.name) + " + ' blocked by RBAC');" };
-      const idx = targetPayload.component.findIndex((comp: any) => comp.reference === h.name);
-      if (idx >= 0) {
-        targetPayload.component[idx] = { reference: h.name, value: val };
-      } else {
-        targetPayload.component.push({ reference: h.name, value: val });
-      }
+      upsertComponentReference(payload, h.name, val);
     });
   }
 }
@@ -69,18 +74,16 @@ export async function populateTemplateComponents(payload: any, templateId: numbe
   const componentRows = await fetchTemplateComponents(templateId, componentSource);
   console.log("populateTemplateComponents", componentRows, templateId);
   if (componentRows.length > 0) {
-    const targetPayload = payload.root || payload;
-    if (!targetPayload.component) targetPayload.component = [];
     componentRows.forEach((c: any) => {
       const val = !validateUserRoles(user, c.approved_roles || [], c.author_id)
         ? c.payload
         : { type: "div", css: { style: { display: "none" } } };
-      const idx = targetPayload.component.findIndex((comp: any) => comp.reference === c.name);
-      if (idx >= 0) {
-        targetPayload.component[idx] = { ...targetPayload.component[idx], reference: c.name, value: val };
-      } else {
-        targetPayload.component.push({ reference: c.name, value: val });
-      }
+      upsertComponentReference(payload, c.name, val);
     });
   }
+}
+
+export async function populateTemplate(payload: any, templateId: number, user: any, handlerSource: IHandlerSource, componentSource: IComponentSource): Promise<void> {
+  await populateTemplateHandlers(payload, templateId, user, handlerSource, componentSource);
+  await populateTemplateComponents(payload, templateId, user, componentSource);
 }

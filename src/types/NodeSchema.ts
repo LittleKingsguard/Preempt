@@ -53,7 +53,6 @@ export interface NodeData {
     cssDef?: CssDef[] | undefined;
   } | undefined;
   versions?: NodeVersion[] | undefined;
-  node?: any | undefined;
 }
 
 export interface TemplateData {

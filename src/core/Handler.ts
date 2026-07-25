@@ -30,10 +30,10 @@ export class Handler implements HandlerDef {
       this.name = 'anonymous_handler';
       this.body = data;
     } else {
-      this.name = data.name;
-      this.event = data.event;
+      this.name = data.name || (data as any).reference || 'anonymous_handler';
+      this.event = data.event || (data as any).target;
       this.phase = data.phase;
-      this.body = data.body;
+      this.body = data.body || '';
     }
 
     if (this.phase && this.parent && this.parent.isInTree && phase !== 99) {
@@ -45,18 +45,20 @@ export class Handler implements HandlerDef {
   }
 
   get body(): string { return this._body; }
-  set body(value: string) { this._body = value; this._compiled = this.compile(); }
+  set body(value: string) { 
+    this._body = value || ''; 
+    this._compiled = this.compile(); 
+  }
 
   get compiled(): Function | undefined { return this._compiled; }
 
   /** Compile the handler body into a Function */
   public compile(): Function | undefined {
     try {
-      const trimmed = this._body.trim();
+      const trimmed = (this._body || '').trim();
       if (!trimmed) {
-        console.error('Handler body is empty for', this);
         return () => {
-          console.error('Attempted to execute empty handler for', this.name);
+          console.warn(`Attempted to execute uncompiled/empty handler ${this.name}`);
         };
       }
 

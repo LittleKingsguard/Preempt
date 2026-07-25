@@ -486,7 +486,6 @@ export class Node {
     const cleanData = (data: any) => {
       if (!data) return data;
       const d = { ...data };
-      if (d.node) delete d.node;
       if (d.css) {
         d.css = { ...d.css };
         if (d.css.id && d.css.id.startsWith("preempt-node-")) {

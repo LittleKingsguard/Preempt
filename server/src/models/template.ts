@@ -1,12 +1,13 @@
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { Tag } from "./tag.js";
-import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplateHandlers, populateTemplateComponents } from "../utils/templateUtils.js";
+import { resolveEditorTemplateId, fetchTemplateRecord, populateTemplate } from "../utils/templateUtils.js";
 import { Node } from "../../../src/core/Node.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgHandlerSource } from "../sources/handlerSource.js";
 import { pgComponentSource } from "../sources/componentSource.js";
 import { pgTagSource } from "../sources/tagSource.js";
+import { pgSettingSource } from "../sources/settingsSource.js";
 import type { IContentData, IContentSource, IHandlerSource, IComponentSource } from "./interfaces.js";
 
 export class Template {
@@ -46,8 +47,7 @@ export class Template {
     const authErr = validateUserRoles(user, template.approved_roles || [], template.author_id);
     if (authErr) return authErr;
 
-    await populateTemplateHandlers(template.payload, template.id, user, handlerSource, componentSource);
-    await populateTemplateComponents(template.payload, template.id, user, componentSource);
+    await populateTemplate(template.payload, template.id, user, handlerSource, componentSource);
 
 
 

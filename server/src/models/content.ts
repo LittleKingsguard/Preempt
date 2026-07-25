@@ -1,5 +1,6 @@
 import { PreemptEvent } from "../../../src/types/Event.js";
-import { checkContentSecurity, populateContentHandlers, populateContentComponents } from "../utils/contentUtils.js";
+import { checkContentSecurity, populateContent } from "../utils/contentUtils.js";
+import { populateTemplate } from "../utils/templateUtils.js";
 import { Tag } from "./tag.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import { pgContentSource } from "../sources/contentSource.js";
@@ -151,12 +152,10 @@ export class Content {
     const authErr = validateUserRoles(user, content.approved_roles || [], content.author_id);
     if (authErr) return authErr;
 
-    await populateContentHandlers(content.payload, content.id, content.resolved_template_id, user, handlerSource, componentSource, content.template_payload);
-    await populateContentComponents(content.payload, content.id, content.resolved_template_id, user, componentSource, content.template_payload);
-
-
-
-
+    if (content.template_payload && content.resolved_template_id) {
+      await populateTemplate(content.template_payload, content.resolved_template_id, user, handlerSource, componentSource);
+    }
+    await populateContent(content.payload, content.id, user, handlerSource, componentSource);
 
     return { content };
   }
@@ -176,8 +175,10 @@ export class Content {
     const contents = [];
     for (const r of rows) {
       const c = new Content(r, source);
-      await populateContentHandlers(c.payload, c.id, c.resolved_template_id, user, pgHandlerSource, pgComponentSource, c.template_payload);
-      await populateContentComponents(c.payload, c.id, c.resolved_template_id, user, pgComponentSource, c.template_payload);
+      if (c.template_payload && c.resolved_template_id) {
+        await populateTemplate(c.template_payload, c.resolved_template_id, user, pgHandlerSource, pgComponentSource);
+      }
+      await populateContent(c.payload, c.id, user, pgHandlerSource, pgComponentSource);
       contents.push(c);
     }
     return contents;

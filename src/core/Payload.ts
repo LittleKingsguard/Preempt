@@ -9,27 +9,39 @@ export class Payload implements ContentPayload {
   public component?: Component[] | undefined;
   public content: Node[];
 
-  constructor(data: Partial<ContentPayload>, parent?: Node) {
+  constructor(data: Partial<ContentPayload>) {
     this.metadata = data.metadata ? CloneUtils.deepClone(data.metadata) : undefined;
     this.userData = data.userData ? CloneUtils.deepClone(data.userData) : undefined;
-    this.component = data.component ? data.component.map(c => {
-      if (!parent) throw new Error("Parent node is required to initialize components in Content");
-      return new Component(c, parent, 0);
-    }) : undefined;
+    
+    const passedComponents = data.component;
     const rawContent = data.content || [];
-    this.content = rawContent.map(item => new Node(item, undefined, 0));
+
+    if (passedComponents && passedComponents.length > 0) {
+      rawContent.forEach(item => {
+        if (item && !(item instanceof Node)) {
+          if (!item.component) item.component = [];
+          passedComponents.forEach(pc => {
+            const binding = pc instanceof Component 
+              ? { reference: pc.reference, target: pc.target, value: pc.value } 
+              : pc;
+            if (!item.component!.some(c => c && c.reference === binding.reference && c.target === binding.target)) {
+              item.component!.push({ ...binding });
+            }
+          });
+        }
+      });
+    }
+
+    this.content = rawContent.map(item => item instanceof Node ? item : new Node(item, undefined, 0));
   }
 
-  public clone(ignoreProps: string[] = [], newParent?: Node): Payload {
+  public clone(ignoreProps: string[] = []): Payload {
     return new Payload({
       metadata: ignoreProps.includes('metadata') ? undefined : this.metadata,
       userData: ignoreProps.includes('userData') ? undefined : this.userData,
-      component: ignoreProps.includes('component') ? undefined : this.component?.map(c => {
-        if (!newParent) throw new Error("New parent node is required to clone components in Content");
-        return c.clone(ignoreProps, newParent, 99);
-      }),
+      component: ignoreProps.includes('component') ? undefined : this.component?.map(c => ({ reference: c.reference, target: c.target, value: c.value })),
       content: ignoreProps.includes('content') ? [] : this.content.map(n => n.clone(ignoreProps, [], null, 99))
-    }, newParent);
+    });
   }
 
   public toString(): string {
