@@ -105,12 +105,12 @@ export class ClientRenderingWorker extends BaseWorker {
           
           const handlerFunc = (event: Event) => {
              const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
-             let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
-             if (fn) {
-               if (fn.length === 1) {
-                  fn(context);
-               } else {
-                  fn(event, context);
+             if (handlerObj && typeof handlerObj.execute === 'function') {
+               handlerObj.execute(event, context);
+             } else {
+               let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
+               if (fn) {
+                 fn(event, context);
                }
              }
           };

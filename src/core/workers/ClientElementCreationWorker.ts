@@ -101,17 +101,17 @@ export class ClientElementCreationWorker extends BaseWorker {
           if (!handlerObj.event) continue;
           const rawEvent = handlerObj.event;
           const eventName = rawEvent.startsWith('on') ? rawEvent.substring(2).toLowerCase() : rawEvent.toLowerCase();
-          
+
           const handlerFunc = (event: Event) => {
-             const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
-             let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
-             if (fn) {
-                if (fn.length === 1) {
-                   fn(context);
-                } else {
-                   fn(event, context);
-                }
-             }
+            const context = { node: node, metadata: Node.globalMetadata, rootNode: Supervisor.getRootNode(), contentPayload: Supervisor.instance?.contentData || [], clientAPI };
+            if (handlerObj && typeof handlerObj.execute === 'function') {
+              handlerObj.execute(event, context);
+            } else {
+              let fn = handlerObj.compiled || clientAPI.getHandler(handlerObj.name, node);
+              if (fn) {
+                fn(event, context);
+              }
+            }
           };
           el.addEventListener(eventName, handlerFunc);
           node._attachedListeners.push({ eventName, handlerFunc });

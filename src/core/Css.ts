@@ -1,5 +1,6 @@
 import { StyleNode } from "./StyleNode.js";
 import type { Node } from "./Node.js";
+import { Supervisor } from "./Supervisor.js";
 
 export class Css {
   public id?: string | undefined;
@@ -16,6 +17,33 @@ export class Css {
         this.styleNodes.push(new StyleNode(def, node));
       }
     }
+  }
+
+  public merge(otherCss: Css | Record<string, any>): number | undefined {
+    if (Supervisor.isPropertyLocked('css')) {
+      console.error(`[Css] Lock violation: Property 'css' is currently locked`);
+      return undefined;
+    }
+    const other = otherCss instanceof Css ? otherCss : new Css(otherCss);
+    if (other.id !== undefined) this.id = other.id;
+    if (other.classes !== undefined && Array.isArray(other.classes)) {
+      this.classes = [...other.classes];
+    }
+    if (other.style !== undefined && typeof other.style === 'object') {
+      this.style = { ...(this.style || {}), ...other.style };
+    }
+    if (other.styleNodes && other.styleNodes.length > 0) {
+      for (const newSN of other.styleNodes) {
+        const existingIdx = this.styleNodes.findIndex(s => s.data?.selector && s.data.selector === newSN.data?.selector);
+        if (existingIdx !== -1) {
+          this.styleNodes[existingIdx].delete();
+          this.styleNodes[existingIdx] = newSN;
+        } else {
+          this.styleNodes.push(newSN);
+        }
+      }
+    }
+    return 5;
   }
 
   public clone(ignoreProps: string[] = [], node?: Node): Css {

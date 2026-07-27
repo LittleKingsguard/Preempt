@@ -56,12 +56,28 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
       }
     }
 
-    // If root node (parent === null), ensure mounted in DOM container if detached
-    if (node.parent === null && !el.parentNode) {
-      const mountId = (node.props?.id as string) || node.css?.id || 'app';
-      const mountTarget = document.getElementById(mountId) || document.body;
-      if (mountTarget && el !== mountTarget) {
-        mountTarget.appendChild(el);
+    // Ensure node is mounted in parent's DOM element at the correct index, or mounted to root container if root
+    if (node.parent === null) {
+      if (!el.parentNode) {
+        const mountId = (node.props?.id as string) || node.css?.id || 'app';
+        const mountTarget = document.getElementById(mountId) || document.body;
+        if (mountTarget && el !== mountTarget) {
+          mountTarget.appendChild(el);
+        }
+      }
+    } else if (node.parent && node.parent.element) {
+      const parentEl = node.parent.element;
+      if (node.parent.children && Array.isArray(node.parent.children)) {
+        const childIndex = node.parent.children.indexOf(node);
+        if (childIndex > -1) {
+          if (el.parentNode !== parentEl) {
+            parentEl.appendChild(el);
+          }
+          const expectedNode = parentEl.children[childIndex];
+          if (expectedNode !== el) {
+            parentEl.insertBefore(el, expectedNode || null);
+          }
+        }
       }
     }
   }

@@ -44,6 +44,51 @@ export class Handler implements HandlerDef {
     }
   }
 
+  public static mergeHandlers(targetNode: Node, incomingHandlers: HandlerDef[] | Handler[] | Record<string, any>): number | undefined {
+    if (Supervisor.isPropertyLocked('handlers')) {
+      console.error(`[Handler] Lock violation: Property 'handlers' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
+      return undefined;
+    }
+
+    if (targetNode.handlers && Array.isArray(targetNode.handlers)) {
+      for (const oldH of targetNode.handlers) {
+        if (oldH && typeof oldH.delete === 'function') {
+          oldH.delete();
+        }
+      }
+    }
+
+    const newHandlersList: Handler[] = [];
+    let minPhase = 5;
+
+    const processHandler = (hDef: HandlerDef | Handler | string, keyName?: string) => {
+      const handlerInstance = Handler.fromDef(hDef, targetNode, 0, keyName);
+      newHandlersList.push(handlerInstance);
+
+      if (handlerInstance.phase) {
+        const pId = PHASE_NAME_MAP[handlerInstance.phase];
+        if (pId !== undefined && pId < minPhase) {
+          minPhase = pId;
+        }
+      }
+    };
+
+    if (Array.isArray(incomingHandlers)) {
+      incomingHandlers.forEach(h => processHandler(h));
+    } else if (incomingHandlers && typeof incomingHandlers === 'object') {
+      for (const [key, val] of Object.entries(incomingHandlers)) {
+        if (val instanceof Handler || (val && typeof val === 'object')) {
+          processHandler(val as HandlerDef, key);
+        } else if (typeof val === 'string') {
+          processHandler({ name: key, body: val }, key);
+        }
+      }
+    }
+
+    targetNode.handlers = newHandlersList;
+    return minPhase;
+  }
+
   get body(): string { return this._body; }
   set body(value: string) { 
     this._body = value || ''; 
@@ -114,6 +159,13 @@ export class Handler implements HandlerDef {
           hEvent = subPath;
         } else {
           if (subPath) hName = subPath;
+        }
+      } else {
+        const knownPhases = ["beforeAssembly", "afterAssembly", "beforeRender", "afterRender", "beforeInstantiate", "afterInstantiate", "beforePreprocessing", "afterPreprocessing", "beforeValidation", "afterValidation", "beforePostprocessing", "afterPostprocessing"];
+        if (knownPhases.includes(targetPath)) {
+          hPhase = targetPath;
+        } else if (targetPath.startsWith("on") || ["click", "submit", "change", "input", "mouseover", "keydown"].includes(targetPath.toLowerCase())) {
+          hEvent = targetPath;
         }
       }
     }

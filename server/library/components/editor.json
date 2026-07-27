@@ -389,35 +389,28 @@
           "reference": "editorInspectorChildRow"
         },
         {
-          "reference": "editorSelectParent",
-          "target": "handlers.click"
+          "reference": "editorSelectParent"
         },
         {
-          "reference": "editorSelectNode",
-          "target": "handlers.click"
+          "reference": "editorSelectNode"
         },
         {
           "reference": "editorDetailPane"
         },
         {
-          "reference": "editorTestDetailPane",
-          "target": "handlers.click"
+          "reference": "editorTestDetailPane"
         },
         {
-          "reference": "editorSaveDetailPane",
-          "target": "handlers.click"
+          "reference": "editorSaveDetailPane"
         },
         {
-          "reference": "editorCloseDetailPane",
-          "target": "handlers.click"
+          "reference": "editorCloseDetailPane"
         },
         {
-          "reference": "editorOpenDetailPane",
-          "target": "handlers.click"
+          "reference": "editorOpenDetailPane"
         },
         {
-          "reference": "editorUpdateNodeProp",
-          "target": "handlers.click"
+          "reference": "editorUpdateNodeProp"
         }
       ]
     }

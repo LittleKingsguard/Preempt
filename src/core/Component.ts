@@ -62,6 +62,43 @@ export class Component implements ComponentBinding {
     }
   }
 
+  public static mergeComponents(targetNode: Node, incomingComponents: ComponentBinding[] | Component[]): number | undefined {
+    if (Supervisor.isPhaseLocked(2) || Supervisor.isPropertyLocked('component')) {
+      console.error(`[Component] Lock violation: Phase 2 or property 'component' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
+      return undefined;
+    }
+
+    const oldComponents = targetNode.component || [];
+    const newComponents = incomingComponents || [];
+
+    let sourceChanged = false;
+    const oldSource = oldComponents.filter(c => c.value !== undefined);
+    const newSource = newComponents.filter(c => c.value !== undefined);
+
+    if (oldSource.length !== newSource.length) {
+      sourceChanged = true;
+    } else {
+      for (const oldC of oldSource) {
+        const newC = newSource.find(c => c.reference === oldC.reference);
+        if (!newC || newC.target !== oldC.target || Node.generateObjectHash(newC.value) !== Node.generateObjectHash(oldC.value)) {
+          sourceChanged = true;
+          break;
+        }
+      }
+    }
+
+    if (sourceChanged) {
+      console.error(`[Component] receiveNextState rejected: Cannot modify source components via receiveNextState. Please update node.data state and pass layout change to Supervisor. Node ID: ${targetNode.css?.id || 'unknown'}`);
+      return undefined;
+    }
+
+    const componentInstances = incomingComponents.map(c => c instanceof Component ? c : new Component(c, targetNode, 0));
+    targetNode.setComponents(componentInstances, 0);
+
+    const hasTypeComp = componentInstances.some(c => c.target === "type");
+    return hasTypeComp ? 2 : 3;
+  }
+
   public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Component {
     const targetPhase = phase;
     const cloned = new Component({

@@ -221,11 +221,19 @@ export class ClientAPI {
       targetNodes.forEach(node => {
         const currentHandlersMap = node.handlers ? { ...node.handlers } : (node.data?.handlers ? { ...node.data.handlers } : {});
         const handlersMap: any = { ...currentHandlersMap };
+        const knownPhases = ["beforeAssembly", "afterAssembly", "beforeRender", "afterRender", "beforeInstantiate", "afterInstantiate", "beforePreprocessing", "afterPreprocessing", "beforeValidation", "afterValidation", "beforePostprocessing", "afterPostprocessing"];
+
         handlers.forEach((h: any) => {
           if (targetEvent) {
+            const isPhase = knownPhases.includes(targetEvent);
             if (overwrite || handlersMap[targetEvent] === undefined) {
-              console.log(`Inserting handler ${h.name} for explicit event ${targetEvent} into node`, node.data);
-              handlersMap[targetEvent] = { name: h.name, body: h.body };
+              console.log(`Inserting handler ${h.name} for explicit targetEvent ${targetEvent} into node`, node.data);
+              handlersMap[targetEvent] = {
+                name: h.name,
+                body: h.body,
+                event: !isPhase ? targetEvent : undefined,
+                phase: isPhase ? targetEvent : undefined
+              };
               if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
             }
           } else {
@@ -240,10 +248,17 @@ export class ClientAPI {
             const eventBinding = Array.from(node.targetComponents.values()).find((c: any) => c.reference === h.name && c.target?.startsWith("handlers."));
             if (eventBinding && eventBinding.target) {
               eventBinding.value = { name: h.name, body: h.body };
-              const eventName = eventBinding.target.substring(9);
+              const subTarget = eventBinding.target.substring(9);
+              const eventName = subTarget.startsWith("event.") ? subTarget.substring(6) : (subTarget.startsWith("phase.") ? subTarget.substring(6) : subTarget);
+              const isSubPhase = knownPhases.includes(eventName);
               if (overwrite || handlersMap[eventName] === undefined) {
-                console.log(`Inserting handler ${h.name} for event ${eventName} into node`, node.data);
-                handlersMap[eventName] = { name: h.name, body: h.body };
+                console.log(`Inserting handler ${h.name} for event/phase ${eventName} into node`, node.data);
+                handlersMap[eventName] = {
+                  name: h.name,
+                  body: h.body,
+                  event: !isSubPhase ? eventName : undefined,
+                  phase: isSubPhase ? eventName : undefined
+                };
                 if (!this.handlers[h.name]) this.handlers[h.name] = this.compileHandler(h.name, h.body)!;
               }
             }

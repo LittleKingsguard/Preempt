@@ -156,7 +156,7 @@ export class Node {
       filtered.forEach(c => {
         if (c.target) {
           if (this.targetComponents.get(c.target) !== undefined) {
-            console.error(`Duplicate target component defined for target: ${c.target}`);
+            console.error(`[Node] Duplicate target component defined for target: ${c.target} on node '${this.css?.id || this.type}'`, this);
           }
           this.targetComponents.set(c.target, c);
         }
@@ -315,6 +315,35 @@ export class Node {
     }
   }
 
+  public mergeNativeChildren(incomingNativeChildren: any[]): number | undefined {
+    if (Supervisor.isPropertyLocked('nativeChildren')) {
+      console.error(`[Node] Lock violation: Property 'nativeChildren' is currently locked for node ${this.css?.id || 'unknown'}`);
+      return undefined;
+    }
+    while (this.nativeChildren && this.nativeChildren.length > 0) {
+      const child = this.nativeChildren.pop();
+      if (child && typeof child.delete === 'function') {
+        child.delete();
+      }
+    }
+
+    const newNativeChildren: Node[] = [];
+    for (const item of incomingNativeChildren) {
+      if (item instanceof Node) {
+        item.parent = this;
+        item.isInTree = this.isInTree;
+        newNativeChildren.push(item);
+      } else if (item && typeof item === 'object') {
+        const childNode = new Node(item as NodeData, this, 0, this.isInTree);
+        newNativeChildren.push(childNode);
+      }
+    }
+    this.nativeChildren = newNativeChildren;
+    this.data.children = newNativeChildren.map(c => c.data);
+    this.invalidateChildrenCache();
+    return 7;
+  }
+
   public receiveNextState(nextState: NextState, explicitPhaseId?: number): void {
     const changedKeys = Object.keys(nextState);
     if (changedKeys.length === 0) {
@@ -323,6 +352,7 @@ export class Node {
           console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
           return;
         }
+        this.lastCompletedPhase = explicitPhaseId > 0 ? explicitPhaseId - 1 : undefined;
         Supervisor.emitToPhase(this, this, this._lastValidState, explicitPhaseId);
       }
       return;
@@ -337,86 +367,67 @@ export class Node {
       }
     }
 
-    if (nextState.component !== undefined) {
-      const oldComponents = this.component || [];
-      const newComponents = nextState.component || [];
-
-      let sourceChanged = false;
-      const oldSource = oldComponents.filter(c => c.value !== undefined);
-      const newSource = newComponents.filter(c => c.value !== undefined);
-
-      if (oldSource.length !== newSource.length) {
-        sourceChanged = true;
-      } else {
-        for (const oldC of oldSource) {
-          const newC = newSource.find(c => c.reference === oldC.reference);
-          if (!newC || newC.target !== oldC.target || Node.generateObjectHash(newC.value) !== Node.generateObjectHash(oldC.value)) {
-            sourceChanged = true;
-            break;
-          }
-        }
-      }
-
-      if (sourceChanged) {
-        console.error(`[Node] receiveNextState rejected: Cannot modify source components via receiveNextState. Please update the node.data state and pass the layout change to Supervisor/InstantiationWorker so the node tree can be properly rebuilt. Node ID: ${this.css?.id}`);
-        return;
-      }
-    }
-
-    let targetPhase = 5; // default to Validation
-    if (explicitPhaseId !== undefined) {
-      if (Supervisor.isPhaseLocked(explicitPhaseId)) {
-        console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
-        return;
-      }
-      targetPhase = explicitPhaseId;
-    } else {
-      for (const key of changedKeys) {
-        if (Supervisor.isPropertyLocked(key)) {
-          console.error(`[Node] Lock violation: Property '${key}' is currently locked by another phase for node ${this.css?.id}`);
-          return;
-        }
-        const pId = Supervisor.propertyToPhaseMap ? Supervisor.propertyToPhaseMap[key] : 5;
-        if (pId !== undefined && pId < targetPhase) {
-          targetPhase = pId;
-        }
-      }
-    }
-
-    if (targetPhase <= 2) {
-      for (const comp of this.targetComponents.values()) {
-        if (comp.rollback !== undefined) {
-          Object.assign(this, comp.rollback);
-        }
-      }
-    } else if (targetPhase === 3) {
-      for (const comp of this.targetComponents.values()) {
-        if (comp.target !== "type" && comp.rollback !== undefined) {
-          Object.assign(this, comp.rollback);
-        }
-      }
-    }
-
     // Snapshot state
     if (!this._lastValidState) {
       this._lastValidState = this.clone(['content', 'children', 'nativeChildren', '_childrenCache', 'parent', 'element'], [], null, 99);
       this._lastValidState.nativeChildren = [...this.nativeChildren];
     }
 
-    // Apply optimistically
-    const mergeDeep = (target: any, source: any) => {
-      for (const key in source) {
-        if (source[key] instanceof Object && !Array.isArray(source[key]) && source[key] !== null) {
-          if (!target[key]) Object.assign(target, { [key]: {} });
-          mergeDeep(target[key], source[key]);
-        } else {
-          Object.assign(target, { [key]: source[key] });
+    let minTargetPhase: number = explicitPhaseId !== undefined ? explicitPhaseId : 5;
+    let lockFailed = false;
+
+    if (explicitPhaseId !== undefined && Supervisor.isPhaseLocked(explicitPhaseId)) {
+      console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
+      return;
+    }
+
+    for (const key of changedKeys) {
+      let phaseResult: number | undefined = undefined;
+      if (key === 'props' && nextState.props !== undefined) {
+        if (!this.props) this.props = new Props({}, this);
+        phaseResult = this.props.merge(nextState.props);
+        this.data.props = { ...this.props };
+      } else if (key === 'css' && nextState.css !== undefined) {
+        if (!this.css) this.css = new Css({}, this);
+        phaseResult = this.css.merge(nextState.css);
+        this.data.css = { id: this.css.id, classes: this.css.classes, style: this.css.style };
+      } else if (key === 'component' && nextState.component !== undefined) {
+        phaseResult = Component.mergeComponents(this, nextState.component);
+      } else if (key === 'handlers' && nextState.handlers !== undefined) {
+        phaseResult = Handler.mergeHandlers(this, nextState.handlers);
+      } else if (key === 'children' && nextState.children !== undefined && Array.isArray(nextState.children)) {
+        phaseResult = this.mergeNativeChildren(nextState.children);
+      } else if (key === 'nativeChildren' && nextState.nativeChildren !== undefined && Array.isArray(nextState.nativeChildren)) {
+        phaseResult = this.mergeNativeChildren(nextState.nativeChildren);
+      } else if (key !== 'placement') {
+        if (Supervisor.isPropertyLocked(key)) {
+          console.error(`[Node] Lock violation: Property '${key}' is currently locked for node ${this.css?.id}`);
+          lockFailed = true;
+          break;
+        }
+        (this as any)[key] = (nextState as any)[key];
+        (this.data as any)[key] = (nextState as any)[key];
+        const mappedPhase = Supervisor.propertyToPhaseMap ? Supervisor.propertyToPhaseMap[key] : 5;
+        if (mappedPhase !== undefined) {
+          phaseResult = mappedPhase;
         }
       }
-    };
-    mergeDeep(this.data, nextState);
-    Object.assign(this, nextState);
 
+      if (phaseResult === undefined && key !== 'placement') {
+        lockFailed = true;
+        break;
+      }
+      if (phaseResult !== undefined && (explicitPhaseId === undefined || phaseResult < minTargetPhase)) {
+        minTargetPhase = phaseResult;
+      }
+    }
+
+    if (lockFailed) {
+      return;
+    }
+
+    const targetPhase = minTargetPhase;
+    this.lastCompletedPhase = targetPhase > 0 ? targetPhase - 1 : undefined;
     Supervisor.emitToPhase(this, this, this._lastValidState, targetPhase);
   }
 
