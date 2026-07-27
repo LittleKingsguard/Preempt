@@ -323,10 +323,7 @@ export class Node {
           console.error(`[Node] Lock violation: Phase ${explicitPhaseId} is already locked for node ${this.css?.id}`);
           return;
         }
-        if (Supervisor.instance && Supervisor.instance.getWorkerForPhase) {
-          const worker = Supervisor.instance.getWorkerForPhase(explicitPhaseId);
-          if (worker) worker.push(this, this._lastValidState);
-        }
+        Supervisor.emitToPhase(this, this, this._lastValidState, explicitPhaseId);
       }
       return;
     }
@@ -420,10 +417,7 @@ export class Node {
     mergeDeep(this.data, nextState);
     Object.assign(this, nextState);
 
-    if (Supervisor.instance && Supervisor.instance.getWorkerForPhase) {
-      const worker = Supervisor.instance.getWorkerForPhase(targetPhase);
-      if (worker) worker.push(this, this._lastValidState);
-    }
+    Supervisor.emitToPhase(this, this, this._lastValidState, targetPhase);
   }
 
   public rollback(rollbackState?: RollbackState): void {

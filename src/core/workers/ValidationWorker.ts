@@ -8,10 +8,9 @@ export class ValidationWorker extends BaseWorker {
 
   public static emitTo(node: Node, rollbackState: RollbackState = {}): void {
     if (!Supervisor.instance || !Supervisor.instance.validationWorker) return;
-    const worker = Supervisor.instance.validationWorker;
     const emitRecursive = (n: Node) => {
       if (n.isInTree && n.lastCompletedPhase !== 5) {
-        worker.push(n, rollbackState);
+        Supervisor.emitToPhase(this, n, rollbackState, 5);
       }
       if (n.children && Array.isArray(n.children)) {
         for (const child of n.children) {

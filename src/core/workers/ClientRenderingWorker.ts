@@ -174,7 +174,7 @@ export class ClientRenderingWorker extends BaseWorker {
         if (!child) continue;
 
         if (!child.element) {
-          this.push(child);
+          Supervisor.emitToPhase(this, child, {}, 6);
         } else {
           activeChildElements.add(child.element);
           if (child.element.parentNode !== el) {
@@ -206,7 +206,7 @@ export class ClientRenderingWorker extends BaseWorker {
 
     if (node.parent) {
       if (!node.parent.element) {
-        this.push(node.parent);
+        Supervisor.emitToPhase(this, node.parent, {}, 6);
       } else if (el.parentNode !== node.parent.element) {
         node.parent.element.appendChild(el);
       }

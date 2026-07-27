@@ -14,9 +14,5 @@
   childrenArray[idx] = childrenArray[idx + dir];
   childrenArray[idx + dir] = temp;
   
-  // Directly mutate the node.children array
-  node.children = childrenArray;
-  
-  // Call modifyNode with an empty partial just to trigger validation and re-render
-  context.clientAPI.modifyNode({}, node, undefined, false);
+  node.receiveNextState({ children: childrenArray });
 }

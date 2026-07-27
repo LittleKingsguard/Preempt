@@ -6,15 +6,17 @@
   if (supervisor && supervisor.userData) {
     // User is signed in
     if (node.children[0]) {
-      node.children[0].content = "Profile ▼";
+      node.children[0].receiveNextState({ content: "Profile ▼" });
     }
   } else {
     // User is not signed in
     // Convert the button to a "Sign In" link
     if (node.children[0]) {
-      node.children[0].type = "a";
-      node.children[0].content = "Sign In";
-      node.children[0].props = { href: "/api/oauth/login" };
+      node.children[0].receiveNextState({
+        type: "a",
+        content: "Sign In",
+        props: { href: "/api/oauth/login" }
+      });
       // Remove the dropdown toggle handler
       if (node.children[0].sourceComponents) {
         for (const [key, comp] of Array.from(node.children[0].targetComponents.entries())) {

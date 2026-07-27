@@ -14,7 +14,7 @@ export class PostprocessingWorker extends BaseWorker {
     });
     for (const match of matchingNodes) {
       if (match.isInTree && match.lastCompletedPhase !== 8) {
-        Supervisor.instance.postprocessingWorker.push(match, rollbackState);
+        Supervisor.emitToPhase(this, match, rollbackState, 8);
       }
     }
   }

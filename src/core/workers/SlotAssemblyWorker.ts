@@ -23,7 +23,7 @@ export class SlotAssemblyWorker extends BaseWorker {
     const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
     for (const match of matchingNodes) {
       if (match.isInTree && match.lastCompletedPhase !== 3) {
-        Supervisor.instance.slotAssemblyWorker.push(match, rollbackState);
+        Supervisor.emitToPhase(this, match, rollbackState, 3);
       }
     }
   }

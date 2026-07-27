@@ -219,14 +219,9 @@ export class ClientAPI {
       }
 
       targetNodes.forEach(node => {
-        if (!node.data) {
-          node.data = { type: node.type || "div" };
-        }
-        if (!node.data.handlers) {
-          (node.data as any).handlers = {};
-        }
+        const currentHandlersMap = node.handlers ? { ...node.handlers } : (node.data?.handlers ? { ...node.data.handlers } : {});
+        const handlersMap: any = { ...currentHandlersMap };
         handlers.forEach((h: any) => {
-          const handlersMap = node.data.handlers as any;
           if (targetEvent) {
             if (overwrite || handlersMap[targetEvent] === undefined) {
               console.log(`Inserting handler ${h.name} for explicit event ${targetEvent} into node`, node.data);
@@ -254,6 +249,7 @@ export class ClientAPI {
             }
           }
         });
+        node.receiveNextState({ handlers: handlersMap });
       });
     } catch (err) {
       console.error("Failed to fetch handlers:", err);
