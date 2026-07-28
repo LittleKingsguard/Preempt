@@ -3,12 +3,27 @@ import { CloneUtils } from "./utils/CloneUtils.js";
 import { Component } from "./Component.js";
 import { Node } from "./Node.js";
 
+/**
+ * Encapsulates dynamic content payload data injected into Supervisor placements.
+ *
+ * @useCase Contains content nodes, component bindings, user metadata, and batch labels for page injection.
+ * @processFlow Passed into `Supervisor.process()` or `Supervisor.injectContent()`.
+ */
 export class Payload implements ContentPayload {
+  /** Metadata key-value dictionary. */
   public metadata?: Record<string, any> | undefined;
+  /** User profile/session data object. */
   public userData?: UserData | undefined;
+  /** Array of component bindings accompanying the content nodes. */
   public component?: Component[] | undefined;
+  /** Array of content Node instances. */
   public content: Node[];
 
+  /**
+   * Constructs a new Payload container instance.
+   *
+   * @param data Raw ContentPayload schema object.
+   */
   constructor(data: Partial<ContentPayload>) {
     this.metadata = data.metadata ? CloneUtils.deepClone(data.metadata) : undefined;
     this.userData = data.userData ? CloneUtils.deepClone(data.userData) : undefined;
@@ -35,6 +50,12 @@ export class Payload implements ContentPayload {
     this.content = rawContent.map(item => item instanceof Node ? item : new Node(item, undefined, 0));
   }
 
+  /**
+   * Deep clones this Payload object.
+   *
+   * @param ignoreProps Property keys to exclude.
+   * @returns Cloned Payload instance.
+   */
   public clone(ignoreProps: string[] = []): Payload {
     return new Payload({
       metadata: ignoreProps.includes('metadata') ? undefined : this.metadata,
@@ -44,6 +65,11 @@ export class Payload implements ContentPayload {
     });
   }
 
+  /**
+   * Concatenates and returns text content across contained nodes.
+   *
+   * @returns Concatenated text content string.
+   */
   public toString(): string {
     return this.content
       .filter(c => c.type === 'text' || !c.type)
@@ -51,3 +77,4 @@ export class Payload implements ContentPayload {
       .join('');
   }
 }
+

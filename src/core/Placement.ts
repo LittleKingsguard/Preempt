@@ -2,10 +2,19 @@ import type { PlacementConfig } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
 
+/**
+ * Manages virtual DOM layout placement slots (`placementName`) and content insertion target definitions (`targetPlacement`).
+ *
+ * @useCase Attached to template nodes as placement slots or content nodes as placement targets to enable dynamic reparenting and layout composition.
+ * @processFlow Resolved in Phase 1 (`PlacementWorker`), reparenting target content nodes into matching layout slot containers.
+ */
 export class Placement implements PlacementConfig {
+  /** Global map of active placement drop-zone names to Placement instances. */
   public static placementMap: Map<string, Placement[]> = new Map<string, Placement[]>();
+  /** Global map of target placement request names to Placement instances. */
   public static sourcePlacements: Map<string, Placement[]> = new Map<string, Placement[]>();
 
+  /** Clears all static placement tracking maps. */
   public static clearPlacements(): void {
     Placement.placementMap.clear();
     Placement.sourcePlacements.clear();
@@ -16,6 +25,14 @@ export class Placement implements PlacementConfig {
   public _referencingNodes: Set<Node> = new Set();
   public parent: Node;
 
+  /**
+   * Constructs a new Placement definition.
+   *
+   * @param data PlacementConfig schema payload.
+   * @param parent Host Node instance.
+   * @param phase Execution phase ID.
+   * @param _isInTree Boolean indicating tree membership.
+   */
   constructor(data: PlacementConfig, parent: Node, phase: number, _isInTree?: boolean) {
     this.parent = parent;
     this.placementName = data.placementName;
@@ -23,6 +40,14 @@ export class Placement implements PlacementConfig {
     this.append(phase);
   }
 
+  /**
+   * Clones this Placement definition.
+   *
+   * @param ignoreProps Property exclusion list.
+   * @param newParent Host Node instance.
+   * @param phase Execution phase ID.
+   * @returns Cloned Placement instance.
+   */
   public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Placement {
     const parentNode = newParent || this.parent;
     const targetPhase = phase;
@@ -40,6 +65,11 @@ export class Placement implements PlacementConfig {
     return clonedPlacement;
   }
 
+  /**
+   * Places a target Node clone into this host placement container.
+   *
+   * @param node Source Node instance to reparent.
+   */
   public placeInto(node: Node): void {
     if (this.parent === node) {
       throw new Error("Cannot place node into itself");
@@ -61,6 +91,11 @@ export class Placement implements PlacementConfig {
     this.parent.invalidateChildrenCache();
   }
 
+  /**
+   * Registers this Placement into global tracking maps and emits node to Phase 1 (`PlacementWorker`).
+   *
+   * @param phase Execution phase ID.
+   */
   public append(phase: number): void {
     if (this.placementName) {
       let list = Placement.placementMap.get(this.placementName);
@@ -96,6 +131,9 @@ export class Placement implements PlacementConfig {
     }
   }
 
+  /**
+   * Unregisters this placement definition and deletes placed child node instances.
+   */
   public delete(): void {
     if (this.placementName) {
       const list = Placement.placementMap.get(this.placementName);
@@ -131,3 +169,4 @@ export class Placement implements PlacementConfig {
     }
   }
 }
+

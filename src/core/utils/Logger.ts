@@ -1,3 +1,9 @@
+/**
+ * Enriches global console methods (`log`, `warn`, `error`, `info`, `debug`) with ISO timestamp prefixes.
+ *
+ * @useCase Called automatically upon module import to ensure clean, timestamped logs in server/browser environments.
+ * @processFlow Runs globally on initialization before any Supervisor pipeline execution.
+ */
 export function setupConsoleTimestamps(): void {
   const targetConsole = typeof window !== 'undefined' ? window.console : globalThis.console;
   if (!targetConsole) return;
@@ -16,3 +22,4 @@ export function setupConsoleTimestamps(): void {
 }
 
 setupConsoleTimestamps();
+

@@ -2,14 +2,33 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 
+/**
+ * Worker handling Phase 7 (Tree Assembly) for Client-Side DOM hierarchy construction.
+ *
+ * @useCase Mounts created elements into their parent container DOM nodes, orders child elements correctly, and removes unmounted DOM nodes.
+ * @processFlow Eighth worker stage executed after Phase 6 Client Element Creation on browser runtime environments.
+ * @queueEmissions Events are emitted to Phase 7 queue automatically by `ClientElementCreationWorker.onProcessSuccess()` upon completion of Phase 6 Element Creation.
+ */
 export class ClientTreeAssemblyWorker extends BaseWorker {
+  /** Phase 7 identifier. */
   public readonly phase = 7;
 
+  /**
+   * Processes the tree assembly worker queue sequentially.
+   *
+   * @returns Promise resolving when tree assembly completes.
+   */
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
     await super.processQueue();
   }
 
+  /**
+   * Processes tree assembly for a single Node instance and triggers `afterRender` handlers.
+   *
+   * @param node Node instance to process.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[ClientTreeAssemblyWorker] Error: Node reached Tree Assembly phase with parent === undefined or isInTree === false`, node);
@@ -25,6 +44,11 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
   }
 
+  /**
+   * Helper method appending and re-ordering child DOM elements within the host element.
+   *
+   * @param node Target host Node instance.
+   */
   private assembleTree(node: Node): void {
     if (typeof document === 'undefined') return;
 
@@ -82,7 +106,14 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
     }
   }
 
+  /**
+   * Updates `node.lastCompletedPhase` to 7 upon success.
+   *
+   * @param node Successfully assembled Node.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 7;
   }
 }
+

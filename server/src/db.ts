@@ -19,6 +19,12 @@ if (process.env.NODE_ENV === 'production' && password === "preemptpassword") {
   process.exit(1);
 }
 
+/**
+ * PostgreSQL connection pool instance configured with environment variables.
+ *
+ * @useCase Primary database connection interface used across server routes, models, and workers for querying Preempt templates, content, components, and handlers.
+ * @processFlow Module initialization loads environment credentials and establishes connection pool.
+ */
 export const pool = new Pool({
   user: process.env.PGUSER || "preempt",
   password,
@@ -26,3 +32,4 @@ export const pool = new Pool({
   port: parseInt(process.env.PGPORT || "5432", 10),
   database: process.env.PGDATABASE || "preempt",
 });
+

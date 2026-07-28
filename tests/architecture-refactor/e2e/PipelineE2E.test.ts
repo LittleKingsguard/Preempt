@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Supervisor } from '../../../src/core/Supervisor';
 import { Node } from '../../../src/core/Node';
 
-import { SSRRenderingWorker } from '../../../src/core/workers/SSRRenderingWorker.js';
+import { SSRTreeAssemblyWorker } from '../../../src/core/workers/SSRTreeAssemblyWorker.js';
 
 describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
     const rootNode = Supervisor.getRootNode();
     expect(rootNode).toBeDefined();
     
-    const html = SSRRenderingWorker.renderToString(rootNode as Node);
+    const html = SSRTreeAssemblyWorker.renderToString(rootNode as Node);
     expect(html).toContain('id="ssr-root"');
     
     // In actual implementation, we would verify the generated clientConfig inside 

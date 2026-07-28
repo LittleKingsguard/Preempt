@@ -5,9 +5,23 @@ import { Supervisor } from "../Supervisor.js";
 import { clientAPI } from "../ClientAPI.js";
 import { StyleNode } from "../StyleNode.js";
 
+/**
+ * Worker handling Phase 6 (Element Creation) for Client-Side DOM rendering.
+ *
+ * @useCase Creates, configures, and binds event listeners to native browser HTML elements (`HTMLElement`).
+ * @processFlow Seventh worker stage executed after Phase 5 Validation on client runtime environments.
+ * @queueEmissions Events are emitted to Phase 6 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 5 Validation for an in-tree node. Direct pushes to Phase 6 are prohibited.
+ */
 export class ClientElementCreationWorker extends BaseWorker {
+  /** Phase 6 identifier. */
   public readonly phase = 6;
 
+  /**
+   * Inject or update dynamic CSS rules inside the `<style id="preempt-dynamic-styles">` element in document head.
+   *
+   * @useCase Dynamically updating browser stylesheets during client rendering.
+   * @processFlow Client rendering style injection.
+   */
   public static renderStyles(): void {
     if (typeof document === 'undefined') return;
     let styleEl = document.getElementById("preempt-dynamic-styles") as HTMLStyleElement;
@@ -30,6 +44,11 @@ export class ClientElementCreationWorker extends BaseWorker {
     }
   }
 
+  /**
+   * Processes the worker queue and triggers dynamic stylesheet injection upon queue completion.
+   *
+   * @returns Promise resolving when element creation is finished.
+   */
   public async processQueue(): Promise<void> {
     if (this.queue.size === 0) return;
 
@@ -44,6 +63,12 @@ export class ClientElementCreationWorker extends BaseWorker {
     }
   }
 
+  /**
+   * Processes element creation for a single Node instance.
+   *
+   * @param node Node instance to process.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[ClientElementCreationWorker] Error: Node reached Element Creation phase with parent === undefined or isInTree === false`, node);
@@ -58,6 +83,7 @@ export class ClientElementCreationWorker extends BaseWorker {
       this.createElement(node);
     }
   }
+
 
   private createElement(node: Node): HTMLElement | null {
     if (typeof document === 'undefined') return null;

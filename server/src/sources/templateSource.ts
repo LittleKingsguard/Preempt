@@ -12,6 +12,21 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL = 60000; // 1 minute
 
+/**
+ * Creates a new template record in PostgreSQL database.
+ *
+ * @param event IPreemptEvent telemetry log payload.
+ * @param authorId Author username string.
+ * @param payload Root template JSON schema object.
+ * @param headers Unused headers string.
+ * @param isVisible Visibility boolean.
+ * @param liveDate Live date timestamp.
+ * @param tags Tag array string.
+ * @param groupIds Array of group IDs.
+ * @param promo Optional promo payload.
+ * @param metadata Optional metadata object.
+ * @returns Inserted template DB row record.
+ */
 export async function dbCreateTemplate(event: IPreemptEvent, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;
   const hasTags = tags && Array.isArray(tags);
@@ -34,6 +49,13 @@ export async function dbCreateTemplate(event: IPreemptEvent, authorId: string, p
   return result.rows[0];
 }
 
+/**
+ * Fetches the author ID for a given template ID.
+ *
+ * @param event Telemetry event.
+ * @param templateId Target template ID.
+ * @returns Author ID string or error object.
+ */
 export async function dbGetTemplateAuthorId(event: IPreemptEvent, templateId: number) {
   const result = await pool.query("SELECT author_id FROM Templates WHERE id = $1", [templateId]);
   if (result.rows.length === 0) {
@@ -43,6 +65,7 @@ export async function dbGetTemplateAuthorId(event: IPreemptEvent, templateId: nu
   fireAndForgetEvent(event);
   return result.rows[0].author_id;
 }
+
 
 export async function dbUpdateTemplate(event: IPreemptEvent, id: number, authorId: string, payload: any, headers: string | null, isVisible: boolean, liveDate: Date | null, tags: string[], groupIds: number[], promo?: any, metadata?: any) {
   const groupId = groupIds && groupIds.length > 0 ? groupIds[0] : null;

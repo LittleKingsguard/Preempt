@@ -9,9 +9,26 @@ import { Css } from "../Css.js";
 
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
 
+/**
+ * Worker handling Phase 3 (Slot Assembly) of the Supervisor pipeline.
+ *
+ * @useCase Applies non-type component bindings (targeting props, styles, handlers, or slot contents) into target nodes.
+ * @processFlow Fourth worker stage executed after Phase 2 Component Assembly.
+ * @queueEmissions Events are emitted to Phase 3 queue when a non-type `Component` binding (`target !== "type"`, e.g. props, css, handlers, content) is attached to an in-tree node, when non-type component references update, or when Phase 2 Component Assembly completes.
+ */
 export class SlotAssemblyWorker extends BaseWorker {
+  /** Phase 3 identifier. */
   public readonly phase = 3;
 
+  /**
+   * Emits eligible nodes with slot component bindings or assembly handlers to Phase 3 processing.
+   *
+   * @param node Target node or tree branch root.
+   * @param rollbackState Optional rollback snapshot.
+   * @param recursive If `true`, recursively checks child nodes.
+   * @useCase Triggering slot assembly stage for specific nodes.
+   * @processFlow Phase 3 event emission helper.
+   */
   public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
     if (!Supervisor.instance || !Supervisor.instance.slotAssemblyWorker) return;
     const isMatch = (n: Node) => {
@@ -28,6 +45,12 @@ export class SlotAssemblyWorker extends BaseWorker {
     }
   }
 
+  /**
+   * Processes non-type component bindings and injects resolved property values into target node paths.
+   *
+   * @param node Node instance to process.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     // Phase 3: Slot Assembly
@@ -77,11 +100,6 @@ export class SlotAssemblyWorker extends BaseWorker {
           node.content = undefined;
           const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, 2) : [];
           void clonedChildren;
-          // for (const clonedChild of clonedChildren) {
-          //   clonedChild.isInTree = node.isInTree;
-          // 
-          //   SlotAssemblyWorker.emitTo(clonedChild, _rollbackState || {}, false);
-          // }
         } else {
           node.content = String(resolvedValue);
           node.children = [];
@@ -94,6 +112,16 @@ export class SlotAssemblyWorker extends BaseWorker {
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
+  /**
+   * Helper method applying a resolved property value to a specific path target (`props.*`, `css.style.*`, `handlers.*`, `content`).
+   *
+   * @param path Target schema path string.
+   * @param value Resolved value string or handler definition.
+   * @param node Host Node instance.
+   * @param newProps Mutable props object copy.
+   * @param _newHandlers Mutable handlers dictionary.
+   * @param newCss Mutable CSS object copy.
+   */
   private applyProperty(
     path: string,
     value: string | HandlerDef,
@@ -135,7 +163,14 @@ export class SlotAssemblyWorker extends BaseWorker {
     }
   }
 
+  /**
+   * Updates `node.lastCompletedPhase` to 3 upon success.
+   *
+   * @param node Successfully processed Node.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 3;
   }
 }
+

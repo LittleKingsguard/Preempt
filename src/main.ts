@@ -16,6 +16,12 @@ const defaultConfig: PipelineConfig = {
   runMonitoring: true
 };
 
+/**
+ * Initializes the client-side Preempt application.
+ *
+ * @useCase Main browser entry point bootstrapped by Vite.
+ * @processFlow Fetches initial payload or reads inline HTML script data, creates Template instance, executes `Supervisor.process()`.
+ */
 async function init() {
   try {
     let data = clientAPI.getInitialData();
@@ -48,3 +54,4 @@ async function init() {
 }
 
 init();
+

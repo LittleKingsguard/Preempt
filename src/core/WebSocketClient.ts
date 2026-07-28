@@ -1,5 +1,11 @@
 type EventCallback = (payload: any) => void;
 
+/**
+ * Client-side WebSocket connection manager handling real-time server events, subscriptions, and automatic reconnects.
+ *
+ * @useCase Subscribes to real-time database updates or live handler modification events broadcast from server.
+ * @processFlow Re-connects automatically on disconnect and resubscribes active topics.
+ */
 export class WebSocketClient {
   private static instance: WebSocketClient;
   private ws: WebSocket | null = null;
@@ -13,6 +19,12 @@ export class WebSocketClient {
     this.connect();
   }
 
+  /**
+   * Returns or initializes the global WebSocketClient singleton instance.
+   *
+   * @param url Optional WebSocket URL string.
+   * @returns WebSocketClient instance.
+   */
   public static getInstance(url?: string): WebSocketClient {
     if (!url) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -76,6 +88,13 @@ export class WebSocketClient {
     }
   }
 
+  /**
+   * Subscribes a callback function to messages published on a specific topic.
+   *
+   * @param topic Target topic name string.
+   * @param callback Callback function executed on incoming payload.
+   * @returns Unsubscribe function.
+   */
   public subscribe(topic: string, callback: EventCallback) {
     if (!this.subscriptions.has(topic)) {
       this.subscriptions.set(topic, new Set());
@@ -85,6 +104,12 @@ export class WebSocketClient {
     return () => this.unsubscribe(topic, callback);
   }
 
+  /**
+   * Unsubscribes a callback function from a specific topic.
+   *
+   * @param topic Target topic string.
+   * @param callback Registered callback function.
+   */
   public unsubscribe(topic: string, callback: EventCallback) {
     if (this.subscriptions.has(topic)) {
       const callbacks = this.subscriptions.get(topic)!;
@@ -96,3 +121,4 @@ export class WebSocketClient {
     }
   }
 }
+

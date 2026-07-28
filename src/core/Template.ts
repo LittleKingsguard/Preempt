@@ -15,11 +15,25 @@ function deduplicateComponents(components: (ComponentBinding | any)[]): Componen
   return Array.from(map.values());
 }
 
+/**
+ * Represents the root layout template tree (`TemplateData`) in Preempt.
+ *
+ * @useCase Encapsulates root node layout, template child nodes, and component definitions.
+ * @processFlow Created at startup/SSR request and passed to `Supervisor.process()`.
+ */
 export class Template {
+  /** Root virtual DOM Node instance of the template layout tree. */
   public root: Node;
+  /** Direct native child Node instances. */
   public children: Node[];
+  /** Array of component bindings defined at the template level. */
   public component: ComponentBinding[];
 
+  /**
+   * Constructs a new Template instance.
+   *
+   * @param data TemplateData JSON schema.
+   */
   constructor(data: TemplateData) {
     const rootData = data.root;
     const templateComponents = [
@@ -40,7 +54,13 @@ export class Template {
     this.root = rootNode;
     this.children = childNodes;
   }
-  //Clone does not emit events by default in this case.
+
+  /**
+   * Clones this Template.
+   *
+   * @param ignoreProps Property exclusion list.
+   * @returns Cloned Template instance.
+   */
   public clone(ignoreProps: string[] = []): Template {
     const clonedRoot = this.root.clone(ignoreProps, [], null, 99);
     const clonedChildren = this.children.map(c => c.clone(ignoreProps, [], null, 99));
@@ -54,6 +74,11 @@ export class Template {
     return cloned;
   }
 
+  /**
+   * Exports clean TemplateData JSON structure.
+   *
+   * @returns Clean TemplateData object.
+   */
   public exportToJson(): TemplateData {
     const json: TemplateData = {
       root: this.root.exportToJson(),
@@ -65,7 +90,9 @@ export class Template {
     return json;
   }
 
+  /** Alias for `exportToJson()`. */
   public toJSON(): TemplateData {
     return this.exportToJson();
   }
 }
+

@@ -1,33 +1,28 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import { Supervisor } from "../Supervisor.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Handler } from "../Handler.js";
 import { Placement } from "../Placement.js";
 
-import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
-
 import { SlotAssemblyWorker } from "./SlotAssemblyWorker.js";
 
+/**
+ * Worker handling Phase 2 (Component Assembly) of the Supervisor pipeline.
+ *
+ * @useCase Resolves structural component bindings targeting `"type"`, deep-merging sub-tree layouts into target hosting nodes.
+ * @processFlow Third worker stage executed after Phase 1 Placement. Triggers `beforeAssembly` and `afterAssembly` lifecycle handlers.
+ * @queueEmissions Events are emitted to Phase 2 queue when a `Component` binding with `target === "type"` is attached to an in-tree node during construction, when structural component references update via `Component.mergeComponents()`, or upon completion of Phase 1 Placement.
+ */
 export class ComponentAssemblyWorker extends BaseWorker {
+  /** Phase 2 identifier. */
   public readonly phase = 2;
 
-  public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
-    if (!Supervisor.instance || !Supervisor.instance.componentAssemblyWorker) return;
-    const isMatch = (n: Node) => {
-      const hasTypeComponent = (n.targetComponents && n.targetComponents.has("type")) ||
-        (n.component && n.component.some(c => c.target === "type"));
-      const hasHandlers = n.handlers && n.handlers.some(h => h.phase === "beforeAssembly" || h.phase === "afterAssembly");
-      return Boolean(hasTypeComponent || hasHandlers);
-    };
-    const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
-    for (const match of matchingNodes) {
-      if (match.isInTree && match.lastCompletedPhase !== 2) {
-        Supervisor.emitToPhase(this, match, rollbackState, 2);
-      }
-    }
-  }
-
+  /**
+   * Processes structural component resolution and deep-merging into the target node.
+   *
+   * @param node Node instance to process.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
     node.executeHandlers("beforeAssembly", { supervisor: this.supervisor }, false);
@@ -130,6 +125,12 @@ export class ComponentAssemblyWorker extends BaseWorker {
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
+  /**
+   * Updates `node.lastCompletedPhase` to 2 upon success and cascades state updates to referencing nodes.
+   *
+   * @param node Successfully processed Node.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 2;
 
@@ -157,3 +158,4 @@ export class ComponentAssemblyWorker extends BaseWorker {
     }
   }
 }
+

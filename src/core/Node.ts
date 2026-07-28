@@ -10,7 +10,14 @@ import { Props } from "./Props.js";
 
 import { CloneUtils } from "./utils/CloneUtils.js";
 
+/**
+ * Core OOP class representing a Virtual DOM Node in Preempt.
+ *
+ * @useCase Fundamental building block of all Preempt UI elements, templates, and content components.
+ * @processFlow Instantiated in Phase 0 (`InstantiationWorker`), reparented in Phase 1 (`PlacementWorker`), assembled in Phases 2-3 (`ComponentAssemblyWorker`/`SlotAssemblyWorker`), validated in Phase 5 (`ValidationWorker`), rendered in Phases 6-7 (`ClientElementCreationWorker`/`SSRElementCreationWorker` & `ClientTreeAssemblyWorker`/`SSRTreeAssemblyWorker`), and modified via atomic state updates (`receiveNextState`).
+ */
 export class Node {
+  /** Map of HTML element tags to their required property attributes (e.g. img requiring src and alt). */
   public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
     "img": ["src", "alt"],
     "a": ["href"],
@@ -23,6 +30,11 @@ export class Node {
 
   private _data!: NodeData;
 
+  /**
+   * Underlying raw `NodeData` JSON schema object.
+   *
+   * @returns Read-only NodeData schema.
+   */
   public get data(): NodeData {
     return this._data;
   }
@@ -31,16 +43,28 @@ export class Node {
     console.error("[Node] Error: 'data' property is read-only and cannot be mutated or reassigned.");
   }
 
+  /** Rollback snapshot saved for error recovery. */
   public _lastValidState?: RollbackState;
 
+  /** Array of directly owned child Node instances. */
   public nativeChildren: Node[] = [];
   private _childrenCache: Node[] | null = null;
   private _parent?: Node | null;
 
+  /**
+   * Parent Node in the Virtual DOM hierarchy.
+   *
+   * @returns Parent Node instance or null/undefined.
+   */
   public get parent(): Node | null | undefined {
     return this._parent;
   }
 
+  /**
+   * Updates the parent Node reference, handling list detachment and cache invalidation.
+   *
+   * @param newParent Target parent Node or null/undefined.
+   */
   public set parent(newParent: Node | null | undefined) {
     if (this._parent === newParent) return;
 
@@ -71,10 +95,18 @@ export class Node {
     }
   }
 
+  /** Associated native browser HTMLElement reference (client-side only). */
   public element: HTMLElement | null = null;
 
+  /** Validity flag set during Phase 5 validation. */
   public isValid: boolean = true;
 
+
+  /**
+   * Computed array combining native child nodes and placed child nodes.
+   *
+   * @returns Array of all active child Node instances.
+   */
   public get children(): Node[] {
     if (this._childrenCache) return this._childrenCache;
     let placedChildren: Node[] = [];
@@ -94,11 +126,15 @@ export class Node {
     this.invalidateChildrenCache();
   }
 
+  /**
+   * Invalidates the cached children array for this node and bubbles cache invalidation up to the parent chain.
+   */
   public invalidateChildrenCache(): void {
     this._childrenCache = null;
     if (this.parent) this.parent.invalidateChildrenCache();
   }
 
+  /** HTML tag type (e.g. 'div', 'button', 'header'). */
   public type: string = 'div';
   public placement: Placement[];
   public component?: Component[] | undefined;
@@ -118,6 +154,15 @@ export class Node {
   public static globalMetadata: any = {};
   public static idCollisions = new Map<string, number>();
 
+  /**
+   * Generates a deterministic, cycle-safe hash string from a NodeData object to produce unique node IDs.
+   *
+   * @param obj NodeData object or sub-structure to hash.
+   * @returns Generated CSS ID string (e.g. 'preempt-node-a1b2c3d4').
+   * @useCase Auto-generating unique CSS IDs during Phase 0 Node instantiation.
+   * @processFlow Phase 0 node setup.
+   * @references `Node.constructor`, `Node.receiveNextState()`, `Placement.constructor`
+   */
   public static generateObjectHash(obj: any): string {
     const HASH_IGNORE_KEYS = new Set([
       'node', 'css', '_instantiatedNodes', '_referencingNodes',
@@ -146,6 +191,13 @@ export class Node {
     return baseId;
   }
 
+  /**
+   * Parses component bindings and updates `sourceComponents` (value providers) and `targetComponents` (injection targets).
+   *
+   * @param components Array of raw component bindings or Component instances.
+   * @param phase Execution phase ID.
+   * @references `Node.constructor`, `Node.clone()`, `Component.mergeComponents()`
+   */
   public setComponents(components: ComponentBinding[] | undefined, phase: number = 0): void {
     if (components === undefined) {
       delete this.component;
@@ -173,6 +225,16 @@ export class Node {
     }
   }
 
+  /**
+   * Constructs a new Node instance from JSON schema data.
+   *
+   * @param data NodeData raw JSON schema object.
+   * @param parent Parent Node instance or null/undefined.
+   * @param phase Execution phase ID.
+   * @param isInTree Boolean indicating if node is attached to the active tree.
+   * @param isClone Boolean flag set if node is being created as a duplicate clone.
+   * @references `InstantiationWorker.regenerateNode()`, `ComponentAssemblyWorker.processNode()`, `SlotAssemblyWorker.processNode()`, `Node.mergeNativeChildren()`, `Node.clone()`, `Template.constructor`, `Payload.constructor`
+   */
   constructor(data: NodeData, parent: Node | null | undefined, phase: number, isInTree: boolean = false, isClone: boolean = false) {
     this._data = data;
     this.parent = parent;
@@ -221,6 +283,7 @@ export class Node {
       if (this._data.placement) {
         this.placement = this._data.placement.map((p: any) => new Placement(p, this, phase, this.isInTree));
       } else {
+
         this.placement = [];
       }
     } else {
@@ -235,6 +298,11 @@ export class Node {
     console.log(`[Node] Created node '${this.css?.id || this.type}' (type: ${this.type}, phase: ${phase}, isInTree: ${this.isInTree})`, this);
   }
 
+  /**
+   * Clears tracking references across placement and component bindings before re-evaluating layout payload updates.
+   *
+   * @references `Supervisor.injectContent()`
+   */
   public clearTrackingArrays(): void {
     if (this.placement) {
       for (const p of this.placement) {
@@ -258,6 +326,11 @@ export class Node {
     }
   }
 
+  /**
+   * Destroys this Node, removing it from parent nativeChildren, unmounting native DOM elements, and releasing children/styles.
+   *
+   * @references `Node.clearTrackingArrays()`, `Node.mergeNativeChildren()`, `Placement.delete()`, `Component.delete()`, `Css.delete()`, `StyleNode.delete()`, `Props.delete()`, `Handler.delete()`
+   */
   public delete(): void {
     if (this.parent) {
       const index = this.parent.nativeChildren.indexOf(this);
@@ -315,6 +388,13 @@ export class Node {
     }
   }
 
+  /**
+   * Replaces native children with new Node or NodeData entries.
+   *
+   * @param incomingNativeChildren Array of raw NodeData schemas or Node instances.
+   * @returns Phase ID 7 for tree assembly re-run.
+   * @references `Node.receiveNextState()`
+   */
   public mergeNativeChildren(incomingNativeChildren: any[]): number | undefined {
     if (Supervisor.isPropertyLocked('nativeChildren')) {
       console.error(`[Node] Lock violation: Property 'nativeChildren' is currently locked for node ${this.css?.id || 'unknown'}`);
@@ -344,6 +424,15 @@ export class Node {
     return 7;
   }
 
+  /**
+   * Receives atomic state updates for this Node, checks property locks, updates state, and emits node to Supervisor stage.
+   *
+   * @param nextState Partial Node state object containing updated properties (css, props, content, children, etc.).
+   * @param explicitPhaseId Optional explicit phase ID to emit to.
+   * @useCase Invoked by `ClientAPI.modifyNode()` to push atomic state updates onto a node queue without full pipeline re-instantiation.
+   * @processFlow State update ingestion and event emission to Supervisor.
+   * @references `ClientAPI.modifyNode()`, `WebSocketClient.onMessage()`, custom page event handlers
+   */
   public receiveNextState(nextState: NextState, explicitPhaseId?: number): void {
     const changedKeys = Object.keys(nextState);
     if (changedKeys.length === 0) {
@@ -431,6 +520,12 @@ export class Node {
     Supervisor.emitToPhase(this, this, this._lastValidState, targetPhase);
   }
 
+  /**
+   * Restores a previously saved valid state snapshot on error.
+   *
+   * @param rollbackState Optional explicit rollback state.
+   * @references `BaseWorker.onProcessError()`
+   */
   public rollback(rollbackState?: RollbackState): void {
     const stateToRestore = rollbackState || this._lastValidState;
     if (stateToRestore) {
@@ -444,18 +539,48 @@ export class Node {
     }
   }
 
+  /**
+   * Tests whether this node matches the provided query criteria.
+   *
+   * @param query NodeQuery criteria or matching predicate.
+   * @returns `true` if matching, `false` otherwise.
+   * @references `NodeQueryUtils.isMatch()`, `Node.findNode()`, `Node.findNodes()`
+   */
   public isMatch(query: NodeQuery | ((node: Node) => boolean)): boolean {
     return NodeQueryUtils.isMatch(this, query);
   }
 
+  /**
+   * Recursively searches this node sub-tree and returns all matching Node instances.
+   *
+   * @param query NodeQuery criteria or matching predicate.
+   * @returns Array of matching Node instances.
+   * @references `NodeQueryUtils.findNodes()`, `PostprocessingWorker.emitTo()`, custom handlers
+   */
   public findNodes(query: NodeQuery | ((node: Node) => boolean)): Node[] {
     return NodeQueryUtils.findNodes(this, query);
   }
 
+  /**
+   * Recursively searches this node sub-tree and returns the first matching Node instance.
+   *
+   * @param query NodeQuery criteria or matching predicate.
+   * @param depth Current search depth (default 0).
+   * @returns Matching Node instance or null if not found.
+   * @references `NodeQueryUtils.findNode()`, `Supervisor.executeHandlers()`, `ClientAPI.modifyNode()`, `ClientAPI.compileHandler()`, custom handlers
+   */
   public findNode(query: NodeQuery | ((node: Node) => boolean), depth: number = 0): Node | null {
     return NodeQueryUtils.findNode(this, query, depth);
   }
 
+  /**
+   * Executes lifecycle or event handlers matching the target phase or event name string.
+   *
+   * @param target Target phase string (e.g. 'beforeAssembly', 'afterRender') or event name.
+   * @param context Execution context dictionary.
+   * @param recursive If `true`, executes handlers recursively down child nodes.
+   * @references `Supervisor.executeHandlers()`, worker queue stage executions across all pipeline phases (0-8)
+   */
   public executeHandlers(target: string, context: any, recursive: boolean = true): void {
     if (this.handlers && Array.isArray(this.handlers)) {
       for (const handler of this.handlers) {
@@ -487,6 +612,12 @@ export class Node {
     }
   }
 
+  /**
+   * Exports a clean `NodeData` JSON schema structure representing this node and sub-tree, stripping transient internal IDs.
+   *
+   * @returns Clean NodeData JSON structure.
+   * @references `Supervisor.exportRootNode()`, `InstantiationWorker.regenerateNode()`, `Template.exportToJson()`
+   */
   public exportToJson(): NodeData {
     const cleanData = (data: any) => {
       if (!data) return data;
@@ -504,9 +635,7 @@ export class Node {
         delete d.props;
       }
       if (d.component) {
-        // TODO: Architectural leak. Core code should not contain hardcoded references 
-        // to specific components like "PreemptEditor". This filtering logic should 
-        // be moved to the editor module or handled via a generalized exclude flag.
+        // TODO: Decouple editor-specific cleaning logic (such as PreemptEditor binding removal) from core Node export.
         const editorIndex = d.component.findIndex((c: any) => c.reference === "PreemptEditor");
         if (editorIndex !== -1) {
           d.component = [...d.component];
@@ -525,6 +654,17 @@ export class Node {
     return cleanData(this.data);
   }
 
+  /**
+   * Deep clones this Node instance, its properties, component bindings, handlers, and native child sub-trees.
+   *
+   * @param ignoreProps Array of property names to exclude from cloning.
+   * @param shallowCopyProps Array of property names to copy by reference.
+   * @param newParent Target parent Node for the cloned instance.
+   * @param phase Execution phase ID.
+   * @param isComponent Boolean indicating if cloned node represents a component root.
+   * @returns Deep cloned Node instance.
+   * @references `CloneUtils.deepClone()`, `ComponentAssemblyWorker.processNode()`, `SlotAssemblyWorker.processNode()`, `Node.receiveNextState()`, `Node.clone()`, `Component.cloneNode()`, `Template.clone()`, `Payload.clone()`
+   */
   public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = [], newParent: Node | null, phase: number, isComponent: boolean = false): Node {
     const clonedData = this.data;
     const targetParent = isComponent ? undefined : newParent;
@@ -538,6 +678,7 @@ export class Node {
       }
     }
     const clonedNode = new Node(clonedData, targetParent, targetPhase, targetIsInTree, true);
+
 
     clonedNode.type = this.type;
 

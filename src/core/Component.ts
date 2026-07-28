@@ -2,6 +2,12 @@ import type { ComponentBinding, HandlerDef, NodeData } from "../types/NodeSchema
 import { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
 
+/**
+ * OOP representation of a reusable Component Binding in Preempt.
+ *
+ * @useCase Handles component reference lookup, sub-tree instantiation, target path injection (`type`, `css.style`, `handlers.*`, `content`), and tree reference tracking.
+ * @processFlow Resolved during Phase 2 (`ComponentAssemblyWorker`) for structural components and Phase 3 (`SlotAssemblyWorker`) for non-type target properties.
+ */
 export class Component implements ComponentBinding {
   public reference: string;
   public target?: string | undefined;
@@ -14,6 +20,7 @@ export class Component implements ComponentBinding {
 
   private _sourceComponent?: Component | undefined;
 
+  /** Source component provider found by searching up the virtual DOM tree. */
   public get sourceComponent(): Component | undefined {
     return this._sourceComponent;
   }
@@ -33,6 +40,14 @@ export class Component implements ComponentBinding {
     }
   }
 
+  /**
+   * Constructs a new Component instance.
+   *
+   * @param data ComponentBinding schema payload.
+   * @param parent Host Node instance.
+   * @param phase Execution phase ID.
+   * @param _isInTree Boolean indicating tree membership.
+   */
   constructor(data: ComponentBinding, parent: Node, phase: number, _isInTree: boolean = false) {
     this.parent = parent;
     this.reference = data.reference;
@@ -62,6 +77,13 @@ export class Component implements ComponentBinding {
     }
   }
 
+  /**
+   * Merges incoming component bindings into a target Node.
+   *
+   * @param targetNode Target Node instance.
+   * @param incomingComponents Array of component bindings or Component objects.
+   * @returns Next phase ID (2 for structural type components, 3 for slot components) or undefined on lock failure.
+   */
   public static mergeComponents(targetNode: Node, incomingComponents: ComponentBinding[] | Component[]): number | undefined {
     if (Supervisor.isPhaseLocked(2) || Supervisor.isPropertyLocked('component')) {
       console.error(`[Component] Lock violation: Phase 2 or property 'component' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
@@ -99,6 +121,14 @@ export class Component implements ComponentBinding {
     return hasTypeComp ? 2 : 3;
   }
 
+  /**
+   * Clones this Component binding instance.
+   *
+   * @param ignoreProps Property exclusion list.
+   * @param newParent Target parent Node.
+   * @param phase Execution phase ID.
+   * @returns Cloned Component instance.
+   */
   public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Component {
     const targetPhase = phase;
     const cloned = new Component({
@@ -133,6 +163,13 @@ export class Component implements ComponentBinding {
     return cloned;
   }
 
+  /**
+   * Resolves component reference payload by searching up the virtual DOM tree.
+   *
+   * @returns Object containing `resolvedValue` and matching `resolvedBinding` Component instance.
+   * @useCase Component resolution during Assembly phases.
+   * @processFlow Upward tree search matching reference string.
+   */
   public resolveBinding(): { resolvedValue: any, resolvedBinding: Component | null } {
     let resolvedValue: any = this.value !== undefined ? this.value : null;
     let resolvedBinding: Component | null = this.value !== undefined ? this : null;
@@ -162,6 +199,13 @@ export class Component implements ComponentBinding {
     return { resolvedValue, resolvedBinding };
   }
 
+  /**
+   * Clones instantiated component nodes for injection into a referencing target node.
+   *
+   * @param referencingNode Target node receiving cloned sub-tree.
+   * @param phase Execution phase ID.
+   * @returns Array of cloned Node instances.
+   */
   public cloneNode(referencingNode: any, phase: number): any[] {
     this._referencingNodes.add(referencingNode);
 
@@ -186,6 +230,9 @@ export class Component implements ComponentBinding {
     return clones;
   }
 
+  /**
+   * Destroys component binding and releases child node references.
+   */
   public delete(): void {
     if (this._sourceComponent && this._sourceComponent._referencingNodes) {
       this._sourceComponent._referencingNodes.delete(this.parent);
@@ -214,3 +261,4 @@ export class Component implements ComponentBinding {
     }
   }
 }
+

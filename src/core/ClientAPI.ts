@@ -4,13 +4,25 @@ import { Handler } from "./Handler.js";
 import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
 import { Component } from "./Component.js";
 
+/**
+ * Client-Side API bridge interface exposed to interactive handlers (`context.clientAPI`).
+ *
+ * @useCase Provides managed methods for atomic node state modification, fetching dynamic content, compiling handlers, and adding content nodes safely without manual DOM manipulation.
+ * @processFlow Invoked within client-side event handlers or lifecycle triggers.
+ */
 export class ClientAPI {
+  /** Map of compiled handler functions cached by name. */
   public handlers: { [key: string]: Function } = {};
 
   constructor() {}
 
-  // resolveComponentBinding was moved to Component.ts
-
+  /**
+   * Reads initial hydration data from `<script id="preempt-initial-data">` element in document HTML.
+   *
+   * @returns Parsed initial template/content JSON payload or null.
+   * @useCase Initial page hydration on client start.
+   * @processFlow Browser DOM startup reading initial payload.
+   */
   public getInitialData(): any {
     if (typeof document !== 'undefined') {
       const dataElement = document.getElementById('preempt-initial-data');
@@ -25,6 +37,15 @@ export class ClientAPI {
     return null;
   }
 
+  /**
+   * Retrieves or compiles a handler function by name, traversing up the virtual DOM node tree.
+   *
+   * @param key Handler name or reference key.
+   * @param contextNode Virtual DOM Node context to start traversal.
+   * @returns Compiled handler function or undefined if not found.
+   * @useCase Handler function lookup during event dispatching.
+   * @processFlow Virtual DOM tree upward traversal and compilation.
+   */
   public getHandler(key: string, contextNode?: Node): Function | undefined {
     let current: Node | null | undefined = contextNode;
     while (current) {
@@ -59,6 +80,14 @@ export class ClientAPI {
     return undefined;
   }
 
+  /**
+   * Compiles a JavaScript function body string into an executable Function object.
+   *
+   * @param name Handler identifier string.
+   * @param body JavaScript code body string.
+   * @returns Executable Function instance or undefined on error.
+   * @useCase Dynamic handler compilation at runtime.
+   */
   public compileHandler(name: string, body: string): Function | undefined {
     try {
       const trimmedValue = body.trim();
@@ -72,6 +101,15 @@ export class ClientAPI {
     }
   }
 
+  /**
+   * Fetches dynamic content payload from a remote API endpoint, wraps nodes with placement drop-zones, and injects into Supervisor.
+   *
+   * @param options Object containing URL, batchLabel, query parameters, optional defaultTemplate, and placement drop-zone targets.
+   * @param next Optional callback function executed after content injection.
+   * @returns Promise resolving when content fetch and injection completes.
+   * @useCase Dynamic tab loading, dynamic listing pagination, and remote widget injection.
+   * @processFlow HTTP fetch -> payload normalization -> placement attachment -> `Supervisor.injectContent()`.
+   */
   async fetchContent(
     options: { url: string, batchLabel: string, query: NodeQuery, defaultTemplate?: NodeData, placements: string[] },
     next?: () => void
@@ -149,6 +187,17 @@ export class ClientAPI {
     }
   }
 
+  /**
+   * Applies an atomic partial state update to a target Node instance.
+   *
+   * @param partialNode Partial state object containing updated node properties.
+   * @param targetNode Target Node instance to update.
+   * @param next Optional callback function executed after update.
+   * @param _persistent Optional persistence flag.
+   * @returns Promise resolving when state update is enqueued.
+   * @useCase Applying runtime state mutations to virtual DOM nodes.
+   * @processFlow Passes `nextState` to `targetNode.receiveNextState()`, enqueuing update for `ClientElementCreationWorker`.
+   */
   async modifyNode(
     partialNode: Partial<Node>,
     targetNode: Node,
@@ -168,6 +217,16 @@ export class ClientAPI {
     if (next) next();
   }
 
+  /**
+   * Inject new content nodes with a batch ID directly into the Supervisor content stream.
+   *
+   * @param nodes Single NodeData object or array of NodeData objects.
+   * @param batchId Batch identifier label string.
+   * @param next Optional callback function executed after injection.
+   * @returns Promise resolving when injection completes.
+   * @useCase Dynamically appending new UI component rows or items.
+   * @processFlow Wraps nodes into ContentPayload and calls `Supervisor.injectContent()`.
+   */
   async addContentNodes(nodes: any | any[], batchId: string, next?: () => void): Promise<void> {
     const nodeArray = Array.isArray(nodes) ? nodes : [nodes];
     if (Supervisor.instance) {
@@ -184,6 +243,17 @@ export class ClientAPI {
     }
   }
 
+  /**
+   * Fetches handler definitions from server API, binds them to target nodes, and triggers pipeline rerun.
+   *
+   * @param query API query parameters.
+   * @param targetNodes Array of Node instances to bind handlers to.
+   * @param next Optional callback.
+   * @param overwrite Boolean flag whether to overwrite existing handler bindings (default true).
+   * @param targetEvent Optional target event or phase string override.
+   * @returns Promise resolving when handlers are bound and pipeline is rerun.
+   * @useCase Dynamic handler fetching and inspection tooling.
+   */
   async fetchHandlers(query: any, targetNodes: Node[], next?: () => void, overwrite: boolean = true, targetEvent?: string): Promise<void> {
     try {
       const queryParams = new URLSearchParams(query as any).toString();
@@ -278,4 +348,6 @@ export class ClientAPI {
   }
 }
 
+/** Global ClientAPI singleton instance. Exposed in client handlers as `context.clientAPI`. */
 export const clientAPI = new ClientAPI();
+

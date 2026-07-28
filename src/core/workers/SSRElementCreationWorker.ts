@@ -3,9 +3,23 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 
+/**
+ * Worker handling Phase 6 (Element Creation) for Server-Side Rendering (SSR).
+ *
+ * @useCase Generates HTML opening/closing tag string representations, escapes text content, and prepares attribute strings for SSR.
+ * @processFlow Seventh worker stage executed after Phase 5 Validation in SSR Node.js server environments.
+ * @queueEmissions Events are emitted to Phase 6 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 5 Validation for an in-tree node. Direct pushes to Phase 6 are prohibited.
+ */
 export class SSRElementCreationWorker extends BaseWorker {
+  /** Phase 6 identifier. */
   public readonly phase = 6;
 
+  /**
+   * Processes SSR element creation for a single Node instance.
+   *
+   * @param node Node instance to process.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[SSRElementCreationWorker] Error: Node reached Element Creation phase with parent === undefined or isInTree === false`, node);
@@ -20,11 +34,25 @@ export class SSRElementCreationWorker extends BaseWorker {
     (node as any).ssrElement = SSRElementCreationWorker.renderNodeElementToString(node);
   }
 
+  /**
+   * Updates `node.lastCompletedPhase` to 6 and emits node to Phase 7 (Tree Assembly).
+   *
+   * @param node Successfully processed Node.
+   * @param _rollbackState Optional rollback snapshot.
+   */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
     node.lastCompletedPhase = 6;
     Supervisor.emitToPhase(this, node, _rollbackState || {}, 7);
   }
 
+  /**
+   * Converts a Node instance into an SSR HTML tag fragment descriptor.
+   *
+   * @param node Node instance to convert.
+   * @returns Object containing `openTag`, `closeTag`, `contentText`, and `isVoid` flag.
+   * @useCase HTML string fragment creation for SSR output.
+   * @processFlow Phase 6 SSR HTML generation.
+   */
   public static renderNodeElementToString(node: Node): { openTag: string; closeTag: string; contentText: string; isVoid: boolean } {
     if (!node.isValid) return { openTag: "", closeTag: "", contentText: "", isVoid: false };
 
@@ -88,3 +116,4 @@ export class SSRElementCreationWorker extends BaseWorker {
     };
   }
 }
+

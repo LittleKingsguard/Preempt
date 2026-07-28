@@ -1,7 +1,22 @@
 import { Node } from "../Node.js";
 import type { NodeQuery } from "../../types/NodeSchema.js";
 
+/**
+ * Utility engine for matching and querying Virtual DOM Node instances against filter criteria.
+ *
+ * @useCase Used by `node.findNode()` and `node.findNodes()` in interactive client handlers to locate target UI nodes.
+ * @processFlow Invoked during client handler execution or MCP component extraction.
+ */
 export class NodeQueryUtils {
+  /**
+   * Tests whether a given Node satisfies a query object or filter predicate.
+   *
+   * @param node Target Node instance to evaluate.
+   * @param query NodeQuery criteria object or custom predicate function.
+   * @returns `true` if the node satisfies all query criteria, `false` otherwise.
+   * @useCase Matching nodes by ID, type, CSS class, prop values, handlers, or component references.
+   * @processFlow Evaluated during tree traversal in `findNode` and `findNodes`.
+   */
   public static isMatch(node: Node, query: NodeQuery | ((n: Node) => boolean)): boolean {
     if (typeof query === 'function') {
       return query(node);
@@ -62,6 +77,15 @@ export class NodeQueryUtils {
     return true;
   }
 
+  /**
+   * Recursively searches a node tree and returns all matching Node instances.
+   *
+   * @param node Root Node of tree branch to search.
+   * @param query Criteria object or filter function.
+   * @returns Array of all matching Node instances.
+   * @useCase Collecting multiple matching form inputs or list items in a component.
+   * @processFlow Client handler tree search.
+   */
   public static findNodes(node: Node, query: NodeQuery | ((n: Node) => boolean)): Node[] {
     const results: Node[] = [];
 
@@ -78,6 +102,16 @@ export class NodeQueryUtils {
     return results;
   }
 
+  /**
+   * Recursively searches a node tree and returns the first matching Node instance.
+   *
+   * @param node Root Node of tree branch to search.
+   * @param query Criteria object or filter function.
+   * @param depth Current recursion depth counter (defaults to 0).
+   * @returns Matching Node instance or `null` if not found.
+   * @useCase Finding specific container elements or named inputs in component handlers.
+   * @processFlow Client handler tree search.
+   */
   public static findNode(node: Node, query: NodeQuery | ((n: Node) => boolean), depth: number = 0): Node | null {
     if (NodeQueryUtils.isMatch(node, query)) {
       return node;
@@ -95,3 +129,4 @@ export class NodeQueryUtils {
     return null;
   }
 }
+

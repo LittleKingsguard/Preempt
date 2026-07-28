@@ -18,10 +18,19 @@ import { SSRTreeAssemblyWorker } from "./workers/SSRTreeAssemblyWorker.js";
 import { PostprocessingWorker } from "./workers/PostprocessingWorker.js";
 import { clientAPI } from "./ClientAPI.js";
 
+/**
+ * Central pipeline orchestrator singleton managing the 9-stage worker pipeline in Preempt.
+ *
+ * @useCase Primary engine executing SSR HTML generation or driving client-side reactive virtual DOM updates.
+ * @processFlow Instantiated on process start or HTTP request, coordinates workers (Phases 0-8), handles phase locks, and runs the monitoring loop.
+ */
 export class Supervisor {
+  /** Active Supervisor singleton instance. Access via `Supervisor.instance`. */
   public static instance: Supervisor | null = null;
+  /** Current pipeline execution stage name (e.g. 'instantiation', 'monitoring', 'closed'). */
   public static currentStage: string = 'closed';
 
+  /** Mapping of Node schema property names to their corresponding phase lock ID numbers. */
   public static propertyToPhaseMap: Record<string, number> = {
     'data': 0,
     'placement': 0,
@@ -35,6 +44,13 @@ export class Supervisor {
     'type': 5
   };
 
+  /**
+   * Checks whether a specific Node property is locked against mutation during the current stage.
+   *
+   * @param propertyName Target property key (e.g. 'css', 'props', 'children').
+   * @returns `true` if property is currently locked, `false` otherwise.
+   * @references `Node.receiveNextState()`, `Node.mergeNativeChildren()`, `Supervisor.isPropertyLocked()`
+   */
   public static isPropertyLocked(propertyName: string): boolean {
     const phaseId = Supervisor.propertyToPhaseMap[propertyName];
     if (phaseId === undefined) return false;
@@ -52,8 +68,16 @@ export class Supervisor {
   public renderingWorker: any;
   public postprocessingWorker: PostprocessingWorker;
 
+  /** Final HTML/CSS string generated during Server-Side Rendering (SSR). */
   public ssrResult?: string | undefined;
 
+  /**
+   * Checks whether a property name is locked.
+   *
+   * @param propertyName Target property name.
+   * @returns `true` if locked, `false` otherwise.
+   * @references Called on instance to check property lock state against current Supervisor phase.
+   */
   public isPropertyLocked(propertyName: string): boolean {
     return Supervisor.isPropertyLocked(propertyName);
   }
@@ -82,6 +106,14 @@ export class Supervisor {
   public templateData!: Template;
   public contentData: Set<Payload> = new Set();
 
+  /**
+   * Private constructor for Supervisor instance.
+   *
+   * @param config PipelineConfig flags.
+   * @param templateData Root Template instance.
+   * @param mountElementId DOM mount container element ID (defaults to "app").
+   * @references `Supervisor.process()`
+   */
   private constructor(config: PipelineConfig, templateData: Template, mountElementId: string = "app") {
     this.config = config;
     this.mountElementId = mountElementId;
@@ -98,6 +130,7 @@ export class Supervisor {
       this.elementCreationWorker = new SSRElementCreationWorker(this);
       this.treeAssemblyWorker = new SSRTreeAssemblyWorker(this);
     } else {
+
       this.elementCreationWorker = new ClientElementCreationWorker(this);
       this.treeAssemblyWorker = new ClientTreeAssemblyWorker(this);
     }
@@ -107,6 +140,13 @@ export class Supervisor {
     Supervisor.flushPendingEmits();
   }
 
+  /**
+   * Retrieves the worker instance responsible for a given phase ID number.
+   *
+   * @param phaseId Phase ID (0-8).
+   * @returns Worker instance or undefined.
+   * @references `Supervisor.emitToPhase()`, `Supervisor.runPipeline()`
+   */
   public getWorkerForPhase(phaseId: number): any {
     switch (phaseId) {
       case 0: return this.instantiationWorker;
@@ -122,12 +162,22 @@ export class Supervisor {
     }
   }
 
+  /** Active locked phase IDs set. */
   public static activeLockedPhases: Set<number> = new Set<number>();
+  /** Queue of pending emissions submitted prior to Supervisor singleton instantiation. */
   public static pendingEmits: { caller: any; node: Node; rollbackState: any; phaseId: number }[] = [];
   public static isPipelineScheduled: boolean = false;
   public static isPipelineRunning: boolean = false;
   public static pipelinePromise: Promise<string | void> | null = null;
 
+  /**
+   * Schedules a microtask pipeline execution batch.
+   *
+   * @returns Promise resolving when scheduled pipeline execution completes.
+   * @useCase Microtask batching of pipeline updates.
+   * @processFlow Event loop microtask scheduling.
+   * @references `Supervisor.emitToPhase()`, `Supervisor.injectContent()`
+   */
   public static schedulePipeline(): Promise<string | void> {
     if (Supervisor.pipelinePromise) {
       return Supervisor.pipelinePromise;
@@ -167,6 +217,12 @@ export class Supervisor {
     return Supervisor.pipelinePromise;
   }
 
+  /**
+   * Locks a specific pipeline phase ID from receiving new node emissions.
+   *
+   * @param phaseId Phase ID (0-8) to lock.
+   * @references `Supervisor.runPipeline()`
+   */
   public static lockPhase(phaseId: number): void {
     if (phaseId === 2) {
       // Phase 2 locks when Phase 3 locks
@@ -179,10 +235,28 @@ export class Supervisor {
     }
   }
 
+  /**
+   * Checks whether a specific phase ID is currently locked.
+   *
+   * @param phaseId Phase ID to test.
+   * @returns `true` if phase is locked, `false` otherwise.
+   * @references `Supervisor.isPropertyLocked()`, `Supervisor.emitToPhase()`, `Node.receiveNextState()`
+   */
   public static isPhaseLocked(phaseId: number): boolean {
     return Supervisor.activeLockedPhases.has(phaseId);
   }
 
+  /**
+   * Emits a Node instance to a target worker phase for stage processing.
+   *
+   * @param caller Originating method or object emitting the event.
+   * @param node Target Virtual DOM Node instance.
+   * @param rollbackState State snapshot for rollback recovery.
+   * @param phaseId Destination worker phase ID (0-8).
+   * @useCase Pushing node events to worker processing queues.
+   * @processFlow Phase event queueing and pipeline scheduling.
+   * @references `BaseWorker.onProcessSuccess()`, `ClientElementCreationWorker.onProcessSuccess()`, `SSRElementCreationWorker.onProcessSuccess()`, `ValidationWorker.onProcessSuccess()`, `Node.constructor`, `Node.receiveNextState()`, `Placement.placeInto()`, `Component.resolveBinding()`
+   */
   public static emitToPhase(caller: any, node: Node, rollbackState: any, phaseId: number): void {
     if (Supervisor.instance) {
       if (!Supervisor.isPhaseLocked(phaseId)) {
@@ -200,6 +274,13 @@ export class Supervisor {
     }
   }
 
+  /**
+   * Flushes all pending emissions collected before Supervisor initialization.
+   *
+   * @useCase Processes events pushed to `Supervisor.pendingEmits` during early node construction prior to `Supervisor` initialization.
+   * @processFlow Invoked automatically by `Supervisor` constructor. Copies pending event snapshots, resets `Supervisor.pendingEmits`, and routes each pending node to `Supervisor.emitToPhase()`.
+   * @references `Supervisor.constructor`
+   */
   public static flushPendingEmits(): void {
     if (!Supervisor.instance) return;
     const emits = [...Supervisor.pendingEmits];
@@ -209,23 +290,45 @@ export class Supervisor {
     }
   }
 
+  /**
+   * Helper returning all active content Node instances across all loaded payloads.
+   *
+   * @returns Flat array of all content Node instances.
+   * @references Public API helper accessible to custom Handlers & Client API.
+   */
   public static getContentNodes(): Node[] {
     return Supervisor.instance ? Array.from(Supervisor.instance.contentNodes.values()).flat() : [];
   }
 
+  /**
+   * Helper returning the root Node instance of the template layout tree.
+   *
+   * @returns Root Node instance or null.
+   * @references `ClientElementCreationWorker.createElement()`, `SSRElementCreationWorker.renderNodeElementToString()`, `Node.executeHandlers()`, `ClientAPI.modifyNode()`, `WebSocketClient.subscribe()`
+   */
   public static getRootNode(): Node | null {
     return Supervisor.instance ? Supervisor.instance.rootNode : null;
   }
 
-
-  // TODO: This method needs to be refactored to decouple editor-specific cleaning logic from the core Supervisor.
+  /**
+   * Exports the root Node tree as a clean `NodeData` JSON object.
+   *
+   * @returns Clean NodeData JSON structure or null.
+   * @references `ClientAPI.modifyNode()`, `main.ts.init()`, integration and E2E test suites
+   */
   public static exportRootNode(): NodeData | null {
+    // TODO: This method needs to be refactored to decouple editor-specific cleaning logic from the core Supervisor.
     if (Supervisor.instance && Supervisor.instance.rootNode) {
       return Supervisor.instance.rootNode.exportToJson();
     }
     return null;
   }
 
+  /**
+   * Resets instantiation state flags, active pipeline promises, and ID collision tracking maps.
+   *
+   * @references `Supervisor.rerun()`, unit and integration test suites
+   */
   public static resetInstantiation(): void {
     if (Supervisor.instance) {
       Supervisor.instance.hasInstantiated = false;
@@ -237,7 +340,20 @@ export class Supervisor {
     Node.idCollisions.clear();
   }
 
+  /**
+   * Primary entry point for executing the Supervisor pipeline with given configuration, template, and content data.
+   *
+   * @param config PipelineConfig execution flags.
+   * @param templateData Root Template layout structure.
+   * @param contentData Page content payload(s).
+   * @param serverApi Optional server API reference (SSR).
+   * @returns Promise resolving to SSR HTML string output (on server) or void (on client).
+   * @useCase Invoked by `ssr.ts` on server or `main.ts` on client to start rendering.
+   * @processFlow Initializes Supervisor instance, executes pipeline workers (Phases 0-8), starts client monitoring loop.
+   * @references `main.ts.init()`, `server/src/routes/ssr.ts`, `ClientAPI.injectContent()`, integration and E2E test suites
+   */
   public static async process(config: PipelineConfig, templateData: Template, contentData?: ContentPayload | ContentPayload[], serverApi?: any): Promise<string | void> {
+
     if (Supervisor.currentStage !== 'monitoring' && Supervisor.currentStage !== 'closed') {
       console.error(`Cannot start process: pipeline is currently in stage '${Supervisor.currentStage}'`);
       if (!templateData && (!Supervisor.instance || !Supervisor.instance.templateData)) {
@@ -305,10 +421,24 @@ export class Supervisor {
     }
   }
 
+  /**
+   * Clears all active phase locks across the pipeline.
+   *
+   * @references `Supervisor.schedulePipeline()`, `Supervisor.process()`, `Supervisor.injectContent()`, `Supervisor.monitor()`, `Supervisor.resumeMonitoring()`
+   */
   public static clearLockedPhases(): void {
     Supervisor.activeLockedPhases.clear();
   }
 
+  /**
+   * Helper function merging incoming content payloads into an existing `Payload` set, deduplicating matching batch labels.
+   *
+   * @param existingData Active set of `Payload` objects to update.
+   * @param newPayloads Array of incoming raw `ContentPayload` objects to merge.
+   * @useCase Deduplicating dynamic page content payloads when dynamic content is injected via `injectContent`.
+   * @processFlow Iterates over incoming raw payloads, matches existing entries by `batchLabel`, removes matched stale payloads, and adds new payloads.
+   * @references `Supervisor.injectContent()`
+   */
   private static mergePayloads(existingData: Set<Payload>, newPayloads: ContentPayload[]): void {
     newPayloads.forEach(rawPayload => {
       const newPayload = new Payload(rawPayload);
@@ -328,6 +458,14 @@ export class Supervisor {
     });
   }
 
+  /**
+   * Merges new content payload(s) into the active content data set and schedules a pipeline update.
+   *
+   * @param payload Single ContentPayload or array of ContentPayload objects.
+   * @useCase Invoked via `ClientAPI.fetchContent()` or handler data fetches to inject dynamic content into placements on the fly.
+   * @processFlow Merges payloads, clears stale tracking arrays, schedules pipeline microtask run.
+   * @references `ClientAPI.fetchContent()`, `ClientAPI.addContentNodes()`, custom page handlers
+   */
   public static async injectContent(payload: ContentPayload | ContentPayload[]): Promise<void> {
     if (!Supervisor.instance) {
       let templateData;
@@ -385,6 +523,15 @@ export class Supervisor {
     await Supervisor.schedulePipeline();
   }
 
+  /**
+   * Completely reruns the pipeline from Phase 0 or target phase using optional configuration overrides.
+   *
+   * @param configOverride Partial PipelineConfig overrides.
+   * @returns Promise resolving when rerun pipeline completes.
+   * @useCase Complete layout rebuild or persistent state modification reload.
+   * @processFlow Reset instantiation, clear internal state, execute `runPipeline()`.
+   * @references `ClientAPI.modifyNode()` (when `_persistent` is `true`)
+   */
   public static async rerun(configOverride?: Partial<PipelineConfig>): Promise<string | void> {
     if (!Supervisor.instance) {
       console.error("Cannot rerun: no active Supervisor instance exists.");
@@ -423,6 +570,14 @@ export class Supervisor {
     return result;
   }
 
+  /**
+   * Main instance execution loop draining phase queues in priority order (0 to 8).
+   *
+   * @returns Promise resolving to SSR result string (if SSR) or void (if client).
+   * @useCase Priority queue loop processing phase workers in sequence.
+   * @processFlow Drains worker queues sequentially (Phases 0 through 8), applying phase locks to prior completed phases.
+   * @references `Supervisor.schedulePipeline()`, `Supervisor.process()`, `Supervisor.rerun()`
+   */
   public async runPipeline(): Promise<string | void> {
     Supervisor.isPipelineRunning = true;
     try {
@@ -497,8 +652,15 @@ export class Supervisor {
     const payloadWithUser = payloadArray.find(c => c.userData || c.metadata?.user);
     this.userData = payloadWithUser?.userData || payloadWithUser?.metadata?.user;
   }
-  //TODO: Shift backend responsibilities of this to SSR functions and delete this method.
+
+  /**
+   * Executes pipeline lifecycle handlers on the root node and content nodes for a given phase string.
+   *
+   * @param phase Lifecycle phase key (e.g. 'afterInstantiate', 'beforeRender', 'afterRender', 'beforeMonitor').
+   * @references `Supervisor.process()`, `Supervisor.runPipeline()`, `Supervisor.monitor()`, `Supervisor.pauseMonitoring()`, `Supervisor.resumeMonitoring()`, worker queue handlers
+   */
   public executeHandlers(phase: string): void {
+    // TODO: Refactor executeHandlers to decouple lifecycle handler execution and optimize content node tree traversal.
     if (this.config.isValidationRun) return;
     if (this.rootNode) {
       this.rootNode.executeHandlers(phase, { supervisor: this });
@@ -514,6 +676,7 @@ export class Supervisor {
     });
   }
 
+  /** Starts the client-side monitoring loop and triggers `beforeMonitor` handlers. */
   private monitor(): void {
     Supervisor.currentStage = 'monitoring';
     Supervisor.clearLockedPhases();
@@ -522,12 +685,14 @@ export class Supervisor {
     console.log("Stage: Monitoring started, state:", this.isMonitoring);
   }
 
+  /** Pauses the client monitoring loop and triggers `onPause` handlers. */
   private pauseMonitoring(): void {
     this.executeHandlers("onPause");
     this.isMonitoring = false;
     console.log("Monitoring paused, state:", this.isMonitoring);
   }
 
+  /** Resumes the client monitoring loop and triggers `onResume` handlers. */
   private resumeMonitoring(): void {
     Supervisor.currentStage = 'monitoring';
     Supervisor.clearLockedPhases();
@@ -536,6 +701,7 @@ export class Supervisor {
     console.log("Monitoring resumed, state:", this.isMonitoring);
   }
 
+  /** Terminates the Supervisor pipeline session, clears active phase locks and global metadata. */
   private close(): void {
     Supervisor.currentStage = 'closed';
     Supervisor.activeLockedPhases.clear();

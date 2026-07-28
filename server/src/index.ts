@@ -1,3 +1,9 @@
+/**
+ * Main Express backend server entry point for Preempt.
+ *
+ * @useCase Boots Express HTTP server, mounts API endpoints (`/api`, `/api/mcp`), SSR route renderer (`/`), initializes WebSockets, and manages database connection pool lifecycle.
+ * @processFlow Application startup boots middleware, mounts routes, starts HTTP server, and attaches WebSocket manager.
+ */
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -96,7 +102,11 @@ const server = app.listen(PORT, () => {
 
 const wsManager = initWebSocket(server);
 
-// Graceful shutdown
+/**
+ * Handles graceful shutdown of HTTP server, WebSockets, and database pool on termination signals.
+ *
+ * @param signal Termination signal string (e.g. 'SIGTERM', 'SIGINT').
+ */
 async function shutdown(signal: string) {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
   
@@ -127,3 +137,4 @@ async function shutdown(signal: string) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+

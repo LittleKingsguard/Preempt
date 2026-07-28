@@ -16,6 +16,12 @@ const PHASE_NAME_MAP: Record<string, number> = {
   beforePostprocess: 8, afterPostprocess: 8
 };
 
+/**
+ * OOP representation of an Event Handler or Pipeline Lifecycle Hook in Preempt.
+ *
+ * @useCase Handles DOM event listener callbacks (e.g. click, submit) or Supervisor lifecycle hooks (e.g. beforeAssembly, afterRender).
+ * @processFlow Bound to browser DOM elements in Phase 6 (`ClientElementCreationWorker`) or triggered by `node.executeHandlers()`.
+ */
 export class Handler implements HandlerDef {
   public name: string;
   public event?: string | undefined;
@@ -24,6 +30,13 @@ export class Handler implements HandlerDef {
   private _body: string = '';
   private _compiled?: Function | undefined;
 
+  /**
+   * Constructs a new Handler instance and automatically emits the host node to matching pipeline phases.
+   *
+   * @param data HandlerDef schema payload or raw JS body string.
+   * @param parent Host Node instance.
+   * @param phase Execution phase ID.
+   */
   constructor(data: HandlerDef | string, parent: Node, phase: number) {
     this.parent = parent;
     if (typeof data === 'string') {
@@ -44,6 +57,13 @@ export class Handler implements HandlerDef {
     }
   }
 
+  /**
+   * Merges incoming handler definitions into a target Node.
+   *
+   * @param targetNode Target Node instance.
+   * @param incomingHandlers Array or dictionary of handler definitions.
+   * @returns Earliest phase ID associated with the handlers.
+   */
   public static mergeHandlers(targetNode: Node, incomingHandlers: HandlerDef[] | Handler[] | Record<string, any>): number | undefined {
     if (Supervisor.isPropertyLocked('handlers')) {
       console.error(`[Handler] Lock violation: Property 'handlers' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
@@ -97,7 +117,11 @@ export class Handler implements HandlerDef {
 
   get compiled(): Function | undefined { return this._compiled; }
 
-  /** Compile the handler body into a Function */
+  /**
+   * Compiles the JavaScript body string into an executable Function object.
+   *
+   * @returns Compiled Function object.
+   */
   public compile(): Function | undefined {
     try {
       const trimmed = (this._body || '').trim();
@@ -120,7 +144,13 @@ export class Handler implements HandlerDef {
     }
   }
 
-  /** Safely execute the handler with centralized error handling */
+  /**
+   * Safely executes the compiled handler with centralized error handling.
+   *
+   * @param event DOM Event object or null.
+   * @param context Preempt execution context dictionary.
+   * @returns Handler return value.
+   */
   public execute(event?: any, context?: any): any {
     if (!this._compiled) {
       console.warn(`Attempted to execute uncompiled handler: ${this}`);
@@ -135,10 +165,20 @@ export class Handler implements HandlerDef {
     }
   }
 
+  /** Destroys the compiled function reference. */
   public delete(): void {
     this._compiled = undefined;
   }
 
+  /**
+   * Factory method creating a Handler from a schema definition, instance, or raw JS string.
+   *
+   * @param def Raw HandlerDef payload, string body, or Handler object.
+   * @param parent Host Node instance.
+   * @param phase Execution phase ID.
+   * @param targetPath Target binding path string.
+   * @returns Instantiated Handler object.
+   */
   public static fromDef(def: HandlerDef | Handler | string, parent: Node, phase: number = 0, targetPath?: string): Handler {
     let hName = typeof def === 'object' && def !== null ? def.name : undefined;
     let hEvent = typeof def === 'object' && def !== null ? def.event : undefined;
@@ -181,6 +221,13 @@ export class Handler implements HandlerDef {
     return handlerObj;
   }
 
+  /**
+   * Clones this Handler instance.
+   *
+   * @param newParent Host Node instance.
+   * @param phase Execution phase ID.
+   * @returns Cloned Handler instance.
+   */
   public clone(newParent: Node, phase: number): Handler {
     const parentNode = newParent || this.parent;
     const targetPhase = phase;
@@ -192,3 +239,4 @@ export class Handler implements HandlerDef {
     }, parentNode, targetPhase);
   }
 }
+

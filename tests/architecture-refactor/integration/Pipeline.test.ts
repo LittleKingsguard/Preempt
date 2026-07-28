@@ -4,7 +4,7 @@ import { Supervisor } from '../../../src/core/Supervisor';
 import { Node } from '../../../src/core/Node';
 import { clientAPI } from '../../../src/core/ClientAPI';
 
-import { SSRRenderingWorker } from '../../../src/core/workers/SSRRenderingWorker.js';
+import { SSRTreeAssemblyWorker } from '../../../src/core/workers/SSRTreeAssemblyWorker.js';
 
 describe('Integration: Atomic Rendering Pipeline', () => {
   beforeEach(() => {
@@ -29,7 +29,7 @@ describe('Integration: Atomic Rendering Pipeline', () => {
     expect(rootNode?.data.props.id).toBe('app');
     
     // Verify the separated SSR worker output
-    const htmlString = SSRRenderingWorker.renderToString(rootNode as Node);
+    const htmlString = SSRTreeAssemblyWorker.renderToString(rootNode as Node);
     expect(htmlString).toContain('id="app"');
     
     // Now simulate hydration by processing JSON again with render set to false

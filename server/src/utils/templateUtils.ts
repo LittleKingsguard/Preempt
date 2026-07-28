@@ -3,6 +3,14 @@ import { pool } from "../db.js";
 import { queryFirstRow } from "./db.js";
 import { validateUserRoles } from "../middleware/auth.js";
 import type { IHandlerSource, IComponentSource } from "../models/interfaces.js";
+
+/**
+ * Resolves the editor mode template ID for a base template ID if an editor variant exists.
+ *
+ * @param baseId Base template ID.
+ * @param editorMode Editor mode parameter string or null.
+ * @returns Resolved template ID integer.
+ */
 export async function resolveEditorTemplateId(baseId: number, editorMode: string | null): Promise<number> {
   if (!editorMode) return baseId;
   const editorTagCheck = await queryFirstRow(`
@@ -17,10 +25,24 @@ export async function resolveEditorTemplateId(baseId: number, editorMode: string
   return editorTagCheck ? editorTagCheck.id : baseId;
 }
 
+/**
+ * Queries database for a template record by ID.
+ *
+ * @param templateId Target template ID.
+ * @returns Template row object or error object.
+ */
 export async function fetchTemplateRecord(templateId: number): Promise<any> {
   return await queryFirstRow("SELECT * FROM Templates WHERE id = $1", [templateId], "Template not found");
 }
 
+/**
+ * Fetches all handler records associated with a template ID.
+ *
+ * @param templateId Template ID.
+ * @param handlerSource Handler data source provider.
+ * @param componentSource Component data source provider.
+ * @returns Array of unique handler records.
+ */
 export async function fetchTemplateHandlers(templateId: number, handlerSource: IHandlerSource, componentSource: IComponentSource) {
   const components = (await componentSource.getAll(new PreemptEvent('templateUtils.getComponents', { id: 'system', type: 'process' }), { templateId })) || [];
   const componentIds = components.map((c: any) => c.id);
@@ -41,6 +63,13 @@ export async function fetchTemplateHandlers(templateId: number, handlerSource: I
   return Array.from(handlerMap.values());
 }
 
+/**
+ * Inserts or updates a component binding reference in a template JSON payload structure.
+ *
+ * @param payload Root template schema payload object.
+ * @param reference Component reference name string.
+ * @param value Resolved component payload or handler definition.
+ */
 export function upsertComponentReference(payload: any, reference: string, value: any): void {
   if (!payload) return;
   const targetPayload = payload.root || payload;
@@ -53,6 +82,15 @@ export function upsertComponentReference(payload: any, reference: string, value:
   }
 }
 
+/**
+ * Populates handler component bindings into a template schema payload.
+ *
+ * @param payload Target template payload object.
+ * @param templateId Template ID.
+ * @param user Authenticated user session.
+ * @param handlerSource Handler data source provider.
+ * @param componentSource Component data source provider.
+ */
 export async function populateTemplateHandlers(payload: any, templateId: number, user: any, handlerSource: IHandlerSource, componentSource: IComponentSource): Promise<void> {
   const handlerRows = await fetchTemplateHandlers(templateId, handlerSource, componentSource);
 
@@ -66,10 +104,25 @@ export async function populateTemplateHandlers(payload: any, templateId: number,
   }
 }
 
+/**
+ * Fetches all component records associated with a template ID.
+ *
+ * @param templateId Template ID.
+ * @param componentSource Component data source provider.
+ * @returns Array of component records.
+ */
 export async function fetchTemplateComponents(templateId: number, componentSource: IComponentSource) {
   return (await componentSource.getAll(new PreemptEvent('templateUtils.getComponents', { id: 'system', type: 'process' }), { templateId })) || [];
 }
 
+/**
+ * Populates component bindings into a template schema payload.
+ *
+ * @param payload Target template payload object.
+ * @param templateId Template ID.
+ * @param user Authenticated user session.
+ * @param componentSource Component data source provider.
+ */
 export async function populateTemplateComponents(payload: any, templateId: number, user: any, componentSource: IComponentSource): Promise<void> {
   const componentRows = await fetchTemplateComponents(templateId, componentSource);
   console.log("populateTemplateComponents", componentRows, templateId);
@@ -83,7 +136,17 @@ export async function populateTemplateComponents(payload: any, templateId: numbe
   }
 }
 
+/**
+ * Populates both handler and component bindings into a template payload.
+ *
+ * @param payload Target template payload object.
+ * @param templateId Template ID.
+ * @param user Authenticated user session.
+ * @param handlerSource Handler data source provider.
+ * @param componentSource Component data source provider.
+ */
 export async function populateTemplate(payload: any, templateId: number, user: any, handlerSource: IHandlerSource, componentSource: IComponentSource): Promise<void> {
   await populateTemplateHandlers(payload, templateId, user, handlerSource, componentSource);
   await populateTemplateComponents(payload, templateId, user, componentSource);
 }
+

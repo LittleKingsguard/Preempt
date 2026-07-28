@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Supervisor } from '../../../src/core/Supervisor.js';
 import { Node } from '../../../src/core/Node.js';
-import { SSRRenderingWorker } from '../../../src/core/workers/SSRRenderingWorker.js';
+import { SSRTreeAssemblyWorker } from '../../../src/core/workers/SSRTreeAssemblyWorker.js';
 import type { NodeData, PipelineConfig } from '../../../src/types/NodeSchema.js';
 
 describe('Supervisor - Orchestrator', () => {
@@ -49,7 +49,7 @@ describe('Supervisor - Orchestrator', () => {
     // Override validation worker (pre-render phase)
     Supervisor.instance.validationWorker = mockWorker;
     
-    const renderSpy = vi.spyOn(SSRRenderingWorker, 'renderToString');
+    const renderSpy = vi.spyOn(SSRTreeAssemblyWorker, 'renderToString');
     
     vi.stubEnv('IS_SSR_TEST', 'true');
     const processPromise = Supervisor.process(

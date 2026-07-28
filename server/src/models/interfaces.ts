@@ -1,4 +1,6 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+
+/** Component data record schema interface. */
 export interface IComponentData {
   id: number;
   name: string;
@@ -9,6 +11,7 @@ export interface IComponentData {
   updated_at?: Date;
 }
 
+/** Data access contract interface for Component persistence operations. */
 export interface IComponentSource {
   getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number }): Promise<any[]>;
   getById(event: IPreemptEvent, id: number): Promise<any | { error: string; status: number }>;
@@ -20,28 +23,33 @@ export interface IComponentSource {
   stage(event: IPreemptEvent, name: string, payload: any, authorId: string, originalId: number | null, batchId: number): Promise<any>;
 }
 
+/** Content user permission mapping schema interface. */
 export interface IContentUserData {
   content_id: number;
   username: string;
   role: string;
 }
 
+/** Content user group permission mapping schema interface. */
 export interface IContentUserGroupData {
   content_id: number;
   group_id: number;
   role: string;
 }
 
+/** User group record schema interface. */
 export interface IUserGroupData {
   id: number;
   name: string;
 }
 
+/** User group member schema interface. */
 export interface IUserGroupMemberData {
   group_id: number;
   username: string;
 }
 
+/** Data access contract interface for UserGroup persistence. */
 export interface IUserGroupSource {
   getAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
@@ -53,6 +61,7 @@ export interface IUserGroupSource {
   getUserGroups(event: IPreemptEvent, username: string): Promise<IUserGroupData[]>;
 }
 
+/** Content entity schema interface. */
 export interface IContentData {
   id: number;
   author_id: string;
@@ -77,6 +86,7 @@ export interface IContentData {
   groups?: IContentUserGroupData[];
 }
 
+/** Data access contract interface for Content persistence operations. */
 export interface IContentSource {
   get(event: IPreemptEvent, criteria: { count_only?: boolean; id?: number; hide_pattern?: 'Overlook' | 'Paywall' | 'Guard'; tags?: string[]; author?: string; limit?: number; offset?: number; list_id?: number; columns?: string[]; format?: 'raw' | 'content' }, user?: any, placeholder?: any): Promise<any>;
   getHeaders(event: IPreemptEvent, id: number): Promise<any>;
@@ -96,6 +106,7 @@ export interface IContentSource {
   getSubjectContext?(event: IPreemptEvent, commentListId: number): Promise<any>;
 }
 
+/** Handler entity schema interface. */
 export interface IHandlerData {
   id: number;
   name: string;
@@ -107,6 +118,7 @@ export interface IHandlerData {
   updated_at?: Date;
 }
 
+/** Data access contract interface for Handler persistence operations. */
 export interface IHandlerSource {
   getAll(event: IPreemptEvent, criteria?: { templateId?: number; contentId?: number; componentIds?: number[]; format?: 'raw' | 'content'; name?: string }): Promise<any[]>;
   getById(event: IPreemptEvent, id: number, criteria?: { format?: 'raw' | 'content' }): Promise<any | { error: string; status: number }>;
@@ -119,7 +131,7 @@ export interface IHandlerSource {
   approve(event: IPreemptEvent, id: number, isApproved: boolean): Promise<any | { error: string; status: number }>;
 }
 
-
+/** User entity schema interface. */
 export interface IUserData {
   username: string;
   email: string;
@@ -134,6 +146,7 @@ export interface IUserData {
   validated_hosts: string[];
 }
 
+/** Data access contract interface for User authentication and profile persistence. */
 export interface IUserSource {
   authenticate(event: IPreemptEvent, username: string, passwordPlain: string): Promise<any | null>;
   create(event: IPreemptEvent, username: string, email: string, passwordPlain: string): Promise<any>;
@@ -148,21 +161,23 @@ export interface IUserSource {
   hasAdmin(event: IPreemptEvent): Promise<boolean>;
 }
 
+/** Authentication token record schema interface. */
 export interface IAuthTokenSource {
   create(event: IPreemptEvent, username: string, type: string, tokenValue: string, expiresInMinutes: number): Promise<void>;
   verify(event: IPreemptEvent, username: string, type: string, tokenValue: string): Promise<any>;
   delete(event: IPreemptEvent, username: string, type: string): Promise<void>;
 }
 
+/** Change batch staging record schema interface. */
 export interface IChangeBatchData {
   id: number;
-
   description: string;
   author_id: string;
   created_at?: Date;
   merged_at?: Date | null;
 }
 
+/** Data access contract interface for staging ChangeBatch operations. */
 export interface IChangeBatchSource {
   create(event: IPreemptEvent, authorId: string, description: string): Promise<any>;
   getPending(event: IPreemptEvent): Promise<any[]>;
@@ -172,23 +187,28 @@ export interface IChangeBatchSource {
   approve(event: IPreemptEvent, batchId: number): Promise<any>;
 }
 
+/** Tag record schema interface. */
 export interface ITagData {
   name: string;
 }
 
+/** Data access contract interface for Tag operations. */
 export interface ITagSource {
   fetchAll(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   updateTemplateTags(event: IPreemptEvent, client: any, templateId: number, tags: string[]): Promise<void>;
   updateContentTags(event: IPreemptEvent, client: any, contentId: number, tags: string[]): Promise<void>;
 }
 
+/** Application key-value setting schema interface. */
 export interface ISettingData {
   key: string;
   value: string;
 }
 
+/** Data access contract interface for Setting configuration operations. */
 export interface ISettingSource {
   get(event: IPreemptEvent, key: string, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   getAll?(event: IPreemptEvent, criteria?: { format?: 'raw' | 'content' }): Promise<any>;
   set(event: IPreemptEvent, key: string, valueStr: string): Promise<void>;
 }
+
