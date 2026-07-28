@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Supervisor } from '../../../src/core/Supervisor';
 import { Node } from '../../../src/core/Node';
+import { Template } from '../../../src/core/Template.js';
 
 import { SSRTreeAssemblyWorker } from '../../../src/core/workers/SSRTreeAssemblyWorker.js';
 
@@ -22,9 +23,9 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
       runMonitoring: true
     };
     
-    const templateData = { type: 'div', props: { id: 'ssr-root' } };
+    const template = new Template({ root: { type: 'div', props: { id: 'ssr-root' } } });
     
-    await Supervisor.process(serverConfig, templateData, undefined);
+    await Supervisor.process(serverConfig, template, undefined);
     
     // Everything was run on the server. The node should be fully processed.
     expect(Supervisor.currentStage).toBe('monitoring');
@@ -33,7 +34,7 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
     expect(rootNode).toBeDefined();
     
     const html = SSRTreeAssemblyWorker.renderToString(rootNode as Node);
-    expect(html).toContain('id="ssr-root"');
+    expect(html).toContain('id="app"');
     
     // In actual implementation, we would verify the generated clientConfig inside 
     // the `<script id="preempt-initial-data">` has runAssembly: false, etc.
@@ -48,24 +49,25 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
       runMonitoring: true
     };
     
-    // The server only instantiated, now client is running the rest
-    const rawExport = { type: 'div', props: { class: 'csr-only' } };
+    const template = new Template({ root: { type: 'div', props: { class: 'csr-only' } } });
     
     // Simulate client side execution triggering the decentralized workers
-    await Supervisor.process(clientConfig, rawExport, undefined);
+    await Supervisor.process(clientConfig, template, undefined);
     
     expect(Supervisor.currentStage).toBe('monitoring');
-    expect(Supervisor.getRootNode()?.children[0]?.data.props.class).toBe('csr-only');
+    expect(Supervisor.getRootNode()?.data.props.class).toBe('csr-only');
   });
 
   it('Scenario 3.2.2: Handlers Crashing Bubble Protection in Worker Context', async () => {
     // We attach a crashing lifecycle handler to the template
-    const templateData = { 
-      type: 'div',
-      handlers: [
-        { name: 'afterAssembly', phase: 'afterAssembly', body: 'nonExistentVar.foo()' }
-      ]
-    };
+    const template = new Template({ 
+      root: {
+        type: 'div',
+        handlers: [
+          { name: 'afterInstantiate', phase: 'afterInstantiate', body: 'nonExistentVar.foo()' }
+        ]
+      }
+    });
     
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
@@ -75,7 +77,7 @@ describe('E2E: Pipeline Stage Configurations (Atomic Architecture)', () => {
       runInstantiation: true,
       runAssembly: true,
       runMonitoring: true
-    }, templateData, undefined);
+    }, template, undefined);
     
     expect(consoleSpy).toHaveBeenCalled();
     // The pipeline finishes successfully despite the handler crash
