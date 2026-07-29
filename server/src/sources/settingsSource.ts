@@ -20,7 +20,7 @@ async function getDefaultSettingComponent(event: IPreemptEvent) {
       cachedDefaultSetting = {
         type: 'div',
         css: { classes: ['setting-item'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'settingKey', target: 'content' }] },
           { type: 'span', content: ': ' },
           { type: 'span', component: [{ reference: 'settingValue', target: 'content' }] }

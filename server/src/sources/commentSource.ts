@@ -18,7 +18,7 @@ async function getDefaultCommentComponent(event: IPreemptEvent) {
       cachedDefaultComment = {
         type: 'div',
         css: { classes: ['comment'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'commentAuthor', target: 'content' }] },
           { type: 'span', component: [{ reference: 'commentDate', target: 'content' }] },
           { type: 'p', component: [{ reference: 'commentBody', target: 'content' }] }

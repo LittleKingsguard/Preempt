@@ -19,7 +19,7 @@ async function getDefaultMessageComponent() {
       cachedDefaultMessage = {
         type: 'div',
         css: { classes: ['message'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'messageAuthor', target: 'content' }] },
           { type: 'span', component: [{ reference: 'messageDate', target: 'content' }] },
           { type: 'p', component: [{ reference: 'messageBody', target: 'content' }] }

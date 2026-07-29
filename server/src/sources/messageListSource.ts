@@ -19,7 +19,7 @@ async function getDefaultMessageListComponent() {
       cachedDefaultMessageList = {
         type: 'div',
         css: { classes: ['message-list'] },
-        content: [
+        children: [
           { type: 'h3', component: [{ reference: 'listName', target: 'content' }] },
           { type: 'strong', component: [{ reference: 'recentMessageAuthor', target: 'content' }] },
           { type: 'span', component: [{ reference: 'recentMessageDate', target: 'content' }] },

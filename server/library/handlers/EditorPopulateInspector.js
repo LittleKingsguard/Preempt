@@ -76,7 +76,7 @@
         const defNode = activeBinding?._instantiatedNodes?.[0];
         if (defNode) {
           mainContent.push({
-            type: "div", css: { style: { display: "flex", gap: "5px" } }, content: [
+            type: "div", css: { style: { display: "flex", gap: "5px" } }, children: [
               {
                 type: "button",
                 content: "Inspect Component Node",
@@ -100,17 +100,17 @@
         if (typeof comp.value === 'object' && comp.value !== null) {
           mainContent.push({
             type: "div", css: { classes: ["inspector-field-row"], style: { flexDirection: "column", alignItems: "flex-start", gap: "5px", padding: "10px", background: "#222", borderRadius: "5px" } },
-            content: [
+            children: [
               { type: "label", content: "Component Definition (Not Instantiated Here)", css: { classes: ["inspector-label"], style: { color: "#5bc0de" } } },
               { type: "label", content: `Type: ${comp.value.type || 'N/A'}`, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc" } } },
-              { type: "label", content: `Children: ${Array.isArray(comp.value.content) ? comp.value.content.length : (comp.value.content ? 1 : 0)}`, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc" } } }
+              { type: "label", content: `Children: ${Array.isArray(comp.value.children) ? comp.value.children.length : (Array.isArray(comp.value.content) ? comp.value.content.length : (comp.value.content ? 1 : 0))}`, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc" } } }
             ]
           });
         } else {
           const valStr = String(comp.value);
           mainContent.push({
             type: "div", css: { classes: ["inspector-field-row"] },
-            content: [
+            children: [
               { type: "label", content: "Value", css: { classes: ["inspector-label"] } },
               { type: "label", content: valStr, css: { classes: ["inspector-label"], style: { fontWeight: "normal", color: "#ccc", wordBreak: "break-all" } } }
             ]
@@ -123,11 +123,11 @@
         props: { open: "true" },
         css: { classes: ["inspector-details"] },
         placement: [{ targetPlacement: ["inspector-components-fields"] }],
-        content: [
+        children: [
           { type: "summary", content: `Def: ${comp.reference}`, css: { classes: ["inspector-summary"] } },
           {
             type: "div", css: { style: { display: "flex", flexDirection: "column", gap: "5px", padding: "5px" } },
-            content: [
+            children: [
               ...mainContent,
               ...(referencingNodes.length > 0 ? [
                 { type: "label", content: "Referencing Nodes:", css: { classes: ["inspector-label"], style: { marginTop: "5px" } } },
@@ -248,21 +248,21 @@
       props: { open: "true" },
       css: { classes: ["inspector-details"] },
       placement: [{ targetPlacement: ["editor-inspector-display"] }],
-      content: [
+      children: [
         { type: "summary", content: "General", css: { classes: ["inspector-summary"] } },
         {
           type: "div", css: { style: { padding: "5px", display: "flex", gap: "5px", flexDirection: "column" } },
-          content: [
+          children: [
             {
               type: "div", css: { classes: ["inspector-field-row"] },
-              content: [
+              children: [
                 { type: "label", content: "Type", css: { classes: ["inspector-label"] } },
                 { type: "input", props: { inputKey: "insp_gen_type" }, css: { classes: ["inspector-input"] } }
               ]
             },
             {
               type: "div", css: { style: { display: "flex", gap: "5px", marginTop: "10px" } },
-              content: [
+              children: [
                 { type: "button", content: "Update General", props: { "data-prop-path": "general" }, component: [{target: "handlers.click", reference: "editorUpdateNodeProp"}], css: { classes: ["editor-btn", "editor-btn-primary"] } },
                 (node.parent ? { type: "button", content: "Inspect Parent", component: [{target: "handlers.click", reference: "editorSelectParent"}], css: { classes: ["editor-btn"] } } : null)
               ].filter(Boolean)
@@ -278,11 +278,11 @@
         type: "details",
         css: { classes: ["inspector-details"] },
         placement: [{ targetPlacement: ["editor-inspector-display"] }],
-        content: [
+        children: [
           { type: "summary", content: "Content (Text)", css: { classes: ["inspector-summary"] } },
           {
             type: "div", css: { style: { padding: "5px", display: "flex", gap: "5px", flexDirection: "column" } },
-            content: [
+            children: [
               {
                 type: "textarea",
                 props: { inputKey: "insp_gen_content" },

@@ -20,7 +20,7 @@ async function getDefaultUsergroupComponent(event: IPreemptEvent) {
       cachedDefaultUsergroup = {
         type: 'div',
         css: { classes: ['usergroup-item'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'groupName', target: 'content' }] },
           { type: 'span', content: ' (ID: ' },
           { type: 'span', component: [{ reference: 'groupId', target: 'content' }] },

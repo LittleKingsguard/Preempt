@@ -20,7 +20,7 @@ async function getDefaultUserComponent(event: IPreemptEvent) {
       cachedDefaultUser = {
         type: 'div',
         css: { classes: ['user-item'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'userUsername', target: 'content' }] },
           { type: 'span', content: ' (' },
           { type: 'span', component: [{ reference: 'userEmail', target: 'content' }] },

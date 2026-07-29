@@ -28,7 +28,7 @@ async function getDefaultHandlerComponent(event: IPreemptEvent) {
       cachedDefaultHandler = {
         type: 'div',
         css: { classes: ['handler-item'] },
-        content: [
+        children: [
           { type: 'strong', component: [{ reference: 'handlerName', target: 'content' }] },
           { type: 'span', content: ' (Author: ' },
           { type: 'span', component: [{ reference: 'handlerAuthor', target: 'content' }] },

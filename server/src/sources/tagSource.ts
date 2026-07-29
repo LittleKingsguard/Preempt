@@ -20,7 +20,7 @@ async function getDefaultTagComponent(event: IPreemptEvent) {
       cachedDefaultTag = {
         type: 'div',
         css: { classes: ['tag-item'] },
-        content: [
+        children: [
           { type: 'span', component: [{ reference: 'tagName', target: 'content' }] }
         ]
       };

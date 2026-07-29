@@ -31,7 +31,7 @@ async (event, context) => {
             newChildren.push({
               type: "div",
               css: { style: { padding: "1rem", border: "1px solid #ccc", borderRadius: "4px" } },
-              content: [
+              children: [
                 { type: "h3", content: "Article " + article.id, css: { style: { margin: "0 0 0.5rem 0" } } },
                 { type: "a", props: { href: "/article/" + article.id }, content: "Read More" }
               ]

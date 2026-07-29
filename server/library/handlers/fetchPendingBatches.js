@@ -24,14 +24,14 @@ async (event, context) => {
         newChildren.push({
           type: "div",
           css: { style: { padding: "15px", border: "1px solid #ccc", marginBottom: "15px", borderRadius: "5px", background: "#fafafa" } },
-          content: [
+          children: [
             { type: "p", content: `Batch ID: ${batch.id} | Author: ${batch.author_id}`, css: { style: { fontWeight: "bold", margin: "0 0 5px 0" } } },
             { type: "p", content: `Description: ${batch.description}`, css: { style: { margin: "0 0 10px 0" } } },
             { type: "p", content: `Created At: ${new Date(batch.created_at).toLocaleString()}`, css: { style: { margin: "0 0 10px 0", fontSize: "0.9em", color: "#666" } } },
             {
               type: "div",
               css: { style: { display: "flex", gap: "10px" } },
-              content: [
+              children: [
                 { 
                   type: "button", 
                   content: "Approve", 
