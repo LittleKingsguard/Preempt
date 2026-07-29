@@ -1,3 +1,4 @@
+import type { ContentPayload, NodeData, ComponentBinding } from "../../../src/types/NodeSchema.js";
 import { PreemptEvent } from "../../../src/types/Event.js";
 import { checkContentSecurity, populateContent } from "../utils/contentUtils.js";
 import { populateTemplate } from "../utils/templateUtils.js";
@@ -57,8 +58,46 @@ export class Content {
     this.groups = data.groups || [];
   }
 
+  toJSON(): ContentPayload {
+    const rawPayload = this.payload;
+    let contentNodes: any = rawPayload;
+    let components: ComponentBinding[] = [];
+
+    if (Array.isArray(rawPayload)) {
+      contentNodes = rawPayload;
+    } else if (rawPayload && typeof rawPayload === 'object') {
+      if (Array.isArray(rawPayload.component)) components.push(...rawPayload.component);
+      if (Array.isArray(rawPayload.content)) {
+        contentNodes = rawPayload.content;
+      } else {
+        contentNodes = rawPayload;
+      }
+    }
+
+    if ((this as any).component && Array.isArray((this as any).component)) {
+      components.push(...((this as any).component as any));
+    }
+
+    return {
+      metadata: {
+        id: this.id,
+        author_id: this.author_id,
+        is_visible: this.is_visible,
+        live_date: this.live_date,
+        resolved_template_id: this.resolved_template_id,
+        created_at: this.created_at,
+        updated_at: this.updated_at,
+        ...(this.metadata || {})
+      },
+      userData: (this as any).userData,
+      component: components,
+      content: contentNodes
+    };
+  }
+
   hasViewAccess(user: any): boolean {
     if (user?.is_admin === true) return true;
+    if (this.author_id && user?.username && this.author_id === user.username) return true;
     const userRole = this.users?.find(u => u.username === user?.username)?.role;
     if (userRole) return true; // Any role (Owner, Contributor, Commenter, Viewer) gives view access
     const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
@@ -127,12 +166,10 @@ export class Content {
       return { error: "Security check failed", status: 403 };
     }
 
-    const hasViewAccess = content.hasViewAccess(user);
-
     const now = new Date();
     const isPublic = content.is_visible && (!content.live_date || new Date(content.live_date) <= now);
 
-    if (!isPublic && !hasViewAccess) {
+    if (!isPublic && !content.hasViewAccess(user)) {
       const behavior = await Setting.get(pgSettingSource, "contentReturnBehavior") || "Overlook";
       if (behavior === "Guard") {
         if (!Content.guardPlaceholderCache) {

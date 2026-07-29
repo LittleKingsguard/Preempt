@@ -668,7 +668,7 @@ export class Node {
    * @returns Deep cloned Node instance.
    * @references `CloneUtils.deepClone()`, `ComponentAssemblyWorker.processNode()`, `SlotAssemblyWorker.processNode()`, `Node.receiveNextState()`, `Node.clone()`, `Component.cloneNode()`, `Template.clone()`, `Payload.clone()`
    */
-  public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = [], newParent: Node | null, phase: number, isComponent: boolean = false): Node {
+  public clone(ignoreProps: string[] = [], shallowCopyProps: string[] = [], newParent: Node | null | undefined, phase: number, isComponent: boolean = false): Node {
     const clonedData = this.data;
     const targetParent = isComponent ? undefined : newParent;
     const targetPhase = isComponent ? 99 : phase;

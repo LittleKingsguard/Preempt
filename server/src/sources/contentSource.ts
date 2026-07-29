@@ -176,8 +176,7 @@ export async function dbGetContent(event: IPreemptEvent, criteria: { count_only?
     const row = result;
     if (row && !('error' in row)) {
       const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
-      const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
-      const hasViewAccess = isAdmin || userRole === 'Owner' || userRole === 'Contributor' || userRole === 'Commenter' || userRole === 'Viewer' || groupRole === 'Owner' || groupRole === 'Contributor' || groupRole === 'Commenter' || groupRole === 'Viewer' || row.author_id === user?.username;
+      const hasViewAccess = isAdmin || !!userRole || row.author_id === user?.username;
       const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
 
       if (!isPublic && !hasViewAccess) {

@@ -66,6 +66,29 @@ export class Payload implements ContentPayload {
   }
 
   /**
+   * Serializes this live Payload instance back to a raw ContentPayload schema object.
+   *
+   * @returns Raw ContentPayload schema object.
+   */
+  public toJSON(): ContentPayload {
+    return {
+      metadata: this.metadata,
+      userData: this.userData,
+      component: this.component?.map(c => ({ reference: c.reference, target: c.target, value: c.value })),
+      content: this.content.map(n => typeof n.exportToJson === 'function' ? n.exportToJson() : n.data)
+    };
+  }
+
+  /**
+   * Export JSON representation matching ContentPayload schema.
+   *
+   * @returns Raw ContentPayload schema object.
+   */
+  public exportToJson(): ContentPayload {
+    return this.toJSON();
+  }
+
+  /**
    * Concatenates and returns text content across contained nodes.
    *
    * @returns Concatenated text content string.

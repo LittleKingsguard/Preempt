@@ -102,11 +102,11 @@ export class ClientAPI {
   }
 
   /**
-   * Fetches dynamic content payload from a remote API endpoint, wraps nodes with placement drop-zones, and injects into Supervisor.
+   * Fetches remote content nodes from server API, attaches placements, and injects into active Supervisor stream.
    *
-   * @param options Object containing URL, batchLabel, query parameters, optional defaultTemplate, and placement drop-zone targets.
-   * @param next Optional callback function executed after content injection.
-   * @returns Promise resolving when content fetch and injection completes.
+   * @param options Fetch options containing endpoint URL, batch label, node query, default template, and target placement names.
+   * @param next Optional callback function executed after injection completes.
+   * @returns Promise resolving when content injection is completed.
    * @useCase Dynamic tab loading, dynamic listing pagination, and remote widget injection.
    * @processFlow HTTP fetch -> payload normalization -> placement attachment -> `Supervisor.injectContent()`.
    */

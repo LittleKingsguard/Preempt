@@ -683,6 +683,7 @@ export class Supervisor {
     this.executeHandlers("beforeMonitor");
     this.isMonitoring = true;
     console.log("Stage: Monitoring started, state:", this.isMonitoring);
+    console.log("Root node:", this.rootNode);
   }
 
   /** Pauses the client monitoring loop and triggers `onPause` handlers. */
@@ -699,6 +700,7 @@ export class Supervisor {
     this.executeHandlers("onResume");
     this.isMonitoring = true;
     console.log("Monitoring resumed, state:", this.isMonitoring);
+    console.log("Root node:", this.rootNode);
   }
 
   /** Terminates the Supervisor pipeline session, clears active phase locks and global metadata. */

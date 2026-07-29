@@ -148,12 +148,12 @@ export class Component implements ComponentBinding {
     }
     if (!ignoreProps.includes('_instantiatedNodes') && this._instantiatedNodes) {
       cloned._instantiatedNodes = this._instantiatedNodes.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], cloned.parent, targetPhase)
+        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase)
       );
     }
     if (!ignoreProps.includes('_clonedChildren') && this._clonedChildren) {
       cloned._clonedChildren = this._clonedChildren.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], cloned.parent, targetPhase)
+        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase)
       );
     }
     if (!ignoreProps.includes('rollback') && this.rollback !== undefined) {

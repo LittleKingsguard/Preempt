@@ -1,4 +1,5 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+import type { ContentPayload } from "../../../src/types/NodeSchema.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 import { pgSettingSource } from './settingsSource.js';
 import type { IContentData } from '../models/interfaces.js';
@@ -28,7 +29,7 @@ async function getDefaultTagComponent(event: IPreemptEvent) {
   return cachedDefaultTag;
 }
 
-function compileTagsToContent(tagRows: any[], defaultTagComp: any): IContentData {
+function compileTagsToContent(tagRows: any[], defaultTagComp: any): ContentPayload {
   const payload = tagRows.map(row => {
     return {
       ...defaultTagComp,
@@ -40,15 +41,17 @@ function compileTagsToContent(tagRows: any[], defaultTagComp: any): IContentData
   });
 
   return {
-    id: 0,
-    author_id: 'system',
-    payload: payload,
-    headers: null,
-    is_visible: true,
-    live_date: new Date(),
-    resolved_template_id: 0,
-    created_at: new Date(),
-    updated_at: new Date()
+    content: payload,
+    metadata: {
+      id: 0,
+      author_id: 'system',
+      is_visible: true,
+      live_date: new Date(),
+      resolved_template_id: 0,
+      created_at: new Date(),
+      updated_at: new Date()
+    },
+    component: []
   };
 }
 

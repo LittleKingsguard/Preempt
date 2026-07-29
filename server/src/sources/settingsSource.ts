@@ -1,4 +1,5 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+import type { ContentPayload } from "../../../src/types/NodeSchema.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 
@@ -30,7 +31,7 @@ async function getDefaultSettingComponent(event: IPreemptEvent) {
   return cachedDefaultSetting;
 }
 
-function compileSettingsToContent(settingRows: any[], defaultSettingComp: any): IContentData {
+function compileSettingsToContent(settingRows: any[], defaultSettingComp: any): ContentPayload {
   const payload = settingRows.map(row => {
     let displayValue = row.value;
     if (typeof displayValue === 'object' && displayValue !== null) {
@@ -47,15 +48,17 @@ function compileSettingsToContent(settingRows: any[], defaultSettingComp: any): 
   });
 
   return {
-    id: 0,
-    author_id: 'system',
-    payload: payload,
-    headers: null,
-    is_visible: true,
-    live_date: new Date(),
-    resolved_template_id: 0,
-    created_at: new Date(),
-    updated_at: new Date()
+    content: payload,
+    metadata: {
+      id: 0,
+      author_id: 'system',
+      is_visible: true,
+      live_date: new Date(),
+      resolved_template_id: 0,
+      created_at: new Date(),
+      updated_at: new Date()
+    },
+    component: []
   };
 }
 

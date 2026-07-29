@@ -53,7 +53,7 @@ router.get('/:commentListId', authenticateToken, async (req: any, res) => {
     const rawPayload = c.payload || c;
     const contentArr = Array.isArray(rawPayload) ? rawPayload : (rawPayload.content && Array.isArray(rawPayload.content) ? rawPayload.content : [rawPayload]);
     return {
-      metadata: c.metadata || rawPayload.metadata || {},
+      metadata: { id: c.id !== undefined ? c.id : c.metadata?.id, author_id: c.author_id, ...(c.metadata || rawPayload.metadata || {}) },
       userData: c.userData || req.user,
       component: c.component || rawPayload.component || [],
       content: contentArr

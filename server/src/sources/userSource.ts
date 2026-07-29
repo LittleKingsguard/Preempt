@@ -1,4 +1,5 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+import type { ContentPayload } from "../../../src/types/NodeSchema.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 import type { IUserSource, IContentData } from "../models/interfaces.js";
@@ -31,7 +32,7 @@ async function getDefaultUserComponent(event: IPreemptEvent) {
   return cachedDefaultUser;
 }
 
-function compileUsersToContent(userRows: any[], defaultUserComp: any): IContentData {
+function compileUsersToContent(userRows: any[], defaultUserComp: any): ContentPayload {
   const payload = userRows.map(row => {
     return {
       ...defaultUserComp,
@@ -44,15 +45,17 @@ function compileUsersToContent(userRows: any[], defaultUserComp: any): IContentD
   });
 
   return {
-    id: 0,
-    author_id: 'system',
-    payload: payload,
-    headers: null,
-    is_visible: true,
-    live_date: new Date(),
-    resolved_template_id: 0,
-    created_at: new Date(),
-    updated_at: new Date()
+    content: payload,
+    metadata: {
+      id: 0,
+      author_id: 'system',
+      is_visible: true,
+      live_date: new Date(),
+      resolved_template_id: 0,
+      created_at: new Date(),
+      updated_at: new Date()
+    },
+    component: []
   };
 }
 

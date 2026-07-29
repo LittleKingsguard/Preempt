@@ -1,4 +1,5 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
+import type { ContentPayload } from "../../../src/types/NodeSchema.js";
 import { pool } from "../db.js";
 import { queryFirstRow, fireAndForgetEvent, getLogEventCTE } from "../utils/db.js";
 
@@ -40,7 +41,7 @@ async function getDefaultHandlerComponent(event: IPreemptEvent) {
   return cachedDefaultHandler;
 }
 
-function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): IContentData {
+function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): ContentPayload {
   const payload = handlerRows.map(row => {
     return {
       ...defaultHandlerComp,
@@ -54,15 +55,17 @@ function compileHandlersToContent(handlerRows: any[], defaultHandlerComp: any): 
   });
 
   return {
-    id: 0,
-    author_id: 'system',
-    payload: payload,
-    headers: null,
-    is_visible: true,
-    live_date: new Date(),
-    resolved_template_id: 0,
-    created_at: new Date(),
-    updated_at: new Date()
+    content: payload,
+    metadata: {
+      id: 0,
+      author_id: 'system',
+      is_visible: true,
+      live_date: new Date(),
+      resolved_template_id: 0,
+      created_at: new Date(),
+      updated_at: new Date()
+    },
+    component: []
   };
 }
 
@@ -104,11 +107,11 @@ export async function dbGetHandlers(event: IPreemptEvent, criteria?: { templateI
   }
 
   const result = await pool.query(query, params);
-  let finalResult = result.rows;
+  let finalResult: any[] | ContentPayload = result.rows;
 
   if (criteria?.format === 'content') {
     const defaultComp = await getDefaultHandlerComponent(event);
-    finalResult = compileHandlersToContent(result.rows, defaultComp) as any;
+    finalResult = compileHandlersToContent(result.rows, defaultComp);
   }
 
   cache.set(cacheKey, { timestamp: Date.now(), value: finalResult });
@@ -126,7 +129,7 @@ export async function dbGetHandlerById(event: IPreemptEvent, id: number, criteri
   if (result && !('error' in result)) {
     if (criteria?.format === 'content') {
       const defaultComp = await getDefaultHandlerComponent(event);
-      result = compileHandlersToContent([result], defaultComp) as any;
+      result = compileHandlersToContent([result], defaultComp);
     }
     cache.set(cacheKey, { timestamp: Date.now(), value: result });
   }
