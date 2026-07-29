@@ -82,6 +82,20 @@ export class Placement implements PlacementConfig {
       current = current.parent;
     }
 
+    if (this.parent.element && this.parent.element.style?.display === 'none') {
+      const parentCssDisplay = this.parent.css?.style?.['display'] || (this.parent.css as any)?.display;
+      if (parentCssDisplay !== 'none') {
+        if (parentCssDisplay !== undefined && parentCssDisplay !== null && parentCssDisplay !== '') {
+          this.parent.element.style.display = parentCssDisplay;
+        } else {
+          this.parent.element.style.removeProperty('display');
+          if (this.parent.element.style.display === 'none') {
+            this.parent.element.style.display = '';
+          }
+        }
+      }
+    }
+
     const clonedNode = node.clone([], [], this.parent, 2);
     this._referencingNodes.add(clonedNode);
     const idx = this.parent.nativeChildren.indexOf(clonedNode);
