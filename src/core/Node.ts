@@ -49,7 +49,7 @@ export class Node {
   /** Array of directly owned child Node instances. */
   public nativeChildren: Node[] = [];
   private _childrenCache: Node[] | null = null;
-  private _parent?: Node | null;
+  private _parent?: Node | null | undefined;
 
   /**
    * Parent Node in the Virtual DOM hierarchy.
@@ -266,13 +266,15 @@ export class Node {
     }
 
     if (!isClone) {
-      if ((phase === 0 || phase === 99) && this._data.children) {
+      if ((phase === 0 || phase === 99) && this._data.children && Array.isArray(this._data.children)) {
         for (const childData of this._data.children) {
-          new Node(childData, this, phase, this.isInTree); //Child adds to nativeChildren via parent setter
+          if (childData && typeof childData === 'object') {
+            new Node(childData, this, phase, this.isInTree); //Child adds to nativeChildren via parent setter
+          }
         }
       }
 
-      if (this._data.handlers) {
+      if (this._data.handlers && Array.isArray(this._data.handlers)) {
         this.handlers = this._data.handlers.map(h => new Handler(h, this, phase));
       } else {
         this.handlers = [];
@@ -280,10 +282,11 @@ export class Node {
 
       this.setComponents(this._data.component, phase);
 
-      if (this._data.placement) {
+      if (this._data.placement && Array.isArray(this._data.placement)) {
         this.placement = this._data.placement.map((p: any) => new Placement(p, this, phase, this.isInTree));
+      } else if (this._data.placement && typeof this._data.placement === 'object') {
+        this.placement = [new Placement(this._data.placement as any, this, phase, this.isInTree)];
       } else {
-
         this.placement = [];
       }
     } else {

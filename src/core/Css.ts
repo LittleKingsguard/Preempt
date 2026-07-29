@@ -58,7 +58,7 @@ export class Css {
       for (const newSN of other.styleNodes) {
         const existingIdx = this.styleNodes.findIndex(s => s.data?.selector && s.data.selector === newSN.data?.selector);
         if (existingIdx !== -1) {
-          this.styleNodes[existingIdx].delete();
+          this.styleNodes[existingIdx]?.delete();
           this.styleNodes[existingIdx] = newSN;
         } else {
           this.styleNodes.push(newSN);

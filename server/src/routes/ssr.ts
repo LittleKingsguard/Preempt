@@ -62,7 +62,11 @@ async function renderAndSendHtml(res: any, contentData: any) {
   }
 
   if (serverConfig.runInstantiation) {
-    const template = new Template(contentData.template_payload);
+    const rawTemplate = contentData.template_payload;
+    const templateData = (rawTemplate && typeof rawTemplate === 'object' && 'root' in rawTemplate)
+      ? rawTemplate
+      : { root: rawTemplate };
+    const template = new Template(templateData);
     htmlOutput = (await Supervisor.process(serverConfig, template, payloadObj, serverApi)) as string || "";
   }
 
