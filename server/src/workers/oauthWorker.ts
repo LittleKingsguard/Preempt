@@ -80,11 +80,17 @@ function reloadEnv() {
 
 function getJWTSecret() {
   reloadEnv();
+  if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    throw new Error("FATAL: JWT_SECRET environment variable must be set in production mode.");
+  }
   return process.env.JWT_SECRET || "supersecretkey";
 }
 
 function getClientSecret() {
   reloadEnv();
+  if (process.env.NODE_ENV === 'production' && !process.env.OIDC_CLIENT_SECRET) {
+    throw new Error("FATAL: OIDC_CLIENT_SECRET environment variable must be set in production mode.");
+  }
   return process.env.OIDC_CLIENT_SECRET || "secret";
 }
 

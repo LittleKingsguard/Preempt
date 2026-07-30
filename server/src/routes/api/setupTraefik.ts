@@ -131,8 +131,8 @@ router.post("/", authenticateToken, async (req: any, res) => {
       if (sslMode === 'letsencrypt') {
         filteredVolumes.push("preempt_letsencrypt:/letsencrypt");
       } else {
-        filteredVolumes.push("./server/certs:/certs:ro");
-        filteredVolumes.push("./server/traefik-dynamic.yml:/traefik-dynamic.yml:ro");
+        filteredVolumes.push("./certs:/certs:ro");
+        filteredVolumes.push("./traefik-dynamic.yml:/traefik-dynamic.yml:ro");
       }
       traefik.set('volumes', composeDoc.createNode(filteredVolumes));
     }
@@ -226,14 +226,14 @@ router.post("/", authenticateToken, async (req: any, res) => {
         <body style="font-family: sans-serif; padding: 2rem; background: #f0f0f0;">
           <div style="max-width: 700px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h1 style="color: green;">Traefik Configured!</h1>
-            <p>Your production configuration has been generated and saved to <code>server/docker-compose.prod.yml</code>.</p>
+            <p>Your production configuration has been generated and saved to <code>docker-compose.prod.yml</code>.</p>
             ${csrPem ? `
             <div style="margin-top: 20px; padding: 15px; border: 1px solid #ccc; background: #f9f9f9; border-radius: 4px;">
               <h3 style="margin-top: 0;">Custom SSL Action Required:</h3>
-              <p>We generated a Private Key and CSR. The Private Key is saved securely at <code>server/certs/server.key</code>.</p>
+              <p>We generated a Private Key and CSR. The Private Key is saved securely at <code>certs/server.key</code>.</p>
               <p>Please provide the following CSR to your Certificate Authority to get your signed certificate:</p>
               <textarea readonly style="width: 100%; height: 200px; font-family: monospace; padding: 10px;">${csrPem}</textarea>
-              <p>Once you receive your signed certificate (e.g. <code>server.crt</code>), save it to <code>server/certs/server.crt</code> before starting the production stack.</p>
+              <p>Once you receive your signed certificate (e.g. <code>server.crt</code>), save it to <code>certs/server.crt</code> before starting the production stack.</p>
             </div>
             ` : ""}
             
@@ -241,7 +241,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
               <strong>Final Step:</strong>
               <p>To apply these changes and start the production stack with HTTPS enabled, run the following commands on your host server:</p>
               <code>docker compose down</code><br/>
-              <code>cp server/docker-compose.prod.yml ./docker-compose.yml</code><br/>
+              <code>cp docker-compose.prod.yml ./docker-compose.yml</code><br/>
               <code>docker compose up -d</code>
             </div>
             <p><a href="/">Return to homepage</a></p>

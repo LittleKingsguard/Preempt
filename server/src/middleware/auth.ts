@@ -2,6 +2,9 @@ import { logger } from "../utils/logger.js";
 import express from "express";
 import jwt from "jsonwebtoken";
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable must be set in production mode.");
+}
 export const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {

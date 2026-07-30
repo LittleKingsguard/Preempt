@@ -173,12 +173,17 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
           <div style="max-width: 500px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h1 style="color: green;">Setup Complete!</h1>
             <p>Your secrets have been saved to the <code>.env</code> file, and the initial library components have been loaded into the database.</p>
+            <div style="background: #e7f5ff; color: #0056b3; padding: 15px; border-radius: 4px; border: 1px solid #bfe0ff; margin: 20px 0;">
+              <strong>Next Step (Production Deployment):</strong>
+              <p>Configure your production domain name and automatic HTTPS SSL certificate (Let's Encrypt / Custom SSL):</p>
+              <a href="/setup/traefik" style="display: inline-block; padding: 10px 18px; background: #0070f3; color: white; border-radius: 4px; font-weight: bold; text-decoration: none; margin-top: 5px;">Configure Production DNS & SSL</a>
+            </div>
             <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; border: 1px solid #ffeeba; margin: 20px 0;">
-              <strong>Action Required:</strong>
-              <p>You MUST restart the Docker containers for the OIDC secrets to take effect.</p>
+              <strong>Development Note:</strong>
+              <p>For local development mode without HTTPS, restart the backend container for new secrets to take effect:</p>
               <code>docker restart preempt_backend</code>
             </div>
-            <p>After restarting, you can navigate back to <a href="/">the homepage</a>.</p>
+            <p>Or return directly to <a href="/">the homepage</a>.</p>
           </div>
         </body>
       </html>

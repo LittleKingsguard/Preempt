@@ -17,6 +17,7 @@ import { SSRElementCreationWorker } from "./workers/SSRElementCreationWorker.js"
 import { SSRTreeAssemblyWorker } from "./workers/SSRTreeAssemblyWorker.js";
 import { PostprocessingWorker } from "./workers/PostprocessingWorker.js";
 import { clientAPI } from "./ClientAPI.js";
+import { Logger } from "./utils/Logger.js";
 
 /**
  * Central pipeline orchestrator singleton managing the 9-stage worker pipeline in Preempt.
@@ -317,7 +318,6 @@ export class Supervisor {
    * @references `ClientAPI.modifyNode()`, `main.ts.init()`, integration and E2E test suites
    */
   public static exportRootNode(): NodeData | null {
-    // TODO: This method needs to be refactored to decouple editor-specific cleaning logic from the core Supervisor.
     if (Supervisor.instance && Supervisor.instance.rootNode) {
       return Supervisor.instance.rootNode.exportToJson();
     }
@@ -682,15 +682,15 @@ export class Supervisor {
     Supervisor.clearLockedPhases();
     this.executeHandlers("beforeMonitor");
     this.isMonitoring = true;
-    console.log("Stage: Monitoring started, state:", this.isMonitoring);
-    console.log("Root node:", this.rootNode);
+    Logger.debug("Stage: Monitoring started, state:", this.isMonitoring);
+    Logger.debug("Root node:", this.rootNode);
   }
 
   /** Pauses the client monitoring loop and triggers `onPause` handlers. */
   private pauseMonitoring(): void {
     this.executeHandlers("onPause");
     this.isMonitoring = false;
-    console.log("Monitoring paused, state:", this.isMonitoring);
+    Logger.debug("Monitoring paused, state:", this.isMonitoring);
   }
 
   /** Resumes the client monitoring loop and triggers `onResume` handlers. */
@@ -699,8 +699,8 @@ export class Supervisor {
     Supervisor.clearLockedPhases();
     this.executeHandlers("onResume");
     this.isMonitoring = true;
-    console.log("Monitoring resumed, state:", this.isMonitoring);
-    console.log("Root node:", this.rootNode);
+    Logger.debug("Monitoring resumed, state:", this.isMonitoring);
+    Logger.debug("Root node:", this.rootNode);
   }
 
   /** Terminates the Supervisor pipeline session, clears active phase locks and global metadata. */

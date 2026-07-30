@@ -637,14 +637,8 @@ export class Node {
       if (d.props && Object.keys(d.props).length === 0) {
         delete d.props;
       }
-      if (d.component) {
-        // TODO: Decouple editor-specific cleaning logic (such as PreemptEditor binding removal) from core Node export.
-        const editorIndex = d.component.findIndex((c: any) => c.reference === "PreemptEditor");
-        if (editorIndex !== -1) {
-          d.component = [...d.component];
-          d.component.splice(editorIndex, 1);
-          if (d.component.length === 0) delete d.component;
-        }
+      if (d.component && Array.isArray(d.component) && d.component.length === 0) {
+        delete d.component;
       }
       if (Array.isArray(d.content)) {
         d.content = d.content.map((c: any) => cleanData(c));
