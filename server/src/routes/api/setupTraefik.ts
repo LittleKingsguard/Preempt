@@ -183,6 +183,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
         kcEnv.set('KC_HOSTNAME_PORT', '443');
         kcEnv.set('KC_HOSTNAME_STRICT_HTTPS', 'true');
       }
+      keycloak.set('command', 'start --import-realm');
 
       const kcLabelsNode = keycloak.get('labels') as any;
       let kcLabels = kcLabelsNode ? kcLabelsNode.toJSON() : [];
