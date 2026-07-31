@@ -201,7 +201,18 @@ app.get("/api/oauth/login", async (req, res) => {
       state,
     });
 
-    res.redirect(url.href);
+    const targetHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
+    const targetProto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
+
+    const targetUrl = new URL(url.href);
+    if (targetUrl.hostname === "localhost" || targetUrl.hostname === "127.0.0.1" || targetUrl.hostname === "keycloak") {
+      const [hostName, hostPort] = targetHost.split(":");
+      targetUrl.protocol = targetProto + ":";
+      targetUrl.hostname = hostName || "localhost";
+      targetUrl.port = hostPort || "";
+    }
+
+    res.redirect(targetUrl.href);
   } catch (err: any) {
     logger.error({ err }, "Failed to initialize login");
     res.status(500).json({ error: "Failed to initialize login" });
@@ -298,16 +309,22 @@ app.get("/api/oauth/logout", async (req, res) => {
     const logoutUrl = new URL(endSessionEndpoint);
     
     // Redirect back to the root of the app after logout
-    const postLogoutRedirectUri = new URL("/", REDIRECT_URI).href;
+    const dynamicRedirect = getDynamicRedirectUri(req);
+    const postLogoutRedirectUri = new URL("/", dynamicRedirect).href;
     logoutUrl.searchParams.set("post_logout_redirect_uri", postLogoutRedirectUri);
     logoutUrl.searchParams.set("client_id", CLIENT_ID);
 
-    let finalUrl = logoutUrl.href;
-    if (process.env.NODE_ENV !== "production") {
-      finalUrl = finalUrl.replace("http://localhost:8080", "http://localhost");
+    const targetHost = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
+    const targetProto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
+
+    if (logoutUrl.hostname === "localhost" || logoutUrl.hostname === "127.0.0.1" || logoutUrl.hostname === "keycloak") {
+      const [hostName, hostPort] = targetHost.split(":");
+      logoutUrl.protocol = targetProto + ":";
+      logoutUrl.hostname = hostName || "localhost";
+      logoutUrl.port = hostPort || "";
     }
 
-    res.redirect(finalUrl);
+    res.redirect(logoutUrl.href);
   } catch (err: any) {
     logger.error({ err }, "Failed to initialize logout");
     res.status(500).json({ error: "Logout failed" });
