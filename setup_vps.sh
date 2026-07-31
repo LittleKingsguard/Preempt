@@ -3,9 +3,10 @@
 # Preempt - VPS Setup & Deployment Script
 # ==============================================================================
 # This script automates setting up Preempt on a fresh Linux VPS.
-# It checks/installs dependencies (Git, Docker, Docker Compose), clones or pulls
-# the repository, initializes environment configuration, builds and launches
-# Docker containers, and provides guidance for completing SSR setup endpoints.
+# It includes optional/automatic steps for installing Docker & Docker Compose first,
+# checks/installs dependencies (Git, Curl), clones or pulls the repository,
+# initializes environment configuration, builds and launches Docker containers,
+# and provides guidance for completing SSR setup endpoints.
 # ==============================================================================
 
 set -euo pipefail
@@ -16,6 +17,7 @@ DEFAULT_BRANCH="main"
 REPO_URL="${REPO_URL:-$DEFAULT_REPO}"
 BRANCH="${BRANCH:-$DEFAULT_BRANCH}"
 TARGET_DIR="${TARGET_DIR:-.}"
+FORCE_INSTALL_DOCKER=false
 
 # Color Output Formatting
 RED='\033[0;31m'
@@ -48,18 +50,20 @@ Usage:
   ./setup_vps.sh [OPTIONS]
 
 Options:
+  -i, --install-docker  Force installation/update of Docker Engine and Docker Compose
   -r, --repo <url>      Git repository URL (Default: ${DEFAULT_REPO})
   -b, --branch <branch> Git branch to checkout (Default: ${DEFAULT_BRANCH})
   -d, --dir <path>      Target installation directory (Default: current directory)
   -h, --help            Show this help message
 
 Environment Variables:
+  INSTALL_DOCKER        Set to 'true' to force Docker installation first
   REPO_URL              Git repository URL
   BRANCH                Git branch name
   TARGET_DIR            Target installation directory
 
 Examples:
-  ./setup_vps.sh
+  ./setup_vps.sh --install-docker
   ./setup_vps.sh -b dev -d /opt/preempt
 EOF
     exit 0
@@ -68,6 +72,10 @@ EOF
 # Parse Command Line Arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -i|--install-docker)
+            FORCE_INSTALL_DOCKER=true
+            shift
+            ;;
         -r|--repo)
             REPO_URL="$2"
             shift 2
@@ -90,8 +98,40 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [ "${INSTALL_DOCKER:-false}" = "true" ]; then
+    FORCE_INSTALL_DOCKER=true
+fi
+
 # ------------------------------------------------------------------------------
-# 1. Dependency Verification & Installation
+# 1. Docker Setup Routine (Optional / Automatic if missing)
+# ------------------------------------------------------------------------------
+install_docker_engine() {
+    log_info "Installing Docker Engine & Docker Compose..."
+    
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
+    fi
+
+    # Run official Docker convenience installer
+    curl -fsSL https://get.docker.com | sh
+
+    if command -v systemctl &>/dev/null; then
+        sudo systemctl enable --now docker
+    fi
+
+    # Add current user to docker group to run without sudo
+    CURRENT_USER="${SUDO_USER:-$(whoami)}"
+    if [ -n "${CURRENT_USER}" ] && [ "${CURRENT_USER}" != "root" ]; then
+        log_info "Adding user '${CURRENT_USER}' to the 'docker' group..."
+        sudo usermod -aG docker "${CURRENT_USER}" || true
+    fi
+
+    log_success "Docker Engine and Docker Compose installed successfully."
+}
+
+# ------------------------------------------------------------------------------
+# 2. Dependency Verification & Installation
 # ------------------------------------------------------------------------------
 log_info "Checking system requirements and dependencies..."
 
@@ -122,17 +162,9 @@ if ! command -v curl &>/dev/null; then
     install_package "curl"
 fi
 
-# Check Docker
-if ! command -v docker &>/dev/null; then
-    log_info "Docker is not installed. Installing Docker..."
-    curl -fsSL https://get.docker.com | sh
-    if command -v systemctl &>/dev/null; then
-        sudo systemctl enable --now docker
-    fi
-    if [ -n "${SUDO_USER:-}" ]; then
-        sudo usermod -aG docker "${SUDO_USER}"
-    fi
-    log_success "Docker installed successfully."
+# Check Docker / Install if requested or missing
+if ${FORCE_INSTALL_DOCKER} || ! command -v docker &>/dev/null; then
+    install_docker_engine
 fi
 
 # Ensure Docker Daemon is running
@@ -141,7 +173,7 @@ if ! docker info &>/dev/null; then
     if command -v systemctl &>/dev/null; then
         sudo systemctl start docker
     else
-        log_error "Docker daemon is not running. Please start Docker service."
+        log_error "Docker daemon is not running. Please start the Docker service."
         exit 1
     fi
 fi
@@ -166,7 +198,7 @@ fi
 log_success "All dependencies verified: git, curl, docker, ${DOCKER_COMPOSE_CMD}"
 
 # ------------------------------------------------------------------------------
-# 2. Repository Setup / Pull
+# 3. Repository Setup / Pull
 # ------------------------------------------------------------------------------
 if [ "${TARGET_DIR}" != "." ] && [ ! -d "${TARGET_DIR}" ]; then
     log_info "Creating directory ${TARGET_DIR}..."
@@ -190,7 +222,7 @@ fi
 log_success "Repository code is up to date."
 
 # ------------------------------------------------------------------------------
-# 3. Environment Configuration
+# 4. Environment Configuration
 # ------------------------------------------------------------------------------
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
@@ -227,7 +259,7 @@ fi
 chmod +x rebuild_frontend.sh reset_db.sh setup_vps.sh 2>/dev/null || true
 
 # ------------------------------------------------------------------------------
-# 4. Spin up Docker Stack
+# 5. Spin up Docker Stack
 # ------------------------------------------------------------------------------
 log_info "Building and launching Docker containers..."
 ${DOCKER_COMPOSE_CMD} up -d --build

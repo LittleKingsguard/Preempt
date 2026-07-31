@@ -42,6 +42,42 @@ Ensure you have the following installed on your machine:
 - [Git](https://git-scm.com/)
 - Node.js 20+ (Optional, only required if running outside Docker containers)
 
+#### Optional: Setting Up Docker First
+If Docker is not yet installed on your system, follow the steps for your operating system:
+
+##### Linux (Ubuntu / Debian / RHEL)
+Install Docker Engine & Docker Compose plugin using the official automated installer:
+```bash
+# Install Docker Engine & Docker Compose
+curl -fsSL https://get.docker.com | sh
+
+# Start and enable Docker service
+sudo systemctl enable --now docker
+
+# (Optional) Add your current user to the 'docker' group to run without 'sudo'
+sudo usermod -aG docker $USER
+
+# Apply group changes (or log out and log back in)
+newgrp docker
+```
+
+##### macOS
+Install [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/) or via Homebrew:
+```bash
+brew install --cask docker
+```
+
+##### Windows
+Install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/) (requires WSL2 enabled).
+
+##### Verify Docker Installation
+```bash
+docker --version
+docker compose version
+```
+
+---
+
 ### 2. Clone Repository & Setup Environment
 ```bash
 git clone https://github.com/LittleKingsguard/Preempt.git
@@ -66,7 +102,7 @@ Once the containers boot up:
 
 ## 🚀 Fresh VPS Deployment Guide
 
-For automated setup on a fresh Linux VPS (Ubuntu, Debian, RHEL, CentOS, Fedora), use the included setup bootstrapper:
+For automated setup on a fresh Linux VPS (Ubuntu, Debian, RHEL, CentOS, Fedora), use the included setup bootstrapper. It automatically handles installing Docker & Docker Compose if missing:
 
 ```bash
 # Download and execute the automated setup script
@@ -76,11 +112,16 @@ curl -fsSL https://raw.githubusercontent.com/LittleKingsguard/Preempt/main/setup
 Or clone manually on your VPS and run:
 ```bash
 chmod +x setup_vps.sh
+
+# Standard deployment (automatically detects & installs Docker if needed):
 ./setup_vps.sh
+
+# Explicitly force Docker Engine & Compose installation first:
+./setup_vps.sh --install-docker
 ```
 
 ### What `setup_vps.sh` Does:
-1. **Dependency Checks**: Automatically detects and installs `git`, `curl`, `docker`, and `docker-compose-plugin` if missing.
+1. **Docker Setup & Dependency Checks**: Detects if Docker is installed. If missing (or if `--install-docker` is passed), installs Docker Engine, `docker-compose-plugin`, enables the systemd service, and adds the active user to the `docker` group.
 2. **Code Synchronization**: Clones or pulls the latest version of Preempt from GitHub.
 3. **Configuration**: Prepares `.env` from `.env.example`.
 4. **Stack Launch**: Runs `docker compose up -d --build` to boot all containers.
@@ -120,7 +161,7 @@ Preempt provides built-in web endpoints for initialization, production SSL confi
 
 | Script | Path | Purpose |
 | :--- | :--- | :--- |
-| **VPS Installer** | [`setup_vps.sh`](file:///media/ryan/Shared%20Files1/Projects/Preempt/setup_vps.sh) | Automates installation of dependencies, Git pulling, `.env` setup, and container booting on a fresh VPS. |
+| **VPS Installer** | [`setup_vps.sh`](file:///media/ryan/Shared%20Files1/Projects/Preempt/setup_vps.sh) | Automates installation of dependencies (including Docker Engine), Git pulling, `.env` setup, and container booting on a fresh VPS. |
 | **Frontend Rebuilder** | [`rebuild_frontend.sh`](file:///media/ryan/Shared%20Files1/Projects/Preempt/rebuild_frontend.sh) | Clears Vite bundle cache and rebuilds client TypeScript artifacts inside a temporary Node Docker container. |
 | **Database Reset** | [`reset_db.sh`](file:///media/ryan/Shared%20Files1/Projects/Preempt/reset_db.sh) | Restores PostgreSQL database back to the captured state defined in `server/seed.sql`. |
 
@@ -133,7 +174,7 @@ Preempt provides built-in web endpoints for initialization, production SSL confi
 | **Traefik Proxy** | `preempt_traefik` | **`80`** | `80` | HTTP / Web Traffic |
 | **Traefik Dashboard** | `preempt_traefik` | **`8080`** | `8080` | Admin Dashboard |
 | **Express Backend** | `preempt_backend` | **`3001`** | `3001` | SSR & API Engine |
-| **OAuth Worker** | `preempt_backend` | **`3002`** | `3002` | OIDC OAuth Callback |
+| **OAuth Worker** | `preempt_backend` | **`3002`** | `3002` | OAuth Callback |
 | **PostgreSQL DB** | `preempt_postgres` | **`5432`** | `5432` | Database Storage |
 | **Apache Kafka** | `preempt_kafka` | **`9092`** | `9092` | Event Streaming |
 | **Keycloak IAM** | `preempt_keycloak` | Internal | `8080` | Realm `/auth` |
