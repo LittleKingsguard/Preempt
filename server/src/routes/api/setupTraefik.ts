@@ -196,6 +196,19 @@ router.post("/", authenticateToken, async (req: any, res) => {
         kcLabels.push('traefik.http.routers.keycloak.tls=true');
       }
       keycloak.set('labels', composeDoc.createNode(kcLabels));
+
+      // Update realm-export.json to enforce sslRequired: external once SSL is configured
+      const realmPath = path.join(process.cwd(), "keycloak-config", "realm-export.json");
+      if (fs.existsSync(realmPath)) {
+        try {
+          const realmData = JSON.parse(fs.readFileSync(realmPath, "utf-8"));
+          realmData.sslRequired = "external";
+          fs.writeFileSync(realmPath, JSON.stringify(realmData, null, 2));
+          logger.info("Updated keycloak-config/realm-export.json with sslRequired: external");
+        } catch (e) {
+          logger.warn({ err: e }, "Failed to update realm-export.json sslRequired setting");
+        }
+      }
     }
 
     // 4. Update global volumes

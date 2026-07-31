@@ -374,6 +374,7 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
 {
   "id": "preempt",
   "realm": "preempt",
+  "sslRequired": "none",
   "browserSecurityHeaders": {
     "contentSecurityPolicyReportOnly": "",
     "xContentTypeOptions": "nosniff",

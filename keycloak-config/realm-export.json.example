@@ -1,6 +1,7 @@
 {
   "id": "preempt",
   "realm": "preempt",
+  "sslRequired": "none",
   "browserSecurityHeaders": {
     "contentSecurityPolicyReportOnly": "",
     "xContentTypeOptions": "nosniff",
