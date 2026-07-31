@@ -362,8 +362,8 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
         read -r -p "SMTP Host [smtp.example.com]: " INPUT_SMTP_HOST </dev/tty || true
         SMTP_HOST="${INPUT_SMTP_HOST:-smtp.example.com}"
 
-        read -r -p "SMTP Port [587]: " INPUT_SMTP_PORT </dev/tty || true
-        SMTP_PORT="${INPUT_SMTP_PORT:-587}"
+        read -r -p "SMTP Port [2525]: " INPUT_SMTP_PORT </dev/tty || true
+        SMTP_PORT="${INPUT_SMTP_PORT:-2525}"
 
         read -r -p "SMTP From Email [noreply@example.com]: " INPUT_SMTP_FROM </dev/tty || true
         SMTP_FROM="${INPUT_SMTP_FROM:-noreply@example.com}"
@@ -384,7 +384,7 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
         echo "" >/dev/tty 2>/dev/null || true
     else
         SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
-        SMTP_PORT="${SMTP_PORT:-587}"
+        SMTP_PORT="${SMTP_PORT:-2525}"
         SMTP_FROM="${SMTP_FROM:-noreply@example.com}"
         SMTP_USER="${SMTP_USER:-smtp_user}"
         SMTP_PASS="${SMTP_PASS:-smtp_password_placeholder}"

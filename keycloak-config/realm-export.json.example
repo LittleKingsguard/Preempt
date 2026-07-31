@@ -23,7 +23,7 @@
   ],
   "smtpServer": {
     "host": "smtp.example.com",
-    "port": "587",
+    "port": "2525",
     "from": "noreply@example.com",
     "fromDisplayName": "Preempt App",
     "replyTo": "noreply@example.com",
