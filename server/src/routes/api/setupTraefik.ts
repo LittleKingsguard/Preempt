@@ -144,6 +144,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
       if (backendEnv) {
         backendEnv.set('OIDC_ISSUER', `https://${domain}/auth/realms/preempt`);
         backendEnv.set('OIDC_REDIRECT_URI', `https://${domain}/api/oauth/callback`);
+        backendEnv.set('NODE_TLS_REJECT_UNAUTHORIZED', '1');
       }
 
       const backendLabelsNode = backend.get('labels') as any;

@@ -1,3 +1,8 @@
+// Default to allowing self-signed TLS certificates during early setup if not explicitly configured
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === undefined) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 // Override global fetch in development so that when openid-client tries to contact
 // "localhost" (the external OIDC issuer), it correctly routes to the internal "keycloak:8080" container.
 // THIS MUST RUN BEFORE IMPORTING openid-client!
@@ -139,7 +144,10 @@ async function getOIDCConfig(req?: express.Request) {
 
   const issuerUrl = new URL(issuerStr);
   try {
-    const execute: any[] = [client.allowInsecureRequests];
+    const execute: any[] = [];
+    if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
+      execute.push(client.allowInsecureRequests);
+    }
     
     const newConfig = await client.discovery(
       issuerUrl,

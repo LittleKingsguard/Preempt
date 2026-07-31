@@ -71,6 +71,7 @@ services:
       - ./.env
     environment:
       TSX_DISABLE_CACHE: "1"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
       OAUTH_PORT: 3002
       OIDC_ISSUER: https://localhost/auth/realms/preempt
       OIDC_CLIENT_ID: preempt-app
