@@ -214,12 +214,24 @@ if [ -d ".git" ]; then
     git fetch origin
     git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
     git pull origin "${BRANCH}"
-else
-    log_info "Cloning Preempt repository (${REPO_URL}, branch: ${BRANCH}) into $(pwd)..."
+elif [ -z "$(ls -A . 2>/dev/null)" ]; then
+    log_info "Empty directory detected. Cloning Preempt repository (${REPO_URL}, branch: ${BRANCH}) into $(pwd)..."
     git clone -b "${BRANCH}" "${REPO_URL}" .
+else
+    log_info "Target directory $(pwd) is not empty and not a Git repository. Cloning into subfolder './preempt'..."
+    mkdir -p preempt
+    cd preempt
+    if [ -d ".git" ]; then
+        log_info "Existing Git repository detected in $(pwd). Fetching and pulling latest changes..."
+        git fetch origin
+        git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
+        git pull origin "${BRANCH}"
+    else
+        git clone -b "${BRANCH}" "${REPO_URL}" .
+    fi
 fi
 
-log_success "Repository code is up to date."
+log_success "Repository code is up to date in $(pwd)."
 
 # ------------------------------------------------------------------------------
 # 4. Environment Configuration
