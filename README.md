@@ -94,7 +94,7 @@ docker compose up -d --build
 
 ### 4. Complete Web-Based First-Time Setup
 Once the containers boot up:
-1. Open **`http://localhost/setup`** in your browser.
+1. Open **`https://localhost/setup`** in your browser (accept the browser self-signed certificate warning).
 2. Log in with your initial Keycloak admin credentials (`admin` / `admin`).
 3. Click **Initialize Database & Save Config**. This will automatically generate security secrets (`JWT_SECRET`, `OIDC_CLIENT_SECRET`), elevate your user to System Administrator, and seed initial JSON component libraries into PostgreSQL.
 
@@ -132,19 +132,20 @@ chmod +x setup_vps.sh
 > When deploying to a server via `setup_vps.sh`, the deployment script dynamically updates configuration files on the VPS to apply **production-ready optimizations** (esbuild minification, sourcemaps disabled, CSS minification, console log stripping, and vendor chunk splitting).
 
 ### What `setup_vps.sh` Does:
-1. **Docker Setup & Dependency Checks**: Detects if Docker is installed. If missing (or if `--install-docker` is passed), installs Docker Engine, `docker-compose-plugin`, enables the systemd service, and adds the active user to the `docker` group.
+1. **Docker Setup & Dependency Checks**: Detects if Docker, Git, Curl, and OpenSSL are installed. If missing (or if `--install-docker` is passed), installs Docker Engine, `docker-compose-plugin`, enables the systemd service, and adds the active user to the `docker` group.
 2. **Code Synchronization**: Clones or pulls the latest version of Preempt from GitHub into `$(pwd)` or `./preempt`.
-3. **Environment & Production Optimization**: Prepares `.env` from `.env.example`, generates `keycloak-config/realm-export.json` from example template, and dynamically transforms `vite.config.ts` into a production-optimized compilation profile (esbuild minification, sourcemaps disabled, console log stripping, vendor chunking).
-4. **Stack Launch & Health Check**: Runs `docker compose up -d --build` to boot all containers and actively polls until the Express backend finishes `npm install` and starts listening on port 3001.
+3. **Environment & Self-Signed SSL Setup**: Prepares `.env` from `.env.example`, generates `keycloak-config/realm-export.json` with `"sslRequired": "external"`, generates an initial self-signed SSL certificate (`certs/server.crt` & `certs/server.key`), creates `traefik-dynamic.yml`, and dynamically transforms `vite.config.ts` into a production-optimized compilation profile.
+4. **Stack Launch & Health Check**: Runs `docker compose up -d --build` to boot all containers and actively polls until the Express backend finishes `npm install` and starts listening.
 5. **Health Status**: Displays running service endpoints and steps for Web SSR initialization.
 
-### Post-Deployment Production SSL & Domain Setup
-After running `setup_vps.sh`:
-1. Navigate to **`http://<YOUR_VPS_IP>/setup`** to complete first-time administrator initialization.
-2. Navigate to **`http://<YOUR_VPS_IP>/setup/traefik`** to open the Production Setup Wizard:
+### Early Setup & Post-Deployment Production SSL
+Preempt enforces HTTPS right out of the box:
+1. **Initial HTTPS Access (Self-Signed SSL)**: Upon completing `setup_vps.sh`, open **`https://<YOUR_VPS_IP>/setup`** in your browser and accept the initial self-signed certificate warning.
+2. **First-Time Administrator Setup**: Complete initial database initialization and admin account creation at `/setup`.
+3. **Upgrading to an Authority Certificate**: Navigate to **`https://<YOUR_VPS_IP>/setup/traefik`** to open the Production Setup Wizard:
    - **Domain Configuration**: Enter your production domain name (e.g. `app.example.com`).
    - **SSL Resolution**: Select **Let's Encrypt** (automatic TLS challenge) or **Custom SSL** (CSR & Private Key generation).
-3. The wizard will output a production-ready `docker-compose.prod.yml`. Apply it on your server using:
+4. The wizard will generate a production-ready `docker-compose.prod.yml` that upgrades Traefik from the self-signed certificate to your trusted authority certificate. Apply it on your server using:
    ```bash
    docker compose down
    cp docker-compose.prod.yml docker-compose.yml
@@ -192,7 +193,8 @@ Preempt provides built-in web endpoints for initialization, production SSL confi
 
 | Service | Container Name | Host Port | Internal Port | Protocol / Path |
 | :--- | :--- | :--- | :--- | :--- |
-| **Traefik Proxy** | `preempt_traefik` | **`80`** | `80` | HTTP / Web Traffic |
+| **Traefik Proxy (HTTP)** | `preempt_traefik` | **`80`** | `80` | HTTP Redirect to HTTPS |
+| **Traefik Proxy (HTTPS)** | `preempt_traefik` | **`443`** | `443` | Web Traffic (Self-Signed / TLS) |
 | **Traefik Dashboard** | `preempt_traefik` | **`8080`** | `8080` | Admin Dashboard |
 | **Express Backend** | `preempt_backend` | **`3001`** | `3001` | SSR & API Engine |
 | **OAuth Worker** | `preempt_backend` | **`3002`** | `3002` | OAuth Callback |
@@ -216,10 +218,10 @@ Reference table for variables defined in [`.env.example`](file:///media/ryan/Sha
 | `PORT` | `3001` | Primary Express backend HTTP server port |
 | `OAUTH_PORT` | `3002` | OAuth callback server port |
 | `JWT_SECRET` | `supersecretkey` | Secret key for signing internal JSON Web Tokens |
-| `OIDC_ISSUER` | `http://localhost/auth/realms/preempt` | Keycloak OpenID Connect issuer URL |
+| `OIDC_ISSUER` | `https://localhost/auth/realms/preempt` | Keycloak OpenID Connect issuer URL |
 | `OIDC_CLIENT_ID` | `preempt-app` | Keycloak client ID for authentication |
 | `OIDC_CLIENT_SECRET` | `secret` | Keycloak client secret key |
-| `OIDC_REDIRECT_URI` | `http://localhost/api/oauth/callback` | OAuth authentication redirect callback |
+| `OIDC_REDIRECT_URI` | `https://localhost/api/oauth/callback` | OAuth authentication redirect callback |
 | `KEYCLOAK_ADMIN` | `admin` | Initial Keycloak master realm administrator username |
 | `KEYCLOAK_ADMIN_PASSWORD` | `admin` | Initial Keycloak master realm administrator password |
 | `KAFKA_BROKERS` | `kafka:9092` | Kafka broker host and port address |

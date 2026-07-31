@@ -44,12 +44,19 @@ services:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.watch=true"
+      - "--providers.file.filename=/traefik-dynamic.yml"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080" # Traefik dashboard
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./certs:/certs:ro"
+      - "./traefik-dynamic.yml:/traefik-dynamic.yml:ro"
     labels:
       - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, max-age=0"
       - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Pragma=no-cache"
@@ -65,10 +72,10 @@ services:
     environment:
       TSX_DISABLE_CACHE: "1"
       OAUTH_PORT: 3002
-      OIDC_ISSUER: http://localhost/auth/realms/preempt
+      OIDC_ISSUER: https://localhost/auth/realms/preempt
       OIDC_CLIENT_ID: preempt-app
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
-      OIDC_REDIRECT_URI: http://localhost/api/oauth/callback
+      OIDC_REDIRECT_URI: https://localhost/api/oauth/callback
       KAFKA_BROKERS: kafka:9092
     extra_hosts:
       - "localhost:host-gateway"
@@ -78,13 +85,15 @@ services:
       - "traefik.http.routers.backend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.backend.priority=1"
       - "traefik.http.routers.backend.middlewares=nocache@docker"
-      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
       - "traefik.http.routers.backend.service=backend"
       - "traefik.http.services.backend.loadbalancer.server.port=3001"
       # oauth
       - "traefik.http.routers.oauth.rule=PathPrefix(`/api/oauth`)"
       - "traefik.http.routers.oauth.priority=10"
-      - "traefik.http.routers.oauth.entrypoints=web"
+      - "traefik.http.routers.oauth.entrypoints=websecure"
+      - "traefik.http.routers.oauth.tls=true"
       - "traefik.http.routers.oauth.service=oauth"
       - "traefik.http.services.oauth.loadbalancer.server.port=3002"
     ports:
@@ -116,7 +125,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HOSTNAME: ${KC_HOSTNAME:-}
-      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "true"
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /auth
@@ -130,7 +139,8 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.keycloak.rule=PathPrefix(`/auth`)"
       - "traefik.http.routers.keycloak.priority=10"
-      - "traefik.http.routers.keycloak.entrypoints=web"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
       - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
     volumes:
       - ./keycloak-config:/opt/keycloak/data/import

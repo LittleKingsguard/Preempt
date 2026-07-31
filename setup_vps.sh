@@ -313,10 +313,10 @@ PGPORT=5432
 PORT=3001
 OAUTH_PORT=3002
 JWT_SECRET=supersecretkey
-OIDC_ISSUER=http://localhost/auth/realms/preempt
+OIDC_ISSUER=https://localhost/auth/realms/preempt
 OIDC_CLIENT_ID=preempt-app
 OIDC_CLIENT_SECRET=secret
-OIDC_REDIRECT_URI=http://localhost/api/oauth/callback
+OIDC_REDIRECT_URI=https://localhost/api/oauth/callback
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 KAFKA_BROKERS=kafka:9092
@@ -326,6 +326,27 @@ EOF
     fi
 else
     log_info "Existing .env file detected. Preserving configuration."
+fi
+
+# Ensure initial self-signed SSL certificate and Traefik dynamic config exist
+mkdir -p certs
+if [ ! -f "certs/server.crt" ] || [ ! -f "certs/server.key" ]; then
+    log_info "Generating initial self-signed SSL certificate..."
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout certs/server.key \
+        -out certs/server.crt \
+        -subj "/CN=${PUBLIC_IP:-localhost}" \
+        -days 365 2>/dev/null || true
+    log_success "Generated initial self-signed SSL certificate in ./certs"
+fi
+
+if [ ! -f "traefik-dynamic.yml" ]; then
+    cat <<'EOF' > traefik-dynamic.yml
+tls:
+  certificates:
+    - certFile: /certs/server.crt
+      keyFile: /certs/server.key
+EOF
 fi
 
 # Generate Keycloak realm import configuration dynamically
@@ -382,7 +403,7 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
 {
   "id": "preempt",
   "realm": "preempt",
-  "sslRequired": "none",
+  "sslRequired": "external",
   "browserSecurityHeaders": {
     "contentSecurityPolicyReportOnly": "",
     "xContentTypeOptions": "nosniff",
