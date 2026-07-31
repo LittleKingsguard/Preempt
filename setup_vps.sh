@@ -200,37 +200,52 @@ log_success "All dependencies verified: git, curl, docker, ${DOCKER_COMPOSE_CMD}
 # ------------------------------------------------------------------------------
 # 3. Repository Setup / Pull
 # ------------------------------------------------------------------------------
-if [ "${TARGET_DIR}" != "." ] && [ ! -d "${TARGET_DIR}" ]; then
-    log_info "Creating directory ${TARGET_DIR}..."
-    mkdir -p "${TARGET_DIR}"
-fi
+ensure_repo() {
+    if [ "${TARGET_DIR}" != "." ] && [ ! -d "${TARGET_DIR}" ]; then
+        log_info "Creating target directory ${TARGET_DIR}..."
+        mkdir -p "${TARGET_DIR}"
+    fi
 
-if [ "${TARGET_DIR}" != "." ]; then
-    cd "${TARGET_DIR}"
-fi
+    if [ "${TARGET_DIR}" != "." ]; then
+        cd "${TARGET_DIR}"
+    fi
 
-if [ -d ".git" ]; then
-    log_info "Existing Git repository detected in $(pwd). Fetching and pulling latest changes..."
-    git fetch origin
-    git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
-    git pull origin "${BRANCH}"
-elif [ -z "$(ls -A . 2>/dev/null)" ]; then
-    log_info "Empty directory detected. Cloning Preempt repository (${REPO_URL}, branch: ${BRANCH}) into $(pwd)..."
-    git clone -b "${BRANCH}" "${REPO_URL}" .
-else
-    log_info "Target directory $(pwd) is not empty and not a Git repository. Cloning into subfolder './preempt'..."
-    mkdir -p preempt
-    cd preempt
+    # Case A: Current directory is already a Git repository
     if [ -d ".git" ]; then
         log_info "Existing Git repository detected in $(pwd). Fetching and pulling latest changes..."
         git fetch origin
         git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
         git pull origin "${BRANCH}"
-    else
-        git clone -b "${BRANCH}" "${REPO_URL}" .
+        return 0
     fi
-fi
 
+    # Case B: Current directory is completely empty
+    if [ -z "$(ls -A . 2>/dev/null)" ]; then
+        log_info "Empty directory detected. Cloning Preempt repository (${REPO_URL}, branch: ${BRANCH}) into $(pwd)..."
+        git clone -b "${BRANCH}" "${REPO_URL}" .
+        return 0
+    fi
+
+    # Case C: Current directory is not empty and not a Git repo (e.g., /root)
+    log_info "Directory $(pwd) is not empty and not a Git repository. Using subfolder './preempt'..."
+    if [ -d "preempt/.git" ]; then
+        cd preempt
+        log_info "Existing Git repository detected in $(pwd). Fetching and pulling latest changes..."
+        git fetch origin
+        git checkout "${BRANCH}" || git checkout -b "${BRANCH}" "origin/${BRANCH}"
+        git pull origin "${BRANCH}"
+    else
+        if [ -d "preempt" ]; then
+            log_warn "Non-git directory './preempt' exists from a previous incomplete run. Removing before cloning..."
+            rm -rf preempt
+        fi
+        log_info "Cloning Preempt repository (${REPO_URL}, branch: ${BRANCH}) into $(pwd)/preempt..."
+        git clone -b "${BRANCH}" "${REPO_URL}" preempt
+        cd preempt
+    fi
+}
+
+ensure_repo
 log_success "Repository code is up to date in $(pwd)."
 
 # ------------------------------------------------------------------------------
