@@ -509,9 +509,8 @@ WAIT_TIME=0
 BACKEND_UP=false
 
 while [ ${WAIT_TIME} -lt ${MAX_WAIT} ]; do
-    if docker exec preempt_backend wget --no-verbose --tries=1 --spider http://localhost:3001/ &>/dev/null || \
-       curl -s --connect-timeout 2 http://localhost:3001/ &>/dev/null || \
-       curl -s --connect-timeout 2 http://localhost/ &>/dev/null; then
+    HTTP_CODE=$(docker exec preempt_backend curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/ 2>/dev/null || true)
+    if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "302" ] || [ "${HTTP_CODE}" = "403" ] || [ "${HTTP_CODE}" = "404" ]; then
         BACKEND_UP=true
         break
     fi
@@ -554,9 +553,11 @@ echo -e "  2. Configure Production Domain & HTTPS (SSL):"
 echo -e "     Navigate to ${BLUE}http://${PUBLIC_IP}/setup/traefik${NC} in your browser."
 echo -e "     Set your production domain name and select Let's Encrypt or Custom SSL."
 echo ""
-echo -e "${GREEN}Useful Management Commands:${NC}"
+echo -e "${GREEN}Useful Management Commands (Run inside project directory: cd $(pwd)):${NC}"
 echo -e "  - View Logs:              ${DOCKER_COMPOSE_CMD} logs -f"
 echo -e "  - Restart Backend:        ${DOCKER_COMPOSE_CMD} restart backend"
+echo -e "  - Stop Stack:             ${DOCKER_COMPOSE_CMD} down"
+echo -e "  - Start Stack:            ${DOCKER_COMPOSE_CMD} up -d"
 echo -e "  - Rebuild Frontend:       ./rebuild_frontend.sh"
 echo -e "  - Reset DB to Seed:       ./reset_db.sh"
 echo -e "${GREEN}==============================================================================${NC}"

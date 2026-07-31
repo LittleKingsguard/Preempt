@@ -169,6 +169,15 @@ async function getKeycloakAdminToken() {
   return data.access_token;
 }
 
+function getDynamicRedirectUri(req: express.Request): string {
+  const host = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
+  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
+  if (REDIRECT_URI.includes("localhost") || REDIRECT_URI.includes("127.0.0.1")) {
+    return `${proto}://${host}/api/oauth/callback`;
+  }
+  return REDIRECT_URI;
+}
+
 app.get("/api/oauth/login", async (req, res) => {
   try {
     const oidcConfig = await getOIDCConfig();
@@ -182,8 +191,10 @@ app.get("/api/oauth/login", async (req, res) => {
       maxAge: 10 * 60 * 1000, // 10 minutes
     });
 
+    const redirectUri = getDynamicRedirectUri(req);
+
     const url = client.buildAuthorizationUrl(oidcConfig, {
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
       scope: OIDC_SCOPES,
       code_challenge,
       code_challenge_method: "S256",
@@ -200,7 +211,9 @@ app.get("/api/oauth/login", async (req, res) => {
 app.get("/api/oauth/callback", async (req, res) => {
   try {
     const oidcConfig = await getOIDCConfig();
-    const currentUrl = new URL(`${req.protocol}://${req.get("host")}${req.originalUrl}`);
+    const host = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
+    const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
+    const currentUrl = new URL(`${proto}://${host}${req.originalUrl}`);
     
     const oauthStateCookie = req.cookies.oauth_state;
     if (!oauthStateCookie) {
