@@ -417,7 +417,6 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
   "enabled": true,
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,
-  "registrationPasswordAllowed": true,
   "verifyEmail": ${ENABLE_VERIFY_EMAIL},
   "resetPasswordAllowed": true,
   "eventsEnabled": true,
@@ -571,18 +570,18 @@ echo -e "${GREEN}                       PREEMPT VPS SETUP COMPLETE!             
 echo -e "${GREEN}==============================================================================${NC}"
 echo ""
 echo -e "${BLUE}Running Services:${NC}"
-echo -e "  - Traefik Edge Proxy:     http://${PUBLIC_IP}:80"
+echo -e "  - Traefik Edge Proxy:     https://${PUBLIC_IP} (HTTP redirects to HTTPS)"
 echo -e "  - Traefik Dashboard:      http://${PUBLIC_IP}:8080"
-echo -e "  - Keycloak Auth Realm:    http://${PUBLIC_IP}/auth"
-echo -e "  - SSR & API Server:       http://${PUBLIC_IP}:3001"
+echo -e "  - Keycloak Auth Realm:    https://${PUBLIC_IP}/auth"
+echo -e "  - SSR & API Server:       https://${PUBLIC_IP}"
 echo ""
 echo -e "${YELLOW}IMPORTANT NEXT STEPS (SSR Setup Endpoints):${NC}"
 echo -e "  1. Complete Initial Admin Setup & Seed Database:"
-echo -e "     Navigate to ${BLUE}http://${PUBLIC_IP}/setup${NC} in your browser."
+echo -e "     Navigate to ${BLUE}https://${PUBLIC_IP}/setup${NC} in your browser (accept self-signed SSL warning)."
 echo -e "     Log in, initialize security secrets, elevate your admin user, and load component libraries."
 echo ""
 echo -e "  2. Configure Production Domain & HTTPS (SSL):"
-echo -e "     Navigate to ${BLUE}http://${PUBLIC_IP}/setup/traefik${NC} in your browser."
+echo -e "     Navigate to ${BLUE}https://${PUBLIC_IP}/setup/traefik${NC} in your browser."
 echo -e "     Set your production domain name and select Let's Encrypt or Custom SSL."
 echo ""
 echo -e "${GREEN}Useful Management Commands (Run inside project directory: cd $(pwd)):${NC}"
