@@ -112,37 +112,47 @@ function issuePreemptSession(res: express.Response, user: any) {
   res.cookie("token", token, { httpOnly: true, secure: process.env.NODE_ENV === "production" });
 }
 
-async function getOIDCConfig() {
+function getDynamicIssuer(req?: express.Request): string {
+  const envIssuer = process.env.OIDC_ISSUER || "https://localhost/auth/realms/preempt";
+  if (!req) return envIssuer;
+  const host = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
+  const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+  if (envIssuer.includes("localhost") || envIssuer.includes("127.0.0.1")) {
+    return `${proto}://${host}/auth/realms/preempt`;
+  }
+  return envIssuer;
+}
+
+const configCache = new Map<string, client.Configuration>();
+
+async function getOIDCConfig(req?: express.Request) {
+  const issuerStr = getDynamicIssuer(req);
   const currentSecret = getClientSecret();
-  if (config && (config as any).clientSecret !== currentSecret) {
-    config = undefined as any;
+  
+  let cached = configCache.get(issuerStr);
+  if (cached && (cached as any).clientSecret !== currentSecret) {
+    configCache.delete(issuerStr);
+    cached = undefined;
   }
 
-  if (config) return config;
+  if (cached) return cached;
 
-  // We expect Keycloak's public frontend URL as the issuer.
-  // Because Keycloak internally thinks it's on port 8080 (even with KC_HOSTNAME_PORT=80), 
-  // its discovery metadata will contain `localhost:8080`.
-  // We use an interceptor to route the request to `keycloak:8080` internally 
-  // AND rewrite the JSON response so openid-client sees `localhost` as the issuer.
-  const issuerUrl = new URL(OIDC_ISSUER);
+  const issuerUrl = new URL(issuerStr);
   try {
-    const execute: any[] = [];
-    if (process.env.NODE_ENV !== "production") {
-      execute.push(client.allowInsecureRequests);
-    }
+    const execute: any[] = [client.allowInsecureRequests];
     
-    config = await client.discovery(
+    const newConfig = await client.discovery(
       issuerUrl,
       CLIENT_ID,
       currentSecret,
       undefined,
-      execute.length > 0 ? { execute } : undefined
+      { execute }
     );
-    (config as any).clientSecret = currentSecret;
-    return config;
+    (newConfig as any).clientSecret = currentSecret;
+    configCache.set(issuerStr, newConfig);
+    return newConfig;
   } catch (err) {
-    logger.error({ err }, "Failed to discover OIDC issuer");
+    logger.error({ err, issuer: issuerStr }, "Failed to discover OIDC issuer");
     throw err;
   }
 }
@@ -180,7 +190,7 @@ function getDynamicRedirectUri(req: express.Request): string {
 
 app.get("/api/oauth/login", async (req, res) => {
   try {
-    const oidcConfig = await getOIDCConfig();
+    const oidcConfig = await getOIDCConfig(req);
     const code_verifier = client.randomPKCECodeVerifier();
     const code_challenge = await client.calculatePKCECodeChallenge(code_verifier);
     const state = client.randomState();
@@ -221,7 +231,7 @@ app.get("/api/oauth/login", async (req, res) => {
 
 app.get("/api/oauth/callback", async (req, res) => {
   try {
-    const oidcConfig = await getOIDCConfig();
+    const oidcConfig = await getOIDCConfig(req);
     const host = (req.headers["x-forwarded-host"] as string) || req.get("host") || "localhost";
     const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
     const currentUrl = new URL(`${proto}://${host}${req.originalUrl}`);
@@ -273,7 +283,8 @@ app.get("/api/oauth/callback", async (req, res) => {
         }
         const newUser = createResult.user;
         await newUser.verifyEmail();
-        await newUser.addValidatedHost(OIDC_ISSUER);
+        const dynamicIssuer = getDynamicIssuer(req);
+        await newUser.addValidatedHost(dynamicIssuer);
 
         issuePreemptSession(res, newUser);
         return res.redirect("/");
@@ -281,12 +292,13 @@ app.get("/api/oauth/callback", async (req, res) => {
         return res.status(403).json({ error: "Email not verified by IdP, cannot auto-register" });
       }
     } else {
-      if (localUser.validated_hosts.includes(OIDC_ISSUER)) {
+      const dynamicIssuer = getDynamicIssuer(req);
+      if (localUser.validated_hosts.includes(dynamicIssuer) || localUser.validated_hosts.includes(OIDC_ISSUER)) {
         issuePreemptSession(res, localUser);
         return res.redirect("/");
       } else {
         // Must link
-        res.cookie("oauth_link", JSON.stringify({ email, issuer: OIDC_ISSUER }), { httpOnly: true, maxAge: 5 * 60 * 1000 });
+        res.cookie("oauth_link", JSON.stringify({ email, issuer: dynamicIssuer }), { httpOnly: true, maxAge: 5 * 60 * 1000 });
         return res.redirect("/?link=true"); // Or wherever the frontend wants it
       }
     }
@@ -298,7 +310,7 @@ app.get("/api/oauth/callback", async (req, res) => {
 
 app.get("/api/oauth/logout", async (req, res) => {
   try {
-    const oidcConfig = await getOIDCConfig();
+    const oidcConfig = await getOIDCConfig(req);
     
     // Attempt to use the end_session_endpoint if available, otherwise fallback to standard Keycloak logout URL
     let endSessionEndpoint = oidcConfig.serverMetadata().end_session_endpoint;
