@@ -375,11 +375,11 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
         echo "" >/dev/tty 2>/dev/null || true
         SMTP_PASS="${INPUT_SMTP_PASS:-smtp_password_placeholder}"
 
-        read -r -p "Require mandatory Email Verification on signup? [y/N]: " INPUT_VERIFY </dev/tty || true
-        if [[ "${INPUT_VERIFY}" =~ ^[Yy] ]]; then
-            ENABLE_VERIFY_EMAIL="true"
-        else
+        read -r -p "Require mandatory Email Verification on signup? [Y/n]: " INPUT_VERIFY </dev/tty || true
+        if [[ "${INPUT_VERIFY}" =~ ^[Nn] ]]; then
             ENABLE_VERIFY_EMAIL="false"
+        else
+            ENABLE_VERIFY_EMAIL="true"
         fi
         echo "" >/dev/tty 2>/dev/null || true
     else
@@ -388,6 +388,7 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
         SMTP_FROM="${SMTP_FROM:-noreply@example.com}"
         SMTP_USER="${SMTP_USER:-smtp_user}"
         SMTP_PASS="${SMTP_PASS:-smtp_password_placeholder}"
+        ENABLE_VERIFY_EMAIL="${ENABLE_VERIFY_EMAIL:-true}"
     fi
 
     if [ "${SMTP_PORT}" = "465" ]; then
@@ -416,6 +417,7 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
   "enabled": true,
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,
+  "registrationPasswordAllowed": true,
   "verifyEmail": ${ENABLE_VERIFY_EMAIL},
   "resetPasswordAllowed": true,
   "eventsEnabled": true,

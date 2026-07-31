@@ -14,7 +14,8 @@
   "enabled": true,
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,
-  "verifyEmail": false,
+  "registrationPasswordAllowed": true,
+  "verifyEmail": true,
   "resetPasswordAllowed": true,
   "eventsEnabled": true,
   "eventsListeners": [
