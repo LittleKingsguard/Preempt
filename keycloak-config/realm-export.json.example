@@ -1,0 +1,74 @@
+{
+  "id": "preempt",
+  "realm": "preempt",
+  "browserSecurityHeaders": {
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=0"
+  },
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "verifyEmail": false,
+  "resetPasswordAllowed": true,
+  "eventsEnabled": true,
+  "eventsListeners": [
+    "kafka",
+    "jboss-logging"
+  ],
+  "smtpServer": {
+    "host": "smtp.example.com",
+    "port": "587",
+    "from": "noreply@example.com",
+    "fromDisplayName": "Preempt App",
+    "replyTo": "noreply@example.com",
+    "replyToDisplayName": "Preempt App",
+    "envelopeFrom": "noreply@example.com",
+    "ssl": "false",
+    "starttls": "true",
+    "auth": "true",
+    "user": "YOUR_SMTP_USER",
+    "password": "YOUR_SMTP_PASSWORD"
+  },
+  "clients": [
+    {
+      "clientId": "preempt-app",
+      "name": "Preempt Application",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret",
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "testuser",
+      "enabled": true,
+      "email": "test@preempt.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

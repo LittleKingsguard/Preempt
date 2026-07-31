@@ -98,6 +98,13 @@ Once the containers boot up:
 2. Log in with your initial Keycloak admin credentials (`admin` / `admin`).
 3. Click **Initialize Database & Save Config**. This will automatically generate security secrets (`JWT_SECRET`, `OIDC_CLIENT_SECRET`), elevate your user to System Administrator, and seed initial JSON component libraries into PostgreSQL.
 
+> [!IMPORTANT]
+> **Configuring Valid Email Credentials (SMTP)**:
+> The developer Keycloak realm configuration template ([`keycloak-config/realm-export.json.example`](file:///media/ryan/Shared%20Files1/Projects/Preempt/keycloak-config/realm-export.json.example)) includes generic placeholder SMTP credentials (`YOUR_SMTP_USER`, `YOUR_SMTP_PASSWORD`).
+> For user password resets and email verification to work in production:
+> 1. Enter your production SMTP service details (e.g. Resend, SendGrid, Mailgun) during `./setup_vps.sh` interactive prompts, **OR**
+> 2. Open the **Keycloak Admin Console** (`http://<YOUR_DOMAIN_OR_IP>/auth/admin/`), switch to the **`preempt`** realm, navigate to **Realm Settings** -> **Email**, and enter your production SMTP credentials.
+
 ---
 
 ## 🚀 Fresh VPS Deployment Guide
@@ -120,11 +127,15 @@ chmod +x setup_vps.sh
 ./setup_vps.sh --install-docker
 ```
 
+> [!NOTE]
+> **Developer vs Production Configuration**: The repository's default configuration files (including `vite.config.ts` and `.env.example`) are intentionally pre-configured for **local development and interactive debugging** (unminified builds, full sourcemaps, verbose logging).
+> When deploying to a server via `setup_vps.sh`, the deployment script dynamically updates configuration files on the VPS to apply **production-ready optimizations** (esbuild minification, sourcemaps disabled, CSS minification, console log stripping, and vendor chunk splitting).
+
 ### What `setup_vps.sh` Does:
 1. **Docker Setup & Dependency Checks**: Detects if Docker is installed. If missing (or if `--install-docker` is passed), installs Docker Engine, `docker-compose-plugin`, enables the systemd service, and adds the active user to the `docker` group.
-2. **Code Synchronization**: Clones or pulls the latest version of Preempt from GitHub.
-3. **Configuration**: Prepares `.env` from `.env.example`.
-4. **Stack Launch**: Runs `docker compose up -d --build` to boot all containers.
+2. **Code Synchronization**: Clones or pulls the latest version of Preempt from GitHub into `$(pwd)` or `./preempt`.
+3. **Environment & Production Optimization**: Prepares `.env` from `.env.example`, generates `keycloak-config/realm-export.json` from example template, and dynamically transforms `vite.config.ts` into a production-optimized compilation profile (esbuild minification, sourcemaps disabled, console log stripping, vendor chunking).
+4. **Stack Launch & Health Check**: Runs `docker compose up -d --build` to boot all containers and actively polls until the Express backend finishes `npm install` and starts listening on port 3001.
 5. **Health Status**: Displays running service endpoints and steps for Web SSR initialization.
 
 ### Post-Deployment Production SSL & Domain Setup
@@ -139,6 +150,16 @@ After running `setup_vps.sh`:
    cp docker-compose.prod.yml docker-compose.yml
    docker compose up -d
    ```
+
+### 💡 Troubleshooting: "502 Bad Gateway" on Initial Boot
+If you see a **502 Bad Gateway** error immediately after starting the containers, **this is normal during the initial boot sequence**:
+- On fresh VPS instances, the `backend` container executes `npm install` inside the container before starting the Express server on port `3001`.
+- Traefik returns a `502 Bad Gateway` while waiting for port `3001` to open.
+- **Resolution**: Wait 30–60 seconds for npm dependencies to finish installing, or monitor progress with:
+  ```bash
+  docker compose logs -f backend
+  ```
+  Once you see `Server listening on port 3001`, refresh your browser.
 
 ---
 

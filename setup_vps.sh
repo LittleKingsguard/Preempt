@@ -5,6 +5,7 @@
 # This script automates setting up Preempt on a fresh Linux VPS.
 # It includes optional/automatic steps for installing Docker & Docker Compose first,
 # checks/installs dependencies (Git, Curl), clones or pulls the repository,
+# prompts for or configures email SMTP settings to generate keycloak-config/realm-export.json,
 # initializes environment configuration, builds and launches Docker containers,
 # and provides guidance for completing SSR setup endpoints.
 # ==============================================================================
@@ -18,6 +19,15 @@ REPO_URL="${REPO_URL:-$DEFAULT_REPO}"
 BRANCH="${BRANCH:-$DEFAULT_BRANCH}"
 TARGET_DIR="${TARGET_DIR:-.}"
 FORCE_INSTALL_DOCKER=false
+NON_INTERACTIVE=false
+
+# SMTP Configuration Defaults
+SMTP_HOST="${SMTP_HOST:-}"
+SMTP_PORT="${SMTP_PORT:-587}"
+SMTP_FROM="${SMTP_FROM:-}"
+SMTP_USER="${SMTP_USER:-}"
+SMTP_PASS="${SMTP_PASS:-}"
+ENABLE_VERIFY_EMAIL="${ENABLE_VERIFY_EMAIL:-false}"
 
 # Color Output Formatting
 RED='\033[0;31m'
@@ -54,6 +64,13 @@ Options:
   -r, --repo <url>      Git repository URL (Default: ${DEFAULT_REPO})
   -b, --branch <branch> Git branch to checkout (Default: ${DEFAULT_BRANCH})
   -d, --dir <path>      Target installation directory (Default: current directory)
+  -y, --non-interactive Run in non-interactive mode using default/env values
+  --smtp-host <host>    SMTP host for Keycloak email delivery
+  --smtp-port <port>    SMTP port for Keycloak email delivery (Default: 587)
+  --smtp-from <email>   SMTP sender email address
+  --smtp-user <user>    SMTP authentication username
+  --smtp-pass <pass>    SMTP authentication password
+  --verify-email        Require mandatory email verification on user registration
   -h, --help            Show this help message
 
 Environment Variables:
@@ -61,10 +78,11 @@ Environment Variables:
   REPO_URL              Git repository URL
   BRANCH                Git branch name
   TARGET_DIR            Target installation directory
+  SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USER, SMTP_PASS, ENABLE_VERIFY_EMAIL
 
 Examples:
   ./setup_vps.sh --install-docker
-  ./setup_vps.sh -b dev -d /opt/preempt
+  ./setup_vps.sh --smtp-host smtp.resend.com --smtp-from noreply@mycompany.com --smtp-pass secret
 EOF
     exit 0
 }
@@ -87,6 +105,34 @@ while [[ $# -gt 0 ]]; do
         -d|--dir)
             TARGET_DIR="$2"
             shift 2
+            ;;
+        -y|--non-interactive)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        --smtp-host)
+            SMTP_HOST="$2"
+            shift 2
+            ;;
+        --smtp-port)
+            SMTP_PORT="$2"
+            shift 2
+            ;;
+        --smtp-from)
+            SMTP_FROM="$2"
+            shift 2
+            ;;
+        --smtp-user)
+            SMTP_USER="$2"
+            shift 2
+            ;;
+        --smtp-pass)
+            SMTP_PASS="$2"
+            shift 2
+            ;;
+        --verify-email)
+            ENABLE_VERIFY_EMAIL=true
+            shift
             ;;
         -h|--help)
             usage
@@ -249,7 +295,7 @@ ensure_repo
 log_success "Repository code is up to date in $(pwd)."
 
 # ------------------------------------------------------------------------------
-# 4. Environment Configuration
+# 4. Environment & Keycloak Realm Configuration
 # ------------------------------------------------------------------------------
 if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
@@ -282,6 +328,172 @@ else
     log_info "Existing .env file detected. Preserving configuration."
 fi
 
+# Generate Keycloak realm import configuration dynamically
+mkdir -p keycloak-config
+if [ ! -f "keycloak-config/realm-export.json" ]; then
+    log_info "Configuring Keycloak Realm import configuration..."
+
+    if [ -t 0 ] && [ "${NON_INTERACTIVE}" = "false" ] && [ -z "${SMTP_HOST}" ]; then
+        echo ""
+        echo -e "${YELLOW}--- Keycloak Email SMTP Configuration (Optional) ---${NC}"
+        echo -e "Press ENTER to accept defaults or enter custom SMTP credentials:"
+        
+        read -r -p "SMTP Host [smtp.example.com]: " INPUT_SMTP_HOST
+        SMTP_HOST="${INPUT_SMTP_HOST:-smtp.example.com}"
+
+        read -r -p "SMTP Port [587]: " INPUT_SMTP_PORT
+        SMTP_PORT="${INPUT_SMTP_PORT:-587}"
+
+        read -r -p "SMTP From Email [noreply@example.com]: " INPUT_SMTP_FROM
+        SMTP_FROM="${INPUT_SMTP_FROM:-noreply@example.com}"
+
+        read -r -p "SMTP Username [smtp_user]: " INPUT_SMTP_USER
+        SMTP_USER="${INPUT_SMTP_USER:-smtp_user}"
+
+        read -r -s -p "SMTP Password (leave blank for placeholder): " INPUT_SMTP_PASS
+        echo ""
+        SMTP_PASS="${INPUT_SMTP_PASS:-smtp_password_placeholder}"
+
+        read -r -p "Require mandatory Email Verification on signup? [y/N]: " INPUT_VERIFY
+        if [[ "${INPUT_VERIFY}" =~ ^[Yy] ]]; then
+            ENABLE_VERIFY_EMAIL="true"
+        else
+            ENABLE_VERIFY_EMAIL="false"
+        fi
+        echo ""
+    else
+        SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
+        SMTP_PORT="${SMTP_PORT:-587}"
+        SMTP_FROM="${SMTP_FROM:-noreply@example.com}"
+        SMTP_USER="${SMTP_USER:-smtp_user}"
+        SMTP_PASS="${SMTP_PASS:-smtp_password_placeholder}"
+    fi
+
+    log_info "Generating keycloak-config/realm-export.json..."
+    cat <<EOF > keycloak-config/realm-export.json
+{
+  "id": "preempt",
+  "realm": "preempt",
+  "browserSecurityHeaders": {
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=0"
+  },
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "verifyEmail": ${ENABLE_VERIFY_EMAIL},
+  "resetPasswordAllowed": true,
+  "eventsEnabled": true,
+  "eventsListeners": [
+    "kafka",
+    "jboss-logging"
+  ],
+  "smtpServer": {
+    "host": "${SMTP_HOST}",
+    "port": "${SMTP_PORT}",
+    "from": "${SMTP_FROM}",
+    "fromDisplayName": "Preempt App",
+    "replyTo": "${SMTP_FROM}",
+    "replyToDisplayName": "Preempt App",
+    "envelopeFrom": "${SMTP_FROM}",
+    "ssl": "false",
+    "starttls": "true",
+    "auth": "true",
+    "user": "${SMTP_USER}",
+    "password": "${SMTP_PASS}"
+  },
+  "clients": [
+    {
+      "clientId": "preempt-app",
+      "name": "Preempt Application",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secret",
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect"
+    }
+  ],
+  "users": [
+    {
+      "username": "testuser",
+      "enabled": true,
+      "email": "test@preempt.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
+EOF
+    log_success "Generated keycloak-config/realm-export.json successfully."
+else
+    log_info "Existing keycloak-config/realm-export.json detected. Preserving configuration."
+fi
+
+# Configure Production Vite Settings to reduce bundle size
+if [ -f "vite.config.ts" ]; then
+    log_info "Optimizing Vite compilation settings for production (minification, chunking, no sourcemaps)..."
+    cat <<'EOF' > vite.config.ts
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  build: {
+    // Minify with esbuild for compact, production-ready bundles
+    minify: 'esbuild',
+    // Disable sourcemaps in production to drastically reduce package size
+    sourcemap: false,
+    // Enable CSS minification and code splitting
+    cssMinify: true,
+    cssCodeSplit: true,
+    // Target modern JavaScript runtime for smaller syntax payload
+    target: 'es2022',
+    // Rollup chunk splitting and compaction
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+        compact: true,
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
+  esbuild: {
+    // Strip debugging logs and debugger statements in production
+    drop: ['console', 'debugger'],
+  },
+  test: {
+    include: ['server/tests/**/*.test.ts'],
+    environment: 'node',
+  },
+});
+EOF
+    log_success "Production Vite compilation settings applied."
+fi
+
 # Ensure executable permissions on helper scripts
 chmod +x rebuild_frontend.sh reset_db.sh setup_vps.sh 2>/dev/null || true
 
@@ -291,8 +503,29 @@ chmod +x rebuild_frontend.sh reset_db.sh setup_vps.sh 2>/dev/null || true
 log_info "Building and launching Docker containers..."
 ${DOCKER_COMPOSE_CMD} up -d --build
 
-log_info "Waiting for services to boot and pass basic checks..."
-sleep 5
+log_info "Waiting for backend service to complete 'npm install' and start listening on port 3001..."
+MAX_WAIT=120
+WAIT_TIME=0
+BACKEND_UP=false
+
+while [ ${WAIT_TIME} -lt ${MAX_WAIT} ]; do
+    if docker exec preempt_backend wget --no-verbose --tries=1 --spider http://localhost:3001/ &>/dev/null || \
+       curl -s --connect-timeout 2 http://localhost:3001/ &>/dev/null || \
+       curl -s --connect-timeout 2 http://localhost/ &>/dev/null; then
+        BACKEND_UP=true
+        break
+    fi
+    sleep 4
+    WAIT_TIME=$((WAIT_TIME + 4))
+    log_info "Bootstrapping dependencies & starting Express backend... (${WAIT_TIME}s / ${MAX_WAIT}s)"
+done
+
+if ${BACKEND_UP}; then
+    log_success "Backend service is online and healthy!"
+else
+    log_warn "Backend takes longer than expected to boot. Containers are starting in the background."
+    log_warn "If you temporarily see 'Bad Gateway', wait a few seconds and run 'docker compose logs -f backend'."
+fi
 
 # Check status of containers
 log_info "Current container status:"

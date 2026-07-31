@@ -51,4 +51,5 @@ server/scripts/
 *.sql
 
 # Keycloak
-keycloak-config/
+keycloak-config/*
+!keycloak-config/realm-export.json.example
