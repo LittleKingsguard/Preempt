@@ -333,34 +333,34 @@ mkdir -p keycloak-config
 if [ ! -f "keycloak-config/realm-export.json" ]; then
     log_info "Configuring Keycloak Realm import configuration..."
 
-    if [ -t 0 ] && [ "${NON_INTERACTIVE}" = "false" ] && [ -z "${SMTP_HOST}" ]; then
-        echo ""
-        echo -e "${YELLOW}--- Keycloak Email SMTP Configuration (Optional) ---${NC}"
-        echo -e "Press ENTER to accept defaults or enter custom SMTP credentials:"
+    if [ -c /dev/tty ] && [ "${NON_INTERACTIVE}" = "false" ] && [ -z "${SMTP_HOST}" ]; then
+        echo "" >/dev/tty 2>/dev/null || true
+        echo -e "${YELLOW}--- Keycloak Email SMTP Configuration (Optional) ---${NC}" >/dev/tty 2>/dev/null || true
+        echo -e "Press ENTER to accept defaults or enter custom SMTP credentials:" >/dev/tty 2>/dev/null || true
         
-        read -r -p "SMTP Host [smtp.example.com]: " INPUT_SMTP_HOST
+        read -r -p "SMTP Host [smtp.example.com]: " INPUT_SMTP_HOST </dev/tty || true
         SMTP_HOST="${INPUT_SMTP_HOST:-smtp.example.com}"
 
-        read -r -p "SMTP Port [587]: " INPUT_SMTP_PORT
+        read -r -p "SMTP Port [587]: " INPUT_SMTP_PORT </dev/tty || true
         SMTP_PORT="${INPUT_SMTP_PORT:-587}"
 
-        read -r -p "SMTP From Email [noreply@example.com]: " INPUT_SMTP_FROM
+        read -r -p "SMTP From Email [noreply@example.com]: " INPUT_SMTP_FROM </dev/tty || true
         SMTP_FROM="${INPUT_SMTP_FROM:-noreply@example.com}"
 
-        read -r -p "SMTP Username [smtp_user]: " INPUT_SMTP_USER
+        read -r -p "SMTP Username [smtp_user]: " INPUT_SMTP_USER </dev/tty || true
         SMTP_USER="${INPUT_SMTP_USER:-smtp_user}"
 
-        read -r -s -p "SMTP Password (leave blank for placeholder): " INPUT_SMTP_PASS
-        echo ""
+        read -r -s -p "SMTP Password (leave blank for placeholder): " INPUT_SMTP_PASS </dev/tty || true
+        echo "" >/dev/tty 2>/dev/null || true
         SMTP_PASS="${INPUT_SMTP_PASS:-smtp_password_placeholder}"
 
-        read -r -p "Require mandatory Email Verification on signup? [y/N]: " INPUT_VERIFY
+        read -r -p "Require mandatory Email Verification on signup? [y/N]: " INPUT_VERIFY </dev/tty || true
         if [[ "${INPUT_VERIFY}" =~ ^[Yy] ]]; then
             ENABLE_VERIFY_EMAIL="true"
         else
             ENABLE_VERIFY_EMAIL="false"
         fi
-        echo ""
+        echo "" >/dev/tty 2>/dev/null || true
     else
         SMTP_HOST="${SMTP_HOST:-smtp.example.com}"
         SMTP_PORT="${SMTP_PORT:-587}"
