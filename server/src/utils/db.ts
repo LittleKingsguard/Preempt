@@ -3,8 +3,7 @@ import type { IPreemptEvent } from "../../../src/types/Event.js";
 import { logger } from "./logger.js";
 
 export async function queryFirstRow(query: string, params: any[] = [], errorMsg?: string, client?: any): Promise<any> {
-  const queryFn = client ? client.query.bind(client) : pool.query.bind(pool);
-  const result = await queryFn(query, params);
+  const result = client ? await client.query(query, params) : await pool.query(query, params);
   if (result.rows.length === 0) {
     return errorMsg ? { error: errorMsg, status: 404 } : null;
   }

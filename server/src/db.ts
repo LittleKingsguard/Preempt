@@ -25,11 +25,24 @@ if (process.env.NODE_ENV === 'production' && password === "preemptpassword") {
  * @useCase Primary database connection interface used across server routes, models, and workers for querying Preempt templates, content, components, and handlers.
  * @processFlow Module initialization loads environment credentials and establishes connection pool.
  */
-export const pool = new Pool({
+export let pool = new Pool({
   user: process.env.PGUSER || "preempt",
   password,
   host: process.env.PGHOST || "localhost",
   port: parseInt(process.env.PGPORT || "5432", 10),
   database: process.env.PGDATABASE || "preempt",
 });
+
+export function reloadPool() {
+  const currentPassword = process.env.PGPASSWORD || "preemptpassword";
+  const oldPool = pool;
+  pool = new Pool({
+    user: process.env.PGUSER || "preempt",
+    password: currentPassword,
+    host: process.env.PGHOST || "localhost",
+    port: parseInt(process.env.PGPORT || "5432", 10),
+    database: process.env.PGDATABASE || "preempt",
+  });
+  oldPool.end().catch(() => {});
+}
 

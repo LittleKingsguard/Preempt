@@ -7,7 +7,7 @@ import { logger } from "../../utils/logger.js";
 import { loadLibraryData } from "../../utils/setupLibrary.js";
 import { User } from "../../models/user.js";
 import { pgUserSource } from "../../sources/userSource.js";
-import { pool } from "../../db.js";
+import { pool, reloadPool } from "../../db.js";
 
 
 const router = express.Router();
@@ -164,6 +164,11 @@ router.post("/initialize", authenticateToken, async (req: any, res) => {
     const pgUser = process.env.PGUSER || "preempt";
     await pool.query(`ALTER USER ${pgUser} WITH PASSWORD '${finalPostgresPassword}'`);
     logger.info("Updated postgres database password.");
+    
+    // Update process.env and reload database connection pool immediately with new password
+    process.env.PGPASSWORD = finalPostgresPassword;
+    process.env.POSTGRES_PASSWORD = finalPostgresPassword;
+    reloadPool();
     
     // Return success page prompting a restart
     const html = `
