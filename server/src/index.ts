@@ -30,21 +30,37 @@ if (process.env.DOMAIN) {
   allowedOrigins.push(`http://${process.env.DOMAIN}`);
 }
 allowedOrigins.push('http://localhost');
+allowedOrigins.push('https://localhost');
 allowedOrigins.push('http://127.0.0.1');
+allowedOrigins.push('https://127.0.0.1');
 
-app.use(cors({ 
-  origin: (origin, callback) => {
-    // Allow if origin is undefined (e.g. mobile apps, curl)
-    // Allow if in development environment
-    // Allow if it's explicitly in the ALLOWED_ORIGINS list
-    if (!origin || process.env.NODE_ENV === 'development' || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const hostHeader = (req.headers["x-forwarded-host"] as string) || req.get("host") || "";
+  const requestHost = hostHeader.split(":")[0];
+
+  cors({ 
+    origin: (origin, callback) => {
+      // Allow if origin is undefined (e.g. mobile apps, curl)
+      // Allow if in development environment
+      if (!origin || process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      try {
+        const originHost = new URL(origin).hostname;
+        if (originHost && originHost === requestHost) {
+          return callback(null, true);
+        }
+      } catch (e) {
+        // Ignore URL parse errors
+      }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
       callback(new Error('Not allowed by CORS'));
-    }
-  }, 
-  credentials: true 
-}));
+    }, 
+    credentials: true 
+  })(req, res, next);
+});
 
 app.use((pinoHttp as any)({ logger }));
 app.use(express.json());
