@@ -369,6 +369,14 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
         SMTP_PASS="${SMTP_PASS:-smtp_password_placeholder}"
     fi
 
+    if [ "${SMTP_PORT}" = "465" ]; then
+        SMTP_SSL="${SMTP_SSL:-true}"
+        SMTP_STARTTLS="${SMTP_STARTTLS:-false}"
+    else
+        SMTP_SSL="${SMTP_SSL:-false}"
+        SMTP_STARTTLS="${SMTP_STARTTLS:-true}"
+    fi
+
     log_info "Generating keycloak-config/realm-export.json..."
     cat <<EOF > keycloak-config/realm-export.json
 {
@@ -402,8 +410,8 @@ if [ ! -f "keycloak-config/realm-export.json" ]; then
     "replyTo": "${SMTP_FROM}",
     "replyToDisplayName": "Preempt App",
     "envelopeFrom": "${SMTP_FROM}",
-    "ssl": "false",
-    "starttls": "true",
+    "ssl": "${SMTP_SSL}",
+    "starttls": "${SMTP_STARTTLS}",
     "auth": "true",
     "user": "${SMTP_USER}",
     "password": "${SMTP_PASS}"
