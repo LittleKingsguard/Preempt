@@ -7,3 +7,11 @@ tls:
       defaultCertificate:
         certFile: /certs/server.crt
         keyFile: /certs/server.key
+
+http:
+  middlewares:
+    hsts-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true

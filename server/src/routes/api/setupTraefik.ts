@@ -143,6 +143,14 @@ router.post("/", authenticateToken, async (req: any, res) => {
       defaultCertificate:
         certFile: /certs/server.crt
         keyFile: /certs/server.key
+
+http:
+  middlewares:
+    hsts-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
 `;
       fs.writeFileSync(path.join(process.cwd(), "traefik-dynamic.yml"), traefikDynamicYaml);
     }
