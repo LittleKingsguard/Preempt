@@ -77,7 +77,7 @@ function generateCSR(domain: string, orgData: any, certsDir: string): { pemCsr: 
 router.post("/", authenticateToken, async (req: any, res) => {
   const tokenUser = req.user;
   
-  if (!tokenUser) {
+  if (!tokenUser || !tokenUser.username) {
     return res.status(401).send("Unauthorized");
   }
 

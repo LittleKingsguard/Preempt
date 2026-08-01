@@ -312,6 +312,17 @@ router.get("/setup", authenticateToken, async (req: any, res) => {
 
 router.get("/setup/traefik", authenticateToken, async (req: any, res) => {
   try {
+    if (!req.user || !req.user.username) {
+      return res.status(401).send(`
+        <html>
+          <body style="font-family: sans-serif; padding: 2rem;">
+            <h2>Authentication Required</h2>
+            <p>You must be logged in as an administrator to access Traefik Setup.</p>
+            <p><a href="/setup">Return to Setup / Login</a></p>
+          </body>
+        </html>
+      `);
+    }
     const userObj = await User.getByUsername(pgUserSource, req.user.username);
     if (!userObj || 'error' in userObj || !(userObj as User).is_admin) {
       return res.status(403).send("Forbidden: Only an admin can configure Traefik.");
