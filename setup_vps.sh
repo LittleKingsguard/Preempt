@@ -348,6 +348,17 @@ if [ ! -f "docker-compose.yml" ]; then
     fi
 fi
 
+if [ -d "docker-compose.prod.yml" ]; then
+    rm -rf docker-compose.prod.yml
+fi
+if [ ! -f "docker-compose.prod.yml" ]; then
+    if [ -f "docker-compose.prod.yml.example" ]; then
+        cp docker-compose.prod.yml.example docker-compose.prod.yml
+    else
+        touch docker-compose.prod.yml
+    fi
+fi
+
 if [ ! -f "traefik-dynamic.yml" ]; then
     if [ -f "traefik-dynamic.yml.example" ]; then
         log_info "Creating traefik-dynamic.yml from traefik-dynamic.yml.example..."

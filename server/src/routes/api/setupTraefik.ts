@@ -318,17 +318,26 @@ http:
 
     composeYaml = String(composeDoc);
 
-    // Save docker-compose.prod.yml to both current working dir (/app) and root project dir (../docker-compose.prod.yml)
-    const localComposePath = path.join(process.cwd(), "docker-compose.prod.yml");
-    fs.writeFileSync(localComposePath, composeYaml);
-    
-    const rootComposePath = path.join(process.cwd(), "..", "docker-compose.prod.yml");
-    if (fs.existsSync(path.dirname(rootComposePath))) {
+    // Safe writer helper to prevent EISDIR errors if Docker mounted a non-existent path as a directory
+    const safeWriteCompose = (filePath: string) => {
       try {
-        fs.writeFileSync(rootComposePath, composeYaml);
-      } catch (e) {
-        logger.warn("Could not write docker-compose.prod.yml to parent directory, saved to server directory.");
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+          const nestedFile = path.join(filePath, "docker-compose.prod.yml");
+          fs.writeFileSync(nestedFile, composeYaml, "utf-8");
+          logger.info(`Wrote compose config into directory mount at ${nestedFile}`);
+        } else {
+          fs.writeFileSync(filePath, composeYaml, "utf-8");
+          logger.info(`Saved compose config to ${filePath}`);
+        }
+      } catch (err) {
+        logger.warn({ err, path: filePath }, "Failed to write compose configuration to target path");
       }
+    };
+
+    safeWriteCompose(path.join(process.cwd(), "docker-compose.prod.yml"));
+    safeWriteCompose(path.join(process.cwd(), "..", "docker-compose.prod.yml"));
+    if (fs.existsSync("/certs")) {
+      safeWriteCompose("/certs/docker-compose.prod.yml");
     }
     
     // We will just render the success page
