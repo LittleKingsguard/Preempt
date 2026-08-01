@@ -332,7 +332,7 @@ fi
 mkdir -p certs
 if [ ! -f "certs/server.crt" ] || [ ! -f "certs/server.key" ]; then
     log_info "Generating initial self-signed SSL certificate..."
-    openssl req -x509 -newkey rsa:2048 -nodes \
+    openssl req -x509 -newkey rsa:2048 -nodes -traditional \
         -keyout certs/server.key \
         -out certs/server.crt \
         -subj "/CN=${PUBLIC_IP:-localhost}" \
@@ -346,6 +346,11 @@ tls:
   certificates:
     - certFile: /certs/server.crt
       keyFile: /certs/server.key
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/server.crt
+        keyFile: /certs/server.key
 EOF
 fi
 

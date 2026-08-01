@@ -8,36 +8,41 @@ import { logger } from "../../utils/logger.js";
 import { User } from "../../models/user.js";
 import { pgUserSource } from "../../sources/userSource.js";
 
+import crypto from "crypto";
+
 const router = express.Router();
 
-function generateCSR(domain: string, orgData: any, certsDir: string) {
+function getOrCreatePrivateKeyPem(certsDir: string): { pemKey: string; privateKeyForge: forge.pki.rsa.PrivateKey } {
   const keyPath = path.join(certsDir, "server.key");
-  let keys: { privateKey: forge.pki.rsa.PrivateKey; publicKey: forge.pki.rsa.PublicKey };
-  let pemKey: string;
-
   if (fs.existsSync(keyPath)) {
     try {
-      pemKey = fs.readFileSync(keyPath, "utf-8");
-      const privateKey = forge.pki.privateKeyFromPem(pemKey);
-      const publicKey = forge.pki.setRsaPublicKey(privateKey.n, privateKey.e);
-      keys = { privateKey, publicKey };
+      const pemKey = fs.readFileSync(keyPath, "utf-8");
+      crypto.createPrivateKey(pemKey); // Verify valid key with Node native crypto
+      const privateKeyForge = forge.pki.privateKeyFromPem(pemKey);
       logger.info("Reusing existing private key from certs/server.key for CSR generation.");
+      return { pemKey, privateKeyForge };
     } catch (err) {
-      logger.warn("Failed to parse existing certs/server.key. Generating a new key pair.");
-      const generated = forge.pki.rsa.generateKeyPair(2048);
-      keys = generated;
-      pemKey = forge.pki.privateKeyToPem(keys.privateKey);
-      fs.writeFileSync(keyPath, pemKey);
+      logger.warn({ err }, "Could not parse existing certs/server.key as PKCS#1. Generating matching PKCS#1 key pair.");
     }
-  } else {
-    const generated = forge.pki.rsa.generateKeyPair(2048);
-    keys = generated;
-    pemKey = forge.pki.privateKeyToPem(keys.privateKey);
-    fs.writeFileSync(keyPath, pemKey);
   }
 
+  const { privateKey: nodePrivateKey } = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs1", format: "pem" }
+  });
+  
+  fs.writeFileSync(keyPath, nodePrivateKey);
+  const privateKeyForge = forge.pki.privateKeyFromPem(nodePrivateKey);
+  return { pemKey: nodePrivateKey, privateKeyForge };
+}
+
+function generateCSR(domain: string, orgData: any, certsDir: string) {
+  const { pemKey, privateKeyForge } = getOrCreatePrivateKeyPem(certsDir);
+  const publicKey = forge.pki.setRsaPublicKey(privateKeyForge.n, privateKeyForge.e);
+
   const csr = forge.pki.createCertificationRequest();
-  csr.publicKey = keys.publicKey;
+  csr.publicKey = publicKey;
 
   const subject = [
     { name: 'commonName', value: domain },
@@ -49,20 +54,20 @@ function generateCSR(domain: string, orgData: any, certsDir: string) {
   ];
 
   csr.setSubject(subject);
-  csr.sign(keys.privateKey);
+  csr.sign(privateKeyForge);
 
   // Create a matching self-signed cert placeholder if server.crt does not exist
   const certPath = path.join(certsDir, "server.crt");
   if (!fs.existsSync(certPath)) {
     const cert = forge.pki.createCertificate();
-    cert.publicKey = keys.publicKey;
+    cert.publicKey = publicKey;
     cert.serialNumber = '01';
     cert.validity.notBefore = new Date();
     cert.validity.notAfter = new Date();
     cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
     cert.setSubject(subject);
     cert.setIssuer(subject);
-    cert.sign(keys.privateKey, forge.md.sha256.create());
+    cert.sign(privateKeyForge, forge.md.sha256.create());
     const pemCert = forge.pki.certificateToPem(cert);
     fs.writeFileSync(certPath, pemCert);
   }
