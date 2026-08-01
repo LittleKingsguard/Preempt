@@ -123,9 +123,12 @@ router.post("/", authenticateToken, async (req: any, res) => {
     let composeYaml = "";
 
     if (sslMode === 'custom') {
-      const certsDir = path.join(process.cwd(), "certs");
+      const rootCertsDir = path.join(process.cwd(), "..", "certs");
+      const certsDir = fs.existsSync("/certs")
+        ? "/certs"
+        : (fs.existsSync(rootCertsDir) ? rootCertsDir : path.join(process.cwd(), "certs"));
       if (!fs.existsSync(certsDir)) {
-        fs.mkdirSync(certsDir);
+        fs.mkdirSync(certsDir, { recursive: true });
       }
       const { pemCsr } = generateCSR(domain, orgData || {}, certsDir);
       csrPem = pemCsr;

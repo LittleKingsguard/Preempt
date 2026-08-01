@@ -103,6 +103,7 @@ services:
       - "3002:3002"
     volumes:
       - ./server:/app
+      - ./certs:/certs
       - ./dist:/dist
       - ./src:/src
       - ./.env:/app/.env
