@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "vitest",
-    "start:all": "concurrently -c \"cyan,magenta,yellow,blue,green\" -n \"backend,relay,email,oauth,vite\" \"tsx watch src/index.ts\" \"tsx watch src/workers/eventRelay.ts\" \"tsx watch src/workers/emailWorker.ts\" \"tsx watch src/workers/oauthWorker.ts\" \"vite build --watch\""
+    "start:all": "concurrently -c \"cyan,magenta,yellow,blue,green\" -n \"backend,relay,email,oauth,vite\" \"tsx watch src/index.ts\" \"tsx watch src/workers/eventRelay.ts\" \"tsx watch src/workers/emailWorker.ts\" \"tsx watch src/workers/oauthWorker.ts\" \"vite build --config /vite.config.ts --watch\""
   },
   "keywords": [],
   "author": "",

@@ -69,6 +69,21 @@ async function startWorker() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   try {
+    try {
+      const admin = kafka.admin();
+      await admin.connect();
+      await admin.createTopics({
+        topics: [
+          { topic: 'preempt-events', numPartitions: 1, replicationFactor: 1 },
+          { topic: 'preempt-events-errors', numPartitions: 1, replicationFactor: 1 }
+        ],
+        waitForLeaders: true
+      });
+      await admin.disconnect();
+    } catch (adminErr) {
+      logger.warn({ err: adminErr }, "Kafka topic auto-creation notice (may already exist)");
+    }
+
     await consumer.subscribe({ topic: 'preempt-events', fromBeginning: true });
 
     await consumer.run({
@@ -125,9 +140,13 @@ async function startWorker() {
       }
       }
     });
-  } catch (err) {
+  } catch (err: any) {
     if (isShuttingDown) return;
-    logger.error({ err }, "Fatal error during consumer run");
+    if (err && (err.code === 3 || err.name === 'KafkaJSProtocolError')) {
+      logger.warn({ message: err.message }, "Kafka topic partition metadata initializing, retrying in 5s...");
+    } else {
+      logger.error({ err }, "Error during consumer run, retrying in 5s...");
+    }
     setTimeout(startWorker, 5000);
   }
 }
