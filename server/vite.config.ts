@@ -15,6 +15,7 @@ export default defineConfig({
   build: {
     outDir: outDir,
     emptyOutDir: false,
+    // Disable minification by default for development environments
     minify: false,
     sourcemap: true,
   },

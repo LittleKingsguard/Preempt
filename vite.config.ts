@@ -10,7 +10,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: false,
-    // Disable minification to retain code readability for debugging
+    // Disable minification by default for development environments
     minify: false,
     // Optional: generate sourcemaps for easier debugging
     sourcemap: true,

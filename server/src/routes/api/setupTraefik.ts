@@ -118,6 +118,24 @@ router.post("/", authenticateToken, async (req: any, res) => {
     fs.writeFileSync(envPath, envContent.trim() + "\n");
     logger.info("Updated .env file with DNS/SSL config.");
 
+    // Dynamically enable Vite production minification profile during setup endpoint execution
+    const enableMinificationInFile = (filePath: string) => {
+      if (fs.existsSync(filePath)) {
+        try {
+          let content = fs.readFileSync(filePath, "utf-8");
+          if (content.includes("minify: false")) {
+            content = content.replace(/minify:\s*false/g, "minify: 'esbuild'");
+            fs.writeFileSync(filePath, content);
+            logger.info(`Enabled production minification in ${filePath}`);
+          }
+        } catch (e) {
+          logger.warn({ err: e }, `Could not update minification setting in ${filePath}`);
+        }
+      }
+    };
+    enableMinificationInFile(path.join(process.cwd(), "vite.config.ts"));
+    enableMinificationInFile(path.join(process.cwd(), "..", "vite.config.ts"));
+
     let csrPem = null;
     let traefikDynamicYaml = "";
     let composeYaml = "";
@@ -292,10 +310,18 @@ http:
 
     composeYaml = String(composeDoc);
 
-    // Save the new compose file as a download/display string rather than overwriting
-    // Actually, we can write it to `/app/docker-compose.prod.yml` and tell the user to copy it.
-    const composePath = path.join(process.cwd(), "docker-compose.prod.yml");
-    fs.writeFileSync(composePath, composeYaml);
+    // Save docker-compose.prod.yml to both current working dir (/app) and root project dir (../docker-compose.prod.yml)
+    const localComposePath = path.join(process.cwd(), "docker-compose.prod.yml");
+    fs.writeFileSync(localComposePath, composeYaml);
+    
+    const rootComposePath = path.join(process.cwd(), "..", "docker-compose.prod.yml");
+    if (fs.existsSync(path.dirname(rootComposePath))) {
+      try {
+        fs.writeFileSync(rootComposePath, composeYaml);
+      } catch (e) {
+        logger.warn("Could not write docker-compose.prod.yml to parent directory, saved to server directory.");
+      }
+    }
     
     // We will just render the success page
     const html = `
@@ -319,7 +345,7 @@ http:
               <strong>Final Step:</strong>
               <p>To apply these changes and start the production stack with HTTPS enabled, run the following commands on your host server:</p>
               <code>docker compose down</code><br/>
-              <code>cp docker-compose.prod.yml ./docker-compose.yml</code><br/>
+              <code>cp docker-compose.prod.yml ./docker-compose.yml 2>/dev/null || cp server/docker-compose.prod.yml ./docker-compose.yml</code><br/>
               <code>docker compose up -d</code>
             </div>
             <p><a href="/">Return to homepage</a></p>

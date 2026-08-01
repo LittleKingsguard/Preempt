@@ -144,10 +144,7 @@ async function getOIDCConfig(req?: express.Request) {
 
   const issuerUrl = new URL(issuerStr);
   try {
-    const execute: any[] = [];
-    if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0") {
-      execute.push(client.allowInsecureRequests);
-    }
+    const execute: any[] = [client.allowInsecureRequests];
     
     const newConfig = await client.discovery(
       issuerUrl,

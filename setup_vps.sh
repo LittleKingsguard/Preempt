@@ -340,8 +340,21 @@ if [ ! -f "certs/server.crt" ] || [ ! -f "certs/server.key" ]; then
     log_success "Generated initial self-signed SSL certificate in ./certs"
 fi
 
+if [ ! -f "docker-compose.yml" ]; then
+    if [ -f "docker-compose.yml.example" ]; then
+        log_info "Creating docker-compose.yml from docker-compose.yml.example..."
+        cp docker-compose.yml.example docker-compose.yml
+        log_success "docker-compose.yml created successfully."
+    fi
+fi
+
 if [ ! -f "traefik-dynamic.yml" ]; then
-    cat <<'EOF' > traefik-dynamic.yml
+    if [ -f "traefik-dynamic.yml.example" ]; then
+        log_info "Creating traefik-dynamic.yml from traefik-dynamic.yml.example..."
+        cp traefik-dynamic.yml.example traefik-dynamic.yml
+        log_success "traefik-dynamic.yml created successfully."
+    else
+        cat <<'EOF' > traefik-dynamic.yml
 tls:
   certificates:
     - certFile: /certs/server.crt
@@ -351,7 +364,25 @@ tls:
       defaultCertificate:
         certFile: /certs/server.crt
         keyFile: /certs/server.key
+
+http:
+  middlewares:
+    hsts-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
 EOF
+    fi
+fi
+
+# Enable production minification during production deployment setup
+log_info "Configuring production Vite compilation profile (minification enabled)..."
+if [ -f "vite.config.ts" ]; then
+    sed -i "s/minify: false/minify: 'esbuild'/g" vite.config.ts || true
+fi
+if [ -f "server/vite.config.ts" ]; then
+    sed -i "s/minify: false/minify: 'esbuild'/g" server/vite.config.ts || true
 fi
 
 # Generate Keycloak realm import configuration dynamically

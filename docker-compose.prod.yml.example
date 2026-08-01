@@ -1,3 +1,7 @@
+# Preempt Production Compose Template
+# Generated dynamically by /setup/traefik endpoint during production initialization.
+# This template serves as a reference for production deployment configuration.
+
 version: '3.8'
 services:
   db:
@@ -41,28 +45,22 @@ services:
     environment:
       - DOCKER_API_VERSION=1.41
     command:
-      - "--api.insecure=true"
+      - "--api.insecure=false"
       - "--providers.docker=true"
-      - "--providers.docker.watch=true"
-      - "--providers.file.filename=/traefik-dynamic.yml"
-      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.filename=/traefik-dynamic.yml"
+      - "--providers.file.watch=true"
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Traefik dashboard
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./certs:/certs:ro"
       - "./traefik-dynamic.yml:/traefik-dynamic.yml:ro"
-    labels:
-      - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, max-age=0"
-      - "traefik.http.middlewares.nocache.headers.customResponseHeaders.Pragma=no-cache"
 
-  # Note: run `docker compose down -v` to clear Vite/tsx caches between runs
   backend:
     image: node:20-alpine
     container_name: preempt_backend
@@ -72,32 +70,34 @@ services:
       - ./.env
     environment:
       TSX_DISABLE_CACHE: "1"
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
       OAUTH_PORT: 3002
-      OIDC_ISSUER: https://localhost/auth/realms/preempt
+      OIDC_ISSUER: https://${DOMAIN:-localhost}/auth/realms/preempt
       OIDC_CLIENT_ID: preempt-app
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-secret}
-      OIDC_REDIRECT_URI: https://localhost/api/oauth/callback
+      OIDC_REDIRECT_URI: https://${DOMAIN:-localhost}/api/oauth/callback
       KAFKA_BROKERS: kafka:9092
     extra_hosts:
       - "localhost:host-gateway"
     labels:
-      # TODO: Update these Traefik rules before production readiness
       - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=PathPrefix(`/`)"
+      - "traefik.http.middlewares.hsts-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.hsts-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.hsts-headers.headers.stsPreload=true"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN:-localhost}`)"
       - "traefik.http.routers.backend.priority=1"
-      - "traefik.http.routers.backend.middlewares=nocache@docker"
       - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.middlewares=hsts-headers"
       - "traefik.http.routers.backend.service=backend"
       - "traefik.http.services.backend.loadbalancer.server.port=3001"
-      # oauth
-      - "traefik.http.routers.oauth.rule=PathPrefix(`/api/oauth`)"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.oauth.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/api/oauth`)"
       - "traefik.http.routers.oauth.priority=10"
       - "traefik.http.routers.oauth.entrypoints=websecure"
-      - "traefik.http.routers.oauth.tls=true"
+      - "traefik.http.routers.oauth.middlewares=hsts-headers"
       - "traefik.http.routers.oauth.service=oauth"
       - "traefik.http.services.oauth.loadbalancer.server.port=3002"
+      - "traefik.http.routers.oauth.tls=true"
     ports:
       - "3001:3001"
       - "3002:3002"
@@ -110,7 +110,6 @@ services:
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
       - ./docker-compose.prod.yml:/app/docker-compose.prod.yml
-    # The Vite and tsx caches are cleared when containers are removed (docker compose down).
     command: sh -c "npm install && npm run start:all"
     depends_on:
       - db
@@ -129,7 +128,8 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-preemptpassword}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      KC_HOSTNAME: ${KC_HOSTNAME:-}
+      KC_HOSTNAME: ${DOMAIN:-localhost}
+      KC_HOSTNAME_PORT: "443"
       KC_HOSTNAME_STRICT_HTTPS: "true"
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
@@ -139,12 +139,12 @@ services:
       KAFKA_CLIENT_ID: keycloak-producer
       KAFKA_TOPIC: keycloak-events
       KAFKA_ACKS: all
-    command: start-dev --import-realm
+    command: start --import-realm
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.keycloak.rule=PathPrefix(`/auth`)"
-      - "traefik.http.routers.keycloak.priority=10"
+      - "traefik.http.routers.keycloak.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth`)"
       - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.middlewares=hsts-headers"
       - "traefik.http.routers.keycloak.tls=true"
       - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
     volumes:

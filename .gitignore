@@ -53,3 +53,18 @@ server/scripts/
 # Keycloak
 keycloak-config/*
 !keycloak-config/realm-export.json.example
+
+# SSL Certs & Dynamic Traefik Configuration
+certs/
+*.crt
+*.key
+*.csr
+traefik-dynamic.yml
+!.traefik-dynamic.yml.example
+
+# Docker Compose Setup Configurations (untracked on production servers to prevent git pull conflicts)
+docker-compose.yml
+docker-compose.prod.yml
+server/docker-compose.prod.yml
+!docker-compose.yml.example
+!docker-compose.prod.yml.example
