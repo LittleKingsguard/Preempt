@@ -1,7 +1,17 @@
-// Default to allowing self-signed TLS certificates during early setup if not explicitly configured
-if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === undefined) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-}
+import { Agent, fetch as undiciFetch } from "undici";
+
+const insecureAgent = new Agent({
+  connect: {
+    rejectUnauthorized: false
+  }
+});
+
+const customFetch: typeof fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  return undiciFetch(input as any, {
+    ...init,
+    dispatcher: insecureAgent
+  } as any) as unknown as Promise<Response>;
+};
 
 // Override global fetch in development so that when openid-client tries to contact
 // "localhost" (the external OIDC issuer), it correctly routes to the internal "keycloak:8080" container.
@@ -151,7 +161,7 @@ async function getOIDCConfig(req?: express.Request) {
       CLIENT_ID,
       currentSecret,
       undefined,
-      { execute }
+      { customFetch, execute: [client.allowInsecureRequests] }
     );
     (newConfig as any).clientSecret = currentSecret;
     configCache.set(issuerStr, newConfig);
@@ -259,7 +269,9 @@ app.get("/api/oauth/callback", async (req, res) => {
       {
         pkceCodeVerifier: code_verifier,
         expectedState: state,
-      }
+      },
+      undefined,
+      { customFetch, execute: [client.allowInsecureRequests] }
     );
 
     const claims = tokens.claims();

@@ -272,6 +272,8 @@ http:
         kcEnv.set('KC_HOSTNAME', domain);
         kcEnv.set('KC_HOSTNAME_PORT', '443');
         kcEnv.set('KC_HOSTNAME_STRICT_HTTPS', 'true');
+        kcEnv.set('KC_PROXY_HEADERS', 'xforwarded');
+        kcEnv.set('KC_HTTP_ENABLED', 'true');
       }
       keycloak.set('command', 'start --import-realm');
 
