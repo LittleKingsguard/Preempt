@@ -30,7 +30,7 @@ function generateCSR(domain: string, orgData: any, certsDir: string): { pemCsr: 
   // 3. Strict Verification: Read saved key back from disk and verify SPKI public key matches
   const savedKeyContent = fs.readFileSync(keyPath, "utf-8");
   const verifiedKeyObj = crypto.createPrivateKey(savedKeyContent);
-  const derivedPublicKeyPem = verifiedKeyObj.export({ type: "spki", format: "pem" }) as string;
+  const derivedPublicKeyPem = crypto.createPublicKey(verifiedKeyObj).export({ type: "spki", format: "pem" }) as string;
 
   if (derivedPublicKeyPem.trim() !== nodePublicKey.trim()) {
     throw new Error("CRITICAL FAILURE: Saved key in server.key does not match public key in generated CSR!");
