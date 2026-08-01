@@ -15,21 +15,34 @@ function generateCSR(domain: string, orgData: any) {
   const csr = forge.pki.createCertificationRequest();
   csr.publicKey = keys.publicKey;
 
-  csr.setSubject([
+  const subject = [
     { name: 'commonName', value: domain },
     { name: 'countryName', value: orgData.country },
     { shortName: 'ST', value: orgData.state },
     { name: 'localityName', value: orgData.locality },
     { name: 'organizationName', value: orgData.organization },
     { shortName: 'OU', value: orgData.organizationalUnit }
-  ]);
+  ];
 
+  csr.setSubject(subject);
   csr.sign(keys.privateKey);
+
+  // Create a matching self-signed cert placeholder so server.key and server.crt match immediately
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '01';
+  cert.validity.notBefore = new Date();
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+  cert.setSubject(subject);
+  cert.setIssuer(subject);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
 
   const pemCsr = forge.pki.certificationRequestToPem(csr);
   const pemKey = forge.pki.privateKeyToPem(keys.privateKey);
+  const pemCert = forge.pki.certificateToPem(cert);
 
-  return { pemCsr, pemKey };
+  return { pemCsr, pemKey, pemCert };
 }
 
 router.post("/", authenticateToken, async (req: any, res) => {
@@ -81,7 +94,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
     let composeYaml = "";
 
     if (sslMode === 'custom') {
-      const { pemCsr, pemKey } = generateCSR(domain, orgData || {});
+      const { pemCsr, pemKey, pemCert } = generateCSR(domain, orgData || {});
       csrPem = pemCsr;
       
       const certsDir = path.join(process.cwd(), "certs");
@@ -89,12 +102,18 @@ router.post("/", authenticateToken, async (req: any, res) => {
         fs.mkdirSync(certsDir);
       }
       fs.writeFileSync(path.join(certsDir, "server.key"), pemKey);
+      fs.writeFileSync(path.join(certsDir, "server.crt"), pemCert);
       
       // We'll write the dynamic config to /app/traefik-dynamic.yml (which is ./server/traefik-dynamic.yml on host)
       traefikDynamicYaml = `tls:
   certificates:
     - certFile: /certs/server.crt
       keyFile: /certs/server.key
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/server.crt
+        keyFile: /certs/server.key
 `;
       fs.writeFileSync(path.join(process.cwd(), "traefik-dynamic.yml"), traefikDynamicYaml);
     }
@@ -120,6 +139,7 @@ router.post("/", authenticateToken, async (req: any, res) => {
         newTraefikCommands.push("--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json");
       } else {
         newTraefikCommands.push("--providers.file.filename=/traefik-dynamic.yml");
+        newTraefikCommands.push("--providers.file.watch=true");
       }
       traefik.set('command', composeDoc.createNode(newTraefikCommands));
       traefik.set('ports', composeDoc.createNode(["80:80", "443:443"]));
@@ -149,15 +169,18 @@ router.post("/", authenticateToken, async (req: any, res) => {
 
       const backendLabelsNode = backend.get('labels') as any;
       let backendLabels = backendLabelsNode ? backendLabelsNode.toJSON() : [];
-      backendLabels = backendLabels.filter((l: string) => !l.startsWith('traefik.http.routers.backend') && !l.startsWith('traefik.http.routers.oauth') && !l.startsWith('traefik.http.middlewares'));
+      backendLabels = backendLabels.filter((l: string) => !l.startsWith('traefik.http.routers.backend') && !l.startsWith('traefik.http.routers.oauth') && !l.startsWith('traefik.http.middlewares') && !l.startsWith('traefik.http.services'));
       
       backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsSeconds=31536000`);
       backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsIncludeSubdomains=true`);
       backendLabels.push(`traefik.http.middlewares.hsts-headers.headers.stsPreload=true`);
 
       backendLabels.push(`traefik.http.routers.backend.rule=Host(\`${domain}\`)`);
+      backendLabels.push('traefik.http.routers.backend.priority=1');
       backendLabels.push('traefik.http.routers.backend.entrypoints=websecure');
       backendLabels.push('traefik.http.routers.backend.middlewares=hsts-headers');
+      backendLabels.push('traefik.http.routers.backend.service=backend');
+      backendLabels.push('traefik.http.services.backend.loadbalancer.server.port=3001');
       if (sslMode === 'letsencrypt') {
         backendLabels.push('traefik.http.routers.backend.tls.certresolver=myresolver');
       } else {
@@ -165,8 +188,11 @@ router.post("/", authenticateToken, async (req: any, res) => {
       }
       
       backendLabels.push(`traefik.http.routers.oauth.rule=Host(\`${domain}\`) && PathPrefix(\`/api/oauth\`)`);
+      backendLabels.push('traefik.http.routers.oauth.priority=10');
       backendLabels.push('traefik.http.routers.oauth.entrypoints=websecure');
       backendLabels.push('traefik.http.routers.oauth.middlewares=hsts-headers');
+      backendLabels.push('traefik.http.routers.oauth.service=oauth');
+      backendLabels.push('traefik.http.services.oauth.loadbalancer.server.port=3002');
       if (sslMode === 'letsencrypt') {
         backendLabels.push('traefik.http.routers.oauth.tls.certresolver=myresolver');
       } else {

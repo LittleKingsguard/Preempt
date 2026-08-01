@@ -45,6 +45,7 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.watch=true"
       - "--providers.file.filename=/traefik-dynamic.yml"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
