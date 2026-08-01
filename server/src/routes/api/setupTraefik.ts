@@ -16,13 +16,19 @@ function getOrCreatePrivateKeyPem(certsDir: string): { pemKey: string; privateKe
   const keyPath = path.join(certsDir, "server.key");
   if (fs.existsSync(keyPath)) {
     try {
-      const pemKey = fs.readFileSync(keyPath, "utf-8");
-      crypto.createPrivateKey(pemKey); // Verify valid key with Node native crypto
-      const privateKeyForge = forge.pki.privateKeyFromPem(pemKey);
+      const rawPem = fs.readFileSync(keyPath, "utf-8");
+      const keyObj = crypto.createPrivateKey(rawPem);
+      const pkcs1Pem = keyObj.export({ type: "pkcs1", format: "pem" }) as string;
+      const privateKeyForge = forge.pki.privateKeyFromPem(pkcs1Pem);
+      
+      if (rawPem.trim() !== pkcs1Pem.trim()) {
+        fs.writeFileSync(keyPath, pkcs1Pem);
+      }
+      
       logger.info("Reusing existing private key from certs/server.key for CSR generation.");
-      return { pemKey, privateKeyForge };
+      return { pemKey: pkcs1Pem, privateKeyForge };
     } catch (err) {
-      logger.warn({ err }, "Could not parse existing certs/server.key as PKCS#1. Generating matching PKCS#1 key pair.");
+      logger.warn({ err }, "Could not parse existing certs/server.key. Generating new PKCS#1 key pair.");
     }
   }
 
