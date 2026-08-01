@@ -105,8 +105,8 @@ services:
       - ./server:/app
       - ./certs:/certs
       - ./dist:/dist
-      - ./src:/app/src
-      - ./index.html:/app/index.html
+      - ./src:/src
+      - ./index.html:/index.html
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
     # The Vite and tsx caches are cleared when containers are removed (docker compose down).
