@@ -12,43 +12,36 @@ import crypto from "crypto";
 
 const router = express.Router();
 
-function getOrCreatePrivateKeyPem(certsDir: string): { pemKey: string; privateKeyForge: forge.pki.rsa.PrivateKey } {
+function generateCSR(domain: string, orgData: any, certsDir: string): { pemCsr: string; pemKey: string } {
   const keyPath = path.join(certsDir, "server.key");
-  if (fs.existsSync(keyPath)) {
-    try {
-      const rawPem = fs.readFileSync(keyPath, "utf-8");
-      const keyObj = crypto.createPrivateKey(rawPem);
-      const pkcs1Pem = keyObj.export({ type: "pkcs1", format: "pem" }) as string;
-      const privateKeyForge = forge.pki.privateKeyFromPem(pkcs1Pem);
-      
-      if (rawPem.trim() !== pkcs1Pem.trim()) {
-        fs.writeFileSync(keyPath, pkcs1Pem);
-      }
-      
-      logger.info("Reusing existing private key from certs/server.key for CSR generation.");
-      return { pemKey: pkcs1Pem, privateKeyForge };
-    } catch (err) {
-      logger.warn({ err }, "Could not parse existing certs/server.key. Generating new PKCS#1 key pair.");
-    }
-  }
+  const certPath = path.join(certsDir, "server.crt");
 
-  const { privateKey: nodePrivateKey } = crypto.generateKeyPairSync("rsa", {
+  // 1. Always generate the private key exactly one time when producing the CSR
+  const { privateKey: nodePrivateKey, publicKey: nodePublicKey } = crypto.generateKeyPairSync("rsa", {
     modulusLength: 2048,
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: { type: "pkcs1", format: "pem" }
   });
-  
-  fs.writeFileSync(keyPath, nodePrivateKey);
-  const privateKeyForge = forge.pki.privateKeyFromPem(nodePrivateKey);
-  return { pemKey: nodePrivateKey, privateKeyForge };
-}
 
-function generateCSR(domain: string, orgData: any, certsDir: string) {
-  const { pemKey, privateKeyForge } = getOrCreatePrivateKeyPem(certsDir);
-  const publicKey = forge.pki.setRsaPublicKey(privateKeyForge.n, privateKeyForge.e);
+  // 2. Always save the generated private key to certs/server.key
+  fs.writeFileSync(keyPath, nodePrivateKey, "utf-8");
+  logger.info(`Saved newly generated private key for CSR to ${keyPath}`);
+
+  // 3. Strict Verification: Read saved key back from disk and verify SPKI public key matches
+  const savedKeyContent = fs.readFileSync(keyPath, "utf-8");
+  const verifiedKeyObj = crypto.createPrivateKey(savedKeyContent);
+  const derivedPublicKeyPem = verifiedKeyObj.export({ type: "spki", format: "pem" }) as string;
+
+  if (derivedPublicKeyPem.trim() !== nodePublicKey.trim()) {
+    throw new Error("CRITICAL FAILURE: Saved key in server.key does not match public key in generated CSR!");
+  }
+
+  // 4. Build CSR using the verified keypair
+  const privateKeyForge = forge.pki.privateKeyFromPem(savedKeyContent);
+  const publicKeyForge = forge.pki.publicKeyFromPem(derivedPublicKeyPem);
 
   const csr = forge.pki.createCertificationRequest();
-  csr.publicKey = publicKey;
+  csr.publicKey = publicKeyForge;
 
   const subject = [
     { name: 'commonName', value: domain },
@@ -62,24 +55,23 @@ function generateCSR(domain: string, orgData: any, certsDir: string) {
   csr.setSubject(subject);
   csr.sign(privateKeyForge);
 
-  // Create a matching self-signed cert placeholder if server.crt does not exist
-  const certPath = path.join(certsDir, "server.crt");
-  if (!fs.existsSync(certPath)) {
-    const cert = forge.pki.createCertificate();
-    cert.publicKey = publicKey;
-    cert.serialNumber = '01';
-    cert.validity.notBefore = new Date();
-    cert.validity.notAfter = new Date();
-    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
-    cert.setSubject(subject);
-    cert.setIssuer(subject);
-    cert.sign(privateKeyForge, forge.md.sha256.create());
-    const pemCert = forge.pki.certificateToPem(cert);
-    fs.writeFileSync(certPath, pemCert);
-  }
+  // 5. Always write a matching temporary self-signed cert for server.crt so Traefik has a valid pair
+  const tempCert = forge.pki.createCertificate();
+  tempCert.publicKey = publicKeyForge;
+  tempCert.serialNumber = '01';
+  tempCert.validity.notBefore = new Date();
+  tempCert.validity.notAfter = new Date();
+  tempCert.validity.notAfter.setFullYear(tempCert.validity.notBefore.getFullYear() + 1);
+  tempCert.setSubject(subject);
+  tempCert.setIssuer(subject);
+  tempCert.sign(privateKeyForge, forge.md.sha256.create());
+  
+  const tempCertPem = forge.pki.certificateToPem(tempCert);
+  fs.writeFileSync(certPath, tempCertPem, "utf-8");
+  logger.info(`Saved matching temporary certificate to ${certPath}`);
 
   const pemCsr = forge.pki.certificationRequestToPem(csr);
-  return { pemCsr, pemKey };
+  return { pemCsr, pemKey: savedKeyContent };
 }
 
 router.post("/", authenticateToken, async (req: any, res) => {
