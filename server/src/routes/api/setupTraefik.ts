@@ -10,8 +10,32 @@ import { pgUserSource } from "../../sources/userSource.js";
 
 const router = express.Router();
 
-function generateCSR(domain: string, orgData: any) {
-  const keys = forge.pki.rsa.generateKeyPair(2048);
+function generateCSR(domain: string, orgData: any, certsDir: string) {
+  const keyPath = path.join(certsDir, "server.key");
+  let keys: { privateKey: forge.pki.rsa.PrivateKey; publicKey: forge.pki.rsa.PublicKey };
+  let pemKey: string;
+
+  if (fs.existsSync(keyPath)) {
+    try {
+      pemKey = fs.readFileSync(keyPath, "utf-8");
+      const privateKey = forge.pki.privateKeyFromPem(pemKey);
+      const publicKey = forge.pki.setRsaPublicKey(privateKey.n, privateKey.e);
+      keys = { privateKey, publicKey };
+      logger.info("Reusing existing private key from certs/server.key for CSR generation.");
+    } catch (err) {
+      logger.warn("Failed to parse existing certs/server.key. Generating a new key pair.");
+      const generated = forge.pki.rsa.generateKeyPair(2048);
+      keys = generated;
+      pemKey = forge.pki.privateKeyToPem(keys.privateKey);
+      fs.writeFileSync(keyPath, pemKey);
+    }
+  } else {
+    const generated = forge.pki.rsa.generateKeyPair(2048);
+    keys = generated;
+    pemKey = forge.pki.privateKeyToPem(keys.privateKey);
+    fs.writeFileSync(keyPath, pemKey);
+  }
+
   const csr = forge.pki.createCertificationRequest();
   csr.publicKey = keys.publicKey;
 
@@ -27,22 +51,24 @@ function generateCSR(domain: string, orgData: any) {
   csr.setSubject(subject);
   csr.sign(keys.privateKey);
 
-  // Create a matching self-signed cert placeholder so server.key and server.crt match immediately
-  const cert = forge.pki.createCertificate();
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = '01';
-  cert.validity.notBefore = new Date();
-  cert.validity.notAfter = new Date();
-  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
-  cert.setSubject(subject);
-  cert.setIssuer(subject);
-  cert.sign(keys.privateKey, forge.md.sha256.create());
+  // Create a matching self-signed cert placeholder if server.crt does not exist
+  const certPath = path.join(certsDir, "server.crt");
+  if (!fs.existsSync(certPath)) {
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date();
+    cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+    cert.setSubject(subject);
+    cert.setIssuer(subject);
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    const pemCert = forge.pki.certificateToPem(cert);
+    fs.writeFileSync(certPath, pemCert);
+  }
 
   const pemCsr = forge.pki.certificationRequestToPem(csr);
-  const pemKey = forge.pki.privateKeyToPem(keys.privateKey);
-  const pemCert = forge.pki.certificateToPem(cert);
-
-  return { pemCsr, pemKey, pemCert };
+  return { pemCsr, pemKey };
 }
 
 router.post("/", authenticateToken, async (req: any, res) => {
@@ -94,15 +120,12 @@ router.post("/", authenticateToken, async (req: any, res) => {
     let composeYaml = "";
 
     if (sslMode === 'custom') {
-      const { pemCsr, pemKey, pemCert } = generateCSR(domain, orgData || {});
-      csrPem = pemCsr;
-      
       const certsDir = path.join(process.cwd(), "certs");
       if (!fs.existsSync(certsDir)) {
         fs.mkdirSync(certsDir);
       }
-      fs.writeFileSync(path.join(certsDir, "server.key"), pemKey);
-      fs.writeFileSync(path.join(certsDir, "server.crt"), pemCert);
+      const { pemCsr } = generateCSR(domain, orgData || {}, certsDir);
+      csrPem = pemCsr;
       
       // We'll write the dynamic config to /app/traefik-dynamic.yml (which is ./server/traefik-dynamic.yml on host)
       traefikDynamicYaml = `tls:
