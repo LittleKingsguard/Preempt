@@ -68,3 +68,9 @@ docker-compose.prod.yml
 server/docker-compose.prod.yml
 !docker-compose.yml.example
 !docker-compose.prod.yml.example
+
+# Vite Configurations (untracked on production servers to allow dynamic minification setup without git pull conflicts)
+vite.config.ts
+server/vite.config.ts
+!vite.config.ts.example
+!server/vite.config.ts.example

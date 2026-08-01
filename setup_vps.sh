@@ -378,8 +378,15 @@ fi
 
 # Enable production minification during production deployment setup
 log_info "Configuring production Vite compilation profile (minification enabled)..."
+if [ ! -f "vite.config.ts" ] && [ -f "vite.config.ts.example" ]; then
+    cp vite.config.ts.example vite.config.ts
+fi
 if [ -f "vite.config.ts" ]; then
     sed -i "s/minify: false/minify: 'esbuild'/g" vite.config.ts || true
+fi
+
+if [ ! -f "server/vite.config.ts" ] && [ -f "server/vite.config.ts.example" ]; then
+    cp server/vite.config.ts.example server/vite.config.ts
 fi
 if [ -f "server/vite.config.ts" ]; then
     sed -i "s/minify: false/minify: 'esbuild'/g" server/vite.config.ts || true

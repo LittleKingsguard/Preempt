@@ -120,6 +120,14 @@ router.post("/", authenticateToken, async (req: any, res) => {
 
     // Dynamically enable Vite production minification profile during setup endpoint execution
     const enableMinificationInFile = (filePath: string) => {
+      const examplePath = `${filePath}.example`;
+      if (!fs.existsSync(filePath) && fs.existsSync(examplePath)) {
+        try {
+          fs.copyFileSync(examplePath, filePath);
+        } catch (e) {
+          logger.warn({ err: e }, `Could not copy ${examplePath} to ${filePath}`);
+        }
+      }
       if (fs.existsSync(filePath)) {
         try {
           let content = fs.readFileSync(filePath, "utf-8");
