@@ -161,7 +161,7 @@ async function getOIDCConfig(req?: express.Request) {
       CLIENT_ID,
       currentSecret,
       undefined,
-      { customFetch, execute: [client.allowInsecureRequests] }
+      { [client.customFetch]: customFetch, execute: [client.allowInsecureRequests] }
     );
     (newConfig as any).clientSecret = currentSecret;
     configCache.set(issuerStr, newConfig);
@@ -271,7 +271,7 @@ app.get("/api/oauth/callback", async (req, res) => {
         expectedState: state,
       },
       undefined,
-      { customFetch, execute: [client.allowInsecureRequests] }
+      { [client.customFetch]: customFetch, execute: [client.allowInsecureRequests] }
     );
 
     const claims = tokens.claims();
