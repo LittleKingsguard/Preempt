@@ -6,7 +6,7 @@ const insecureAgent = new Agent({
   }
 });
 
-const customFetch: typeof fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+const customFetch = (input: any, init?: any): Promise<Response> => {
   return undiciFetch(input as any, {
     ...init,
     dispatcher: insecureAgent
@@ -269,9 +269,7 @@ app.get("/api/oauth/callback", async (req, res) => {
       {
         pkceCodeVerifier: code_verifier,
         expectedState: state,
-      },
-      undefined,
-      { [client.customFetch]: customFetch, execute: [client.allowInsecureRequests] }
+      }
     );
 
     const claims = tokens.claims();
@@ -310,7 +308,10 @@ app.get("/api/oauth/callback", async (req, res) => {
       }
     } else {
       const dynamicIssuer = getDynamicIssuer(req);
-      if (localUser.validated_hosts.includes(dynamicIssuer) || localUser.validated_hosts.includes(OIDC_ISSUER)) {
+      if (emailVerified || localUser.validated_hosts.includes(dynamicIssuer) || localUser.validated_hosts.includes(OIDC_ISSUER)) {
+        if (emailVerified && !localUser.validated_hosts.includes(dynamicIssuer)) {
+          await localUser.addValidatedHost(dynamicIssuer);
+        }
         issuePreemptSession(res, localUser);
         return res.redirect("/");
       } else {

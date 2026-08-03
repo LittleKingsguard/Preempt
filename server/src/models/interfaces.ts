@@ -1,5 +1,11 @@
 import type { IPreemptEvent } from "../../../src/types/Event.js";
 
+/** Role context interface for role evaluation queries. */
+export interface RoleContext {
+  username?: string;
+  roles: string[];
+}
+
 /** Component data record schema interface. */
 export interface IComponentData {
   id: number;

@@ -2,9 +2,13 @@ import { logger } from "../utils/logger.js";
 import express from "express";
 import jwt from "jsonwebtoken";
 
-if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET environment variable must be set in production mode.");
+export function getJWTSecret(): string {
+  if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    throw new Error("FATAL: JWT_SECRET environment variable must be set in production mode.");
+  }
+  return process.env.JWT_SECRET || "supersecretkey";
 }
+
 export const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -14,7 +18,7 @@ export const authenticateToken = (req: express.Request, res: express.Response, n
     return next();
   }
   try {
-    const user = jwt.verify(token, JWT_SECRET);
+    const user = jwt.verify(token, getJWTSecret());
     (req as any).user = user;
     next();
   } catch (err) {
@@ -76,6 +80,7 @@ export function validateUserRoles(user: any, permittedRoles: string[], creatorUs
   if (user.has_verified === false) return { error: "Please verify your email to perform this action", status: 403 };
 
   let isAuthorized = false;
+  if (user.is_admin) isAuthorized = true;
   if (permittedRoles.includes("admin") && user.is_admin) isAuthorized = true;
   if (permittedRoles.includes("contributor") && user.is_contributor) isAuthorized = true;
   if (permittedRoles.includes("trusted_dev") && user.is_trusted_dev) isAuthorized = true;

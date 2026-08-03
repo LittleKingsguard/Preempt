@@ -169,14 +169,25 @@ export async function dbGetContent(event: IPreemptEvent, criteria: { count_only?
   }
 
   const now = new Date();
-  const isAdmin = user?.is_admin === true;
+  const isAdmin = user?.is_admin === true || (Array.isArray(user?.roles) && user.roles.includes('admin'));
+  const userRoles: string[] = Array.isArray(user?.roles) 
+    ? user.roles 
+    : [
+        ...(user?.is_admin ? ['admin'] : []),
+        ...(user?.is_contributor ? ['contributor'] : []),
+        ...(user?.is_trusted_dev ? ['trusted_dev'] : []),
+        ...(user?.role ? [user.role] : [])
+      ];
   const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
+  const username = typeof user === 'string' ? user : user?.username;
 
   if (criteria.id !== undefined) {
     const row = result;
     if (row && !('error' in row)) {
-      const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
-      const hasViewAccess = isAdmin || !!userRole || row.author_id === user?.username;
+      const userRole = row.users?.find((u: any) => u.username === username)?.role;
+      const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
+      const hasApprovedRole = Array.isArray(row.approved_roles) && userRoles.some(r => row.approved_roles.includes(r));
+      const hasViewAccess = isAdmin || !!userRole || !!groupRole || (username && row.author_id === username) || hasApprovedRole;
       const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
 
       if (!isPublic && !hasViewAccess) {
@@ -196,10 +207,11 @@ export async function dbGetContent(event: IPreemptEvent, criteria: { count_only?
 
   const finalRows = [];
   for (const row of result) {
-    const userRole = row.users?.find((u: any) => u.username === user?.username)?.role;
+    const userRole = row.users?.find((u: any) => u.username === username)?.role;
     const groupRole = row.groups?.find((g: any) => userGroupIds.includes(g.group_id))?.role;
+    const hasApprovedRole = Array.isArray(row.approved_roles) && userRoles.some(r => row.approved_roles.includes(r));
     
-    const hasViewAccess = isAdmin || userRole === 'Owner' || userRole === 'Contributor' || userRole === 'Commenter' || userRole === 'Viewer' || groupRole === 'Owner' || groupRole === 'Contributor' || groupRole === 'Commenter' || groupRole === 'Viewer' || row.author_id === user?.username;
+    const hasViewAccess = isAdmin || userRole === 'Owner' || userRole === 'Contributor' || userRole === 'Commenter' || userRole === 'Viewer' || groupRole === 'Owner' || groupRole === 'Contributor' || groupRole === 'Commenter' || groupRole === 'Viewer' || (username && row.author_id === username) || hasApprovedRole;
     const isPublic = row.is_visible && (!row.live_date || new Date(row.live_date) <= now);
     
     if (!isPublic && !hasViewAccess) {

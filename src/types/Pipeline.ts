@@ -23,3 +23,28 @@ export interface PipelineConfig {
   isValidationRun?: boolean;
 }
 
+export type PipelineStage = 
+  | 'instantiation' 
+  | 'placement' 
+  | 'componentAssembly' 
+  | 'slotAssembly' 
+  | 'preprocessing' 
+  | 'validation' 
+  | 'elementCreation' 
+  | 'treeAssembly' 
+  | 'postprocessing';
+
+export interface PipelineContext {
+  mountElementId?: string;
+  stage: PipelineStage | string;
+  hasInstantiated: boolean;
+  userData?: any;
+}
+
+import type { Node } from "../core/Node.js";
+
+export interface PipelineObserver {
+  onStageStart?: (stage: PipelineStage, context: PipelineContext) => void;
+  onStageComplete?: (stage: PipelineStage, rootNode: Node | null, context: PipelineContext) => void;
+  onError?: (stage: PipelineStage, error: Error, context: PipelineContext) => void;
+}

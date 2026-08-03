@@ -103,6 +103,15 @@ export class Content {
     const userGroupIds = user?.groups?.map((g: any) => g.id) || [];
     const groupRole = this.groups?.find(g => userGroupIds.includes(g.group_id))?.role;
     if (groupRole) return true;
+    const userRoles: string[] = Array.isArray(user?.roles) 
+      ? user.roles 
+      : [
+          ...(user?.is_admin ? ['admin'] : []),
+          ...(user?.is_contributor ? ['contributor'] : []),
+          ...(user?.is_trusted_dev ? ['trusted_dev'] : []),
+          ...(user?.role ? [user.role] : [])
+        ];
+    if (Array.isArray(this.approved_roles) && userRoles.some(r => this.approved_roles.includes(r))) return true;
     return false;
   }
 

@@ -4,6 +4,13 @@ import { Handler } from "./Handler.js";
 import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
 import { Component } from "./Component.js";
 
+export type EventMutationListener = (
+  event: Event | { type: string; [key: string]: any },
+  targetNode: Node,
+  preState: NodeData,
+  postState: NodeData
+) => void;
+
 /**
  * Client-Side API bridge interface exposed to interactive handlers (`context.clientAPI`).
  *
@@ -14,7 +21,27 @@ export class ClientAPI {
   /** Map of compiled handler functions cached by name. */
   public handlers: { [key: string]: Function } = {};
 
+  public beforeEventListeners: Set<EventMutationListener> = new Set();
+  public afterEventListeners: Set<EventMutationListener> = new Set();
+
+  public addBeforeEventListener(listener: EventMutationListener): void {
+    this.beforeEventListeners.add(listener);
+  }
+
+  public removeBeforeEventListener(listener: EventMutationListener): void {
+    this.beforeEventListeners.delete(listener);
+  }
+
+  public addAfterEventListener(listener: EventMutationListener): void {
+    this.afterEventListeners.add(listener);
+  }
+
+  public removeAfterEventListener(listener: EventMutationListener): void {
+    this.afterEventListeners.delete(listener);
+  }
+
   constructor() {}
+
 
   /**
    * Reads initial hydration data from `<script id="preempt-initial-data">` element in document HTML.
@@ -346,7 +373,85 @@ export class ClientAPI {
       await Supervisor.rerun();
     }
   }
+
+  /**
+   * Dispatches a synthetic event on a target DOM element / Virtual DOM Node.
+   * Operates directly on the DOM element (`node.element`) to test CSS behavior and JS handlers in MCP context.
+   *
+   * @param selector Query selector string or NodeQuery object.
+   * @param eventType Standard or custom event type name (e.g. 'click', 'input', 'submit').
+   * @param eventData Optional event detail payload.
+   * @returns Promise resolving to `true` if target element/node was located and dispatched, `false` otherwise.
+   */
+  async dispatchSyntheticEvent(
+    selector: string | NodeQuery,
+    eventType: string,
+    eventData?: any
+  ): Promise<boolean> {
+    const root = Supervisor.getRootNode();
+    if (!root) return false;
+
+    let targetNode: Node | null = null;
+    const allNodes: Node[] = [root, ...Supervisor.getContentNodes()];
+
+    if (typeof selector === 'string') {
+      for (const node of allNodes) {
+        if (node.element && typeof (node.element as any).matches === 'function' && (node.element as any).matches(selector)) {
+          targetNode = node;
+          break;
+        }
+        if (node.css?.id === selector || node.props?.id === selector || node.css?.classes?.includes(selector)) {
+          targetNode = node;
+          break;
+        }
+      }
+      if (!targetNode && typeof document !== 'undefined') {
+        const domEl = document.querySelector(selector);
+        if (domEl) {
+          targetNode = allNodes.find(n => n.element === domEl) || null;
+        }
+      }
+    } else {
+      const { NodeQueryUtils } = await import("./utils/NodeQueryUtils.js");
+      targetNode = allNodes.find(n => NodeQueryUtils.isMatch(n, selector)) || null;
+    }
+
+    if (!targetNode) return false;
+
+    const preState = targetNode.exportToJson();
+
+    const syntheticEvent = (typeof Event !== 'undefined' && targetNode.element)
+      ? new CustomEvent(eventType, { bubbles: true, cancelable: true, detail: eventData })
+      : { type: eventType, detail: eventData, target: targetNode.element || targetNode };
+
+    for (const listener of this.beforeEventListeners) {
+      try {
+        listener(syntheticEvent as any, targetNode, preState, preState);
+      } catch (err) {
+        console.error("[ClientAPI] Error in beforeEventListener:", err);
+      }
+    }
+
+    if (targetNode.element && typeof (targetNode.element as any).dispatchEvent === 'function') {
+      (targetNode.element as any).dispatchEvent(syntheticEvent as Event);
+    } else {
+      targetNode.executeHandlers(eventType, { event: syntheticEvent, clientAPI: this });
+    }
+
+    const postState = targetNode.exportToJson();
+
+    for (const listener of this.afterEventListeners) {
+      try {
+        listener(syntheticEvent as any, targetNode, preState, postState);
+      } catch (err) {
+        console.error("[ClientAPI] Error in afterEventListener:", err);
+      }
+    }
+
+    return true;
+  }
 }
+
 
 /** Global ClientAPI singleton instance. Exposed in client handlers as `context.clientAPI`. */
 export const clientAPI = new ClientAPI();

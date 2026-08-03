@@ -1,4 +1,4 @@
-import type { PipelineConfig } from "../types/Pipeline.js";
+import type { PipelineConfig, PipelineObserver, PipelineStage, PipelineContext } from "../types/Pipeline.js";
 import type { NodeData, ContentPayload, UserData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { Template } from "./Template.js";
@@ -28,6 +28,39 @@ import { Logger } from "./utils/Logger.js";
 export class Supervisor {
   /** Active Supervisor singleton instance. Access via `Supervisor.instance`. */
   public static instance: Supervisor | null = null;
+  /** Active pipeline observers registered for stage telemetry events. */
+  public observers: Set<PipelineObserver> = new Set();
+
+  public addObserver(observer: PipelineObserver): void {
+    this.observers.add(observer);
+  }
+
+  public removeObserver(observer: PipelineObserver): void {
+    this.observers.delete(observer);
+  }
+
+  public clearObservers(): void {
+    this.observers.clear();
+  }
+
+  public static addObserver(observer: PipelineObserver): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.addObserver(observer);
+    }
+  }
+
+  public static removeObserver(observer: PipelineObserver): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.removeObserver(observer);
+    }
+  }
+
+  public static clearObservers(): void {
+    if (Supervisor.instance) {
+      Supervisor.instance.clearObservers();
+    }
+  }
+
   /** Current pipeline execution stage name (e.g. 'instantiation', 'monitoring', 'closed'). */
   public static currentStage: string = 'closed';
 
@@ -599,7 +632,9 @@ export class Supervisor {
         for (let phaseId = 0; phaseId <= 8; phaseId++) {
           const worker = this.getWorkerForPhase(phaseId);
           if (worker && worker.hasEvents()) {
-            Supervisor.currentStage = this.getStageNameForPhase(phaseId);
+            const stageName = this.getStageNameForPhase(phaseId) as PipelineStage;
+            Supervisor.currentStage = stageName;
+            this.notifyStageStart(stageName);
             // Lock prior phases when starting a higher phase queue
             for (let p = 0; p < phaseId; p++) {
               Supervisor.lockPhase(p);
@@ -607,7 +642,13 @@ export class Supervisor {
             if (phaseId === 1 || phaseId === 6 || phaseId === 7) {
               Supervisor.lockPhase(phaseId);
             }
-            await worker.processQueue();
+            try {
+              await worker.processQueue();
+              this.notifyStageComplete(stageName);
+            } catch (err: any) {
+              this.notifyError(stageName, err instanceof Error ? err : new Error(String(err)));
+              throw err;
+            }
             queueDrained = false;
             break; // Restart loop to prioritize lowest phase IDs again
           }
@@ -621,6 +662,58 @@ export class Supervisor {
       }
     } finally {
       Supervisor.isPipelineRunning = false;
+    }
+  }
+
+  private notifyStageStart(stage: PipelineStage): void {
+    if (this.observers.size === 0) return;
+    const context: PipelineContext = {
+      mountElementId: this.mountElementId,
+      stage,
+      hasInstantiated: this.hasInstantiated,
+      userData: this.userData
+    };
+    for (const observer of this.observers) {
+      try {
+        observer.onStageStart?.(stage, context);
+      } catch (err) {
+        console.error(`[Supervisor] Error in PipelineObserver.onStageStart for stage '${stage}':`, err);
+      }
+    }
+  }
+
+  private notifyStageComplete(stage: PipelineStage): void {
+    if (this.observers.size === 0) return;
+    const context: PipelineContext = {
+      mountElementId: this.mountElementId,
+      stage,
+      hasInstantiated: this.hasInstantiated,
+      userData: this.userData
+    };
+    const clonedRoot = this.rootNode ? this.rootNode.clone([], [], null, 99) : null;
+    for (const observer of this.observers) {
+      try {
+        observer.onStageComplete?.(stage, clonedRoot, context);
+      } catch (err) {
+        console.error(`[Supervisor] Error in PipelineObserver.onStageComplete for stage '${stage}':`, err);
+      }
+    }
+  }
+
+  private notifyError(stage: PipelineStage, error: Error): void {
+    if (this.observers.size === 0) return;
+    const context: PipelineContext = {
+      mountElementId: this.mountElementId,
+      stage,
+      hasInstantiated: this.hasInstantiated,
+      userData: this.userData
+    };
+    for (const observer of this.observers) {
+      try {
+        observer.onError?.(stage, error, context);
+      } catch (err) {
+        console.error(`[Supervisor] Error in PipelineObserver.onError for stage '${stage}':`, err);
+      }
     }
   }
 
