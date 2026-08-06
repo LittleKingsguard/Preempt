@@ -37,6 +37,7 @@ At the core of Preempt is the **Supervisor**, which orchestrates a 10-stage work
 ### Dynamic Phase Resolution & Worker Emission Rules
 - **Dynamic Phase Resolution**: Phase numbers (0-9) are dynamically resolved via `PhaseRegistry.getPhaseNumber(stageName)`. Emitting events to phases is executed via `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals (`0-9`) is prohibited.
 - **Worker Emissions vs `receiveNextState`**: `node.receiveNextState()` is strictly intended for post-processing execution contexts (user event handlers, WebSocket reactivity, and `ClientAPI.modifyNode()`). Workers must **never** call `receiveNextState()`. Instead, workers update node properties directly (e.g. `Object.assign(node, payload)`) and emit to target stages via `Supervisor.emitToPhaseName(this, node, rollbackState, 'stageName')`.
+- **Anti-Pattern Documentation Rule**: Whenever an anti-pattern or unsupported pattern is identified, mentioned, or discussed during development, agents must check `docs/skills/` to verify if it is documented and document it immediately if missing.
 
 ### Adding New Workers Without Breaking Changes
 When creating or adding new pipeline worker stages, follow these guidelines to prevent breaking changes:

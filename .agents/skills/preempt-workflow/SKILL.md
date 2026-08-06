@@ -65,6 +65,7 @@ To add a new worker stage to the pipeline without breaking existing functionalit
 
 ## Important Rules
 - Never use `globalThis.Supervisor` as a fallback. `Supervisor` is an import and its singleton should be accessed directly via `Supervisor.instance`.
+- **Anti-Pattern Documentation Directive**: Whenever an anti-pattern, unsupported design choice, or prohibited coding practice is mentioned in user feedback, code reviews, or architectural discussions, the agent MUST immediately check `docs/skills/` (and `.agents/skills/`) to verify if it is documented. If missing or incomplete, the agent MUST document the anti-pattern immediately.
 
 ## Accessing Advanced Documentation
 Detailed technical guidelines exist in the repository under `docs/skills/`. Before making major structural or design changes, you should read the relevant file using the `view_file` tool:
