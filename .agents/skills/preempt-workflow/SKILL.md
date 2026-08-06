@@ -46,6 +46,7 @@ The Supervisor orchestrates a 10-stage worker pipeline (Phases 0 through 9):
 ### Critical Phase Registry & Locking Rules
 - **Dynamic Phase Lookup**: Never hardcode numeric phase literals (`0-9`) in core code or tests. Always use `PhaseRegistry.getPhaseNumber(stageName)` or `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals is a phase order antipattern.
 - **Worker Phase Emissions vs `receiveNextState`**: `node.receiveNextState()` is designed for user event handlers, WebSocket updates, and `ClientAPI` calls *after* pipeline worker runs complete. Workers must **never** call `receiveNextState()`. Instead, workers apply state updates directly to nodes (e.g. `Object.assign(targetNode, payload)`) and emit to pipeline stages using `Supervisor.emitToPhaseName(this, node, rollbackState, 'stageName')`.
+- **Component Placement Rules & Anti-Patterns**: Components defining `placementName` drop-zones inside their sub-tree is supported. Components defining `targetPlacement` to place themselves *out* of the component hierarchy, or host nodes invoking `type` components while having children with placements of either type, are unsupported Anti-Patterns.
 - **Phase Locking Strategy**: Locking for both `ComponentRoutingWorker` (Phase 2) and `ComponentAssemblyWorker` (Phase 3) is deferred until `SlotAssemblyWorker` (Phase 4) locks. This allows slot assembly to inject content nodes with source components that chain backward to routing without triggering lock violations.
 
 ### Adding New Workers Without Breaking Changes

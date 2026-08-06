@@ -39,3 +39,9 @@ If a content node fails to find a matching target placement, it is essentially o
 For a real-world example of complex placement assembly, refer to the Editor system:
 - **`server/library/components/editor.json`**: Defines root placement drop-zones for the editor interface, such as `editor-inspector-display`.
 - **`server/library/handlers/EditorInspectHandler.js`**: Demonstrates dynamic placement assembly. The handler generates content nodes on the fly with specific `targetPlacement` arrays (e.g., targeting `inspector-components-panel`) and pushes them into a temporary payload via `clientAPI.addContentNodes()`. When the Supervisor reruns the pipeline, it effortlessly routes these dynamically generated nodes into the deeply nested structural components defined in `editor.json`.
+
+## Anti-Patterns & Unsupported Usage
+- **Supported Component Placements**: Structural components ARE fully supported to define `placementName` drop-zones inside their sub-tree layout (e.g., `editor.json` providing `editor-inspector-display`).
+- **Unsupported Anti-Patterns**:
+  1. **Component Nodes Requesting `targetPlacement`**: A component payload should never define `targetPlacement` to place itself *out* of its component hierarchy into an external drop-zone.
+  2. **Host Nodes Invoking `type` Components With Placement Children**: A hosting node invoking a `type` component must NOT have children that define placements of either type (`placementName` or `targetPlacement`). Re-assembling or restoring the hosting node to its `node.data` originals replaces the host node's child sub-tree, breaking any placement linkages defined on those host children.

@@ -120,6 +120,9 @@ export class SlotAssemblyWorker extends BaseWorker {
 
       if (resolvedValue === null) {
         console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
+        if (hasInstructions) {
+          this.resetPropertyToOriginal(binding.target, node, newProps, newCss);
+        }
         continue;
       }
 
@@ -197,6 +200,44 @@ export class SlotAssemblyWorker extends BaseWorker {
       } else if (value === "false" && hasClass) {
         newCss.classes = newCss.classes.filter((c: string) => c !== className);
         node.css = newCss;
+      }
+    }
+  }
+
+  /**
+   * Resets a target property path to its original node.data initial value.
+   *
+   * @param path Target schema path string.
+   * @param node Host Node instance.
+   * @param newProps Mutable props object copy.
+   * @param newCss Mutable CSS object copy.
+   */
+  private resetPropertyToOriginal(path: string, node: Node, newProps: any, newCss: any): void {
+    if (path === "content") {
+      node.content = node.data.content;
+    } else if (path.startsWith("props.")) {
+      const propName = path.substring(6);
+      const originalValue = node.data.props?.[propName];
+      if (originalValue !== undefined) {
+        newProps[propName] = originalValue;
+      } else {
+        delete newProps[propName];
+      }
+      node.props = newProps;
+    } else if (path.startsWith("css.style.")) {
+      const styleName = path.substring(10);
+      const originalStyle = node.data.css?.style?.[styleName];
+      if (newCss.style) {
+        if (originalStyle !== undefined) {
+          newCss.style[styleName] = originalStyle;
+        } else {
+          delete newCss.style[styleName];
+        }
+        node.css = newCss;
+      }
+    } else if (path.startsWith("handlers.")) {
+      if (node.handlers) {
+        node.handlers = node.handlers.filter(h => h.phase !== path);
       }
     }
   }

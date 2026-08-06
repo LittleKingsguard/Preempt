@@ -142,4 +142,26 @@ describe('ComponentAssemblyWorker', () => {
     expect(nodeA.type).toBe('header');
     expect(msg.complete).toBe(true);
   });
+
+  it('resets node to node.data originals when an instructed type component resolution fails', async () => {
+    nodeA.data.type = 'div';
+    nodeA.data.content = 'Original Content';
+    nodeA.type = 'modified-type';
+    nodeA.content = 'Modified Content';
+
+    const failingTypeComp = new Component({ reference: 'NonExistentComponent', target: 'type' }, nodeA, 0);
+    nodeA.targetComponents.set('type', failingTypeComp);
+
+    const msg = new WorkerMessage('TestActor', 'ComponentAssemblyWorker');
+    msg.addInstruction('createdNew', ['NonExistentComponent']);
+    nodeA.addMessage(msg);
+
+    worker.push(nodeA, {});
+    await worker.processQueue();
+
+    // Node should be reset back to node.data originals
+    expect(nodeA.type).toBe('div');
+    expect(nodeA.content).toBe('Original Content');
+    expect(nodeA.targetComponents.has('type')).toBe(false);
+  });
 });

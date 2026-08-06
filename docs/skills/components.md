@@ -74,3 +74,10 @@ For a real-world example of complex structural data injection and component-driv
 - **`server/library/components/editor.json`**: Acts as the primary template structure for the Editor UI. It defines hidden dependencies and leverages structural components (e.g., `{ "reference": "editorInspectorComponents", "target": "type" }`) to assemble the inspector panel.
 - **`server/library/components/editorInspectorComponents.json`**: An example of a nested structural component that defines its own layout and drop-zones for child rows.
 - **`server/library/handlers/EditorInspectHandler.js`**: Demonstrates how to dynamically push component references (like `editorInspectorComponentRow`) into a node's child array during execution to build complex, data-driven interfaces on the fly.
+
+## Component Assembly Reset & Anti-Patterns
+- **Message-Driven Assembly & Reset to `node.data`**: `ComponentAssemblyWorker` and `SlotAssemblyWorker` process node state selectively based on `WorkerMessage` instructions (`createdNew` / `updatedSource`). If an instructed component binding cannot resolve a valid source component (`resolvedValue === null` or missing root node), the assembly worker resets the node (or target property path) back to its original `node.data` definitions.
+- **Component Placement Rules & Anti-Patterns**:
+  - **Supported**: Defining `placementName` drop-zones inside a component sub-tree is fully supported (allowing content nodes to be placed *into* the component).
+  - **Anti-Pattern 1**: Component nodes attempting to define `targetPlacement` to place themselves *out* of the component.
+  - **Anti-Pattern 2**: Hosting nodes that invoke a `type` component containing children with placements of either type (`placementName` or `targetPlacement`). Re-assembling or restoring host nodes replaces child sub-trees, destroying dynamic placement linkages on host children (breaking behavior).

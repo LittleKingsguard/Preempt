@@ -3,6 +3,8 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Handler } from "../Handler.js";
 import { Placement } from "../Placement.js";
+import { Props } from "../Props.js";
+import { Css } from "../Css.js";
 import { Supervisor } from "../Supervisor.js";
 import { WorkerMessage } from "../WorkerMessage.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -71,8 +73,14 @@ export class ComponentAssemblyWorker extends BaseWorker {
 
       if (resolvedValue === null) {
         console.error(`Component binding failed: Could not resolve value for reference '${typeComponent.reference}' targeting '${typeComponent.target}'`);
+        if (hasInstructions) {
+          this.resetNodeToOriginals(node);
+        }
       } else if (Array.isArray(resolvedValue)) {
         console.error(`Component binding failed: Cannot resolve an array for a 'type' target component.`);
+        if (hasInstructions) {
+          this.resetNodeToOriginals(node);
+        }
       } else {
         const d = resolvedValue;
 
@@ -152,6 +160,8 @@ export class ComponentAssemblyWorker extends BaseWorker {
                 Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'componentRouting');
               }
             }
+          } else if (hasInstructions) {
+            this.resetNodeToOriginals(node);
           }
         }
       }
@@ -176,12 +186,40 @@ export class ComponentAssemblyWorker extends BaseWorker {
           : { [sourceComp.target || 'content']: resolvedValue };
         for (const refNode of sourceComp._referencingNodes) {
           Object.assign(refNode, nextStatePayload);
-          Supervisor.emitToPhaseName(this, refNode, _rollbackState || {}, 'placement');
+          const routingMsg = new WorkerMessage('ComponentAssemblyWorker', 'ComponentRoutingWorker');
+          routingMsg.addInstruction('updatedSource', [sourceComp.reference || sourceComp.target || 'component']);
+          refNode.addMessage(routingMsg);
+          Supervisor.emitToPhaseName(this, refNode, _rollbackState || {}, 'componentRouting');
         }
       }
     }
 
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
+  }
+
+  /**
+   * Resets node properties and children back to original node.data definitions.
+   *
+   * @param node Target node to restore.
+   */
+  private resetNodeToOriginals(node: Node): void {
+    node.type = node.data.type || 'div';
+    node.content = node.data.content;
+    node.props = new Props(node.data.props || {}, node);
+    node.css = new Css(node.data.css || {}, node);
+    if (node.data.handlers && Array.isArray(node.data.handlers)) {
+      node.handlers = node.data.handlers.map(h => Handler.fromDef(h, node, this.phase));
+    } else {
+      node.handlers = [];
+    }
+    node.setComponents(node.data.component, this.phase);
+    node.children = [];
+    node.nativeChildren = [];
+    if (node.data.children && Array.isArray(node.data.children)) {
+      for (const childData of node.data.children) {
+        new Node(childData, node, this.phase, node.isInTree);
+      }
+    }
   }
 
   /**
