@@ -81,7 +81,7 @@ export class Handler implements HandlerDef {
     }
 
     const newHandlersList: Handler[] = [];
-    let minPhase = 5;
+    let minPhase = PhaseRegistry.getPhaseNumber('validation');
 
     const processHandler = (hDef: HandlerDef | Handler | string, keyName?: string) => {
       const handlerInstance = Handler.fromDef(hDef, targetNode, 0, keyName);
@@ -109,6 +109,30 @@ export class Handler implements HandlerDef {
 
     targetNode.handlers = newHandlersList;
     return minPhase;
+  }
+
+  /**
+   * Resolves the numeric phase ID for a handler phase name string.
+   *
+   * @param phaseName Lifecycle hook or event phase name (e.g. 'beforePreprocess', 'afterValidate').
+   * @returns Numeric phase ID or undefined if unmapped.
+   */
+  public static getPhaseId(phaseName: string): number | undefined {
+    return PHASE_NAME_MAP[phaseName];
+  }
+
+  /**
+   * Resolves the canonical pipeline stage name for a handler phase name string.
+   *
+   * @param phaseName Lifecycle hook or event phase name (e.g. 'beforePreprocess', 'afterValidate').
+   * @returns Canonical stage name string (e.g. 'preprocessing', 'validation') or undefined.
+   */
+  public static getStageName(phaseName: string): string | undefined {
+    const pId = PHASE_NAME_MAP[phaseName];
+    if (pId !== undefined) {
+      return PhaseRegistry.getPhaseName(pId);
+    }
+    return undefined;
   }
 
   get body(): string { return this._body; }

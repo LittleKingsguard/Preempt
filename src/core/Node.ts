@@ -568,7 +568,28 @@ export class Node {
 
     const targetPhase = minTargetPhase;
     this.lastCompletedPhase = targetPhase > 0 ? targetPhase - 1 : undefined;
+
+    // Check for all phase handlers and emit host node to all matching stage phases via Supervisor.emitToPhaseName
+    if (this.handlers && this.handlers.length > 0) {
+      const emittedStages = new Set<string>();
+      for (const h of this.handlers) {
+        if (h.phase) {
+          const stageName = Handler.getStageName(h.phase);
+          if (stageName && !emittedStages.has(stageName)) {
+            emittedStages.add(stageName);
+            Supervisor.emitToPhaseName(this, this, this._lastValidState, stageName);
+          }
+        }
+      }
+    }
+
+    // Emit to primary target phase
     Supervisor.emitToPhase(this, this, this._lastValidState, targetPhase);
+
+    // receiveNextState must always emit to ValidationWorker (validation phase)
+    if (targetPhase !== validationPhase) {
+      Supervisor.emitToPhaseName(this, this, this._lastValidState, 'validation');
+    }
   }
 
   /**
