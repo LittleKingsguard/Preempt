@@ -3,17 +3,18 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { StyleNode } from "../StyleNode.js";
 import { SSRElementCreationWorker } from "./SSRElementCreationWorker.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 7 (Tree Assembly) for Server-Side Rendering (SSR).
+ * Worker handling Phase 8 (Tree Assembly) for Server-Side Rendering (SSR).
  *
  * @useCase Compiles the entire virtual DOM tree into a final SSR HTML string response prefixed with `<style id="preempt-dynamic-styles">`.
- * @processFlow Eighth worker stage executed after Phase 6 SSR Element Creation in Node.js server environments.
- * @queueEmissions Events are emitted to Phase 7 queue automatically by `SSRElementCreationWorker.onProcessSuccess()` upon completion of Phase 6 SSR Element Creation.
+ * @processFlow Eighth worker stage executed after Phase 7 SSR Element Creation in Node.js server environments.
+ * @queueEmissions Events are emitted to Phase 8 queue automatically by `SSRElementCreationWorker.onProcessSuccess()` upon completion of Phase 7 SSR Element Creation.
  */
 export class SSRTreeAssemblyWorker extends BaseWorker {
-  /** Phase 7 identifier. */
-  public readonly phase = 7;
+  /** Phase 8 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('treeAssembly');
 
   /**
    * Processes the SSR tree assembly queue, rendering final HTML and CSS strings into `supervisor.ssrResult`.
@@ -40,7 +41,7 @@ export class SSRTreeAssemblyWorker extends BaseWorker {
   }
 
   /**
-   * Processes a node during Phase 7 SSR tree assembly and triggers `afterRender` handlers.
+   * Processes a node during Phase 8 SSR tree assembly and triggers `afterRender` handlers.
    *
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
@@ -52,18 +53,18 @@ export class SSRTreeAssemblyWorker extends BaseWorker {
     }
     console.log(`[SSRTreeAssemblyWorker] Assembling HTML tree for node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
 
-    // Phase 7: SSR Tree Assembly
+    // Phase 8: SSR Tree Assembly
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
   }
 
   /**
-   * Updates `node.lastCompletedPhase` to 7 upon success.
+   * Updates `node.lastCompletedPhase` to 8 upon success.
    *
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 7;
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('treeAssembly');
   }
 
   /**

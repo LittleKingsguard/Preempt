@@ -4,17 +4,18 @@ import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 import { clientAPI } from "../ClientAPI.js";
 import { StyleNode } from "../StyleNode.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 6 (Element Creation) for Client-Side DOM rendering.
+ * Worker handling Phase 7 (Element Creation) for Client-Side DOM rendering.
  *
  * @useCase Creates, configures, and binds event listeners to native browser HTML elements (`HTMLElement`).
- * @processFlow Seventh worker stage executed after Phase 5 Validation on client runtime environments.
- * @queueEmissions Events are emitted to Phase 6 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 5 Validation for an in-tree node. Direct pushes to Phase 6 are prohibited.
+ * @processFlow Seventh worker stage executed after Phase 6 Validation on client runtime environments.
+ * @queueEmissions Events are emitted to Phase 7 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 6 Validation for an in-tree node. Direct pushes to Phase 7 are prohibited.
  */
 export class ClientElementCreationWorker extends BaseWorker {
-  /** Phase 6 identifier. */
-  public readonly phase = 6;
+  /** Phase 7 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('elementCreation');
 
   /**
    * Inject or update dynamic CSS rules inside the `<style id="preempt-dynamic-styles">` element in document head.
@@ -76,7 +77,7 @@ export class ClientElementCreationWorker extends BaseWorker {
     }
     console.log(`[ClientElementCreationWorker] Creating element for node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
 
-    // Phase 6: Element Creation
+    // Phase 7: Element Creation
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
 
     if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
@@ -196,7 +197,7 @@ export class ClientElementCreationWorker extends BaseWorker {
   }
 
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 6;
-    Supervisor.emitToPhase(this, node, _rollbackState || {}, 7);
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('elementCreation');
+    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'treeAssembly');
   }
 }

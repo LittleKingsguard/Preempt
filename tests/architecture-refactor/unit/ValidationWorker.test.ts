@@ -1,27 +1,27 @@
-// @ts-nocheck
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ValidationWorker } from '../../../src/core/workers/ValidationWorker';
 import { Node } from '../../../src/core/Node';
+import { Props } from '../../../src/core/Props';
+import { PhaseRegistry } from '../../../src/core/PhaseRegistry';
 
 describe('ValidationWorker', () => {
-  let worker;
-  let node;
+  let worker: ValidationWorker;
+  let node: Node;
 
   beforeEach(() => {
     worker = new ValidationWorker();
     node = new Node({ type: 'img', props: { src: 'test.png', alt: 'test' } }, null, 0, true);
   });
 
-  it('emits event to next phase if validation passes', async () => {
-    worker.push(node, { props: { src: 'old.png' } });
+  it('emits event to next phase if validation passes and sets lastCompletedPhase to validation phase', async () => {
+    worker.push(node, { props: { src: 'old.png' } } as any);
     
-    // Instead of asserting emitToPhase (which is decentralized now), we can assert 
-    // that processQueue successfully processes the node without errors or rollbacks.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
     await worker.processQueue();
     
     expect(consoleSpy).not.toHaveBeenCalled();
+    expect(node.lastCompletedPhase).toBe(PhaseRegistry.getPhaseNumber('validation'));
     consoleSpy.mockRestore();
   });
 

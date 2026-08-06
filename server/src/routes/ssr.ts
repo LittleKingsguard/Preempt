@@ -24,9 +24,12 @@ const serverApi = {
 };
 
 async function renderAndSendHtml(res: any, contentData: any) {
-  const distPath = path.join(process.cwd(), "../dist/index.html");
+  let distPath = path.join(process.cwd(), "../dist/index.html");
   if (!fs.existsSync(distPath)) {
-    return res.status(500).send("Frontend dist not found. Did you run npm run build?");
+    distPath = path.join(process.cwd(), "dist/index.html");
+    if (!fs.existsSync(distPath)) {
+      return res.status(500).send("Frontend dist not found. Did you run npm run build?");
+    }
   }
 
   Supervisor.resetInstantiation();

@@ -9,9 +9,18 @@ import { Supervisor } from "../Supervisor.js";
  * @processFlow Manages queued Node instances, controls phase execution order, handles errors, and executes state rollbacks on failure.
  */
 export abstract class BaseWorker {
-  protected queue: Map<Node, RollbackState | undefined> = new Map();
+  public queue: Map<Node, RollbackState | undefined> = new Map();
   protected isProcessing: boolean = false;
-  protected supervisor: Supervisor;
+  private _supervisor?: Supervisor | undefined;
+
+  public get supervisor(): Supervisor {
+    return this._supervisor ?? Supervisor.instance!;
+  }
+
+  public set supervisor(val: Supervisor | undefined) {
+    this._supervisor = val;
+  }
+
   /** Phase ID number (0-8) associated with this worker instance. */
   public abstract readonly phase: number;
 
@@ -20,8 +29,8 @@ export abstract class BaseWorker {
    *
    * @param supervisor Central Supervisor pipeline orchestrator instance.
    */
-  constructor(supervisor: Supervisor) {
-    this.supervisor = supervisor;
+  constructor(supervisor?: Supervisor) {
+    this._supervisor = supervisor;
   }
 
   /**

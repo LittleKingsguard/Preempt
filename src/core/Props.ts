@@ -1,12 +1,13 @@
 import type { Node } from "./Node.js";
 import { CloneUtils } from "./utils/CloneUtils.js";
 import { Supervisor } from "./Supervisor.js";
+import { PhaseRegistry } from "./PhaseRegistry.js";
 
 /**
  * Encapsulates dynamic DOM attributes and property key-value dictionaries for a Node.
  *
  * @useCase Attached to `node.props` to store attributes like `id`, `src`, `href`, `placeholder`, `value`, `disabled`, etc.
- * @processFlow Processed in Phase 5 (`ValidationWorker`) and Phase 6 (`ClientElementCreationWorker`/`SSRElementCreationWorker`).
+ * @processFlow Processed in Phase 6 (`ValidationWorker`) and Phase 7 (`ClientElementCreationWorker`/`SSRElementCreationWorker`).
  */
 export class Props {
   public parent?: Node;
@@ -73,7 +74,7 @@ export class Props {
         this[key] = CloneUtils.deepClone(value);
       }
     }
-    return 5;
+    return PhaseRegistry.getPhaseNumber('validation');
   }
 
   /**
@@ -83,7 +84,7 @@ export class Props {
    * @param newParent Host Node instance.
    * @returns Cloned Props instance.
    */
-  public clone(ignoreProps: string[] = [], newParent?: Node): Props {
+  public clone(ignoreProps: string[] = [], newParent?: Node, _actor: string = 'Props'): Props {
     const parentNode = newParent || this.parent;
     const propsObj: Record<string, any> = {};
     for (const [key, value] of Object.entries(this)) {

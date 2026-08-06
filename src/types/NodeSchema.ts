@@ -154,8 +154,8 @@ export interface NodeQuery {
 
 import type { Node } from "../core/Node.js";
 /** State update payload pushed to `Node._nextStateQueue`. */
-export type NextState = Partial<Node>;
+export type NextState = Partial<Node> | Record<string, any>;
 /** State snapshot payload saved for rollback operations. */
-export type RollbackState = Partial<Node>;
+export type RollbackState = Partial<Node> | Record<string, any>;
 
 

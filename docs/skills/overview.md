@@ -16,19 +16,39 @@ This architecture enables:
 5. **Handlers**: JavaScript functions attached to Nodes that execute in response to user events (e.g., `click`) or specific lifecycle stages of the rendering pipeline (e.g., `beforeRender`).
 6. **Event Streaming**: Preempt leverages an internal event bus (via the `Events` table and a Kafka `eventRelay`) to stream real-time structural payload updates to distributed clients via WebSockets, enabling high-performance, dynamic UI reactivity.
 
-## The Supervisor Pipeline
-At the core of Preempt is the **Supervisor**, which orchestrates a multi-stage pipeline using a suite of decoupled `Worker` classes to convert raw JSON data from the database into a fully reactive UI.
+## The Supervisor Pipeline & PhaseRegistry
+At the core of Preempt is the **Supervisor**, which orchestrates a 10-stage worker pipeline (Phases 0 through 9) using a suite of decoupled `Worker` classes:
 
-1. **InstantiationWorker**: Converts the raw JSON `NodeData` into OOP `Node` instances in memory. During this stage, any Component Bindings with a non-null object or array `value` are eagerly parsed and deeply cloned into an `_instantiatedNodes` array. A cycle-safe `deepClone` (using a `WeakSet` to track references) must be used here to avoid crashing when bindings contain recursive parent/child references.
-2. **ComponentAssemblyWorker**: Merges template and content components into the global registry. Resolves standard component references (styles, properties, handlers) by deep-merging them into nodes. For structural components, it merges the eagerly instantiated content/children directly into the target node.
-3. **SlotAssemblyWorker**: Assembles dynamically injected content into slots.
-4. **PlacementWorker**: The supervisor collects all placements across the tree, deliberately scanning into the `_instantiatedNodes` of structural components to ensure nested drop-zones are mapped correctly. Content nodes are then placed into their target drop-zones.
-5. **PreprocessingWorker**: A placeholder stage for implementation-specific expansions (e.g., hooks for custom data formatting).
-6. **ValidationWorker**: Executes structural integrity checks to ensure the `Node` tree is valid before rendering.
-7. **SSRRenderingWorker / ClientRenderingWorker**:
-   - *Server-Side (`SSRRenderingWorker`)*: Generates raw HTML strings and a bundled CSS block to send to the browser.
-   - *Client-Side (`ClientRenderingWorker`)*: Syncs the virtual `Node` tree with the native DOM, patching changes iteratively via an atomic event loop.
-8. **PostprocessingWorker**: A placeholder stage for final cleanup tasks or custom implementation-specific expansions.
+0. **InstantiationWorker** (`'instantiation'`): Converts raw JSON `NodeData` into OOP `Node` instances in memory. Eagerly parses structural component bindings into `_instantiatedNodes`.
+1. **PlacementWorker** (`'placement'`): Matches content nodes requesting target drop-zones (`targetPlacement`) to template placement wrappers.
+2. **ComponentRoutingWorker** (`'componentRouting'`): Evaluates target and source component bindings, routing structural updates to Phase 3 or Phase 4 and cascading source component updates down children.
+3. **ComponentAssemblyWorker** (`'componentAssembly'`): Deep-merges structural components targeting `"type"` into target hosting nodes.
+4. **SlotAssemblyWorker** (`'slotAssembly'`): Applies non-type component bindings (props, styles, handlers, slot contents) into target nodes.
+5. **PreprocessingWorker** (`'preprocessing'`): Executes custom preprocessing algorithms and `beforePreprocess`/`afterPreprocess` handlers.
+6. **ValidationWorker** (`'validation'`): Executes structural integrity and required property validation checks (`img.src`, `a.href`, style schemas) before rendering.
+7. **SSRElementCreationWorker / ClientElementCreationWorker** (`'elementCreation'`):
+   - *Server-Side (`SSRElementCreationWorker`)*: Generates raw HTML opening/closing tag string representations.
+   - *Client-Side (`ClientElementCreationWorker`)*: Instantiates native browser `HTMLElement` objects and binds event listeners.
+8. **SSRTreeAssemblyWorker / ClientTreeAssemblyWorker** (`'treeAssembly'`):
+   - *Server-Side (`SSRTreeAssemblyWorker`)*: Compiles the full virtual DOM tree into a final SSR HTML payload prefixed with dynamic styles.
+   - *Client-Side (`ClientTreeAssemblyWorker`)*: Mounts DOM elements into parent containers and applies tree patches.
+9. **PostprocessingWorker** (`'postprocessing'`): Executes post-rendering application hooks (`beforePostprocess`, `afterPostprocess`) and cleanup.
+
+### Dynamic Phase Resolution & Worker Emission Rules
+- **Dynamic Phase Resolution**: Phase numbers (0-9) are dynamically resolved via `PhaseRegistry.getPhaseNumber(stageName)`. Emitting events to phases is executed via `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals (`0-9`) is prohibited.
+- **Worker Emissions vs `receiveNextState`**: `node.receiveNextState()` is strictly intended for post-processing execution contexts (user event handlers, WebSocket reactivity, and `ClientAPI.modifyNode()`). Workers must **never** call `receiveNextState()`. Instead, workers update node properties directly (e.g. `Object.assign(node, payload)`) and emit to target stages via `Supervisor.emitToPhaseName(this, node, rollbackState, 'stageName')`.
+
+### Adding New Workers Without Breaking Changes
+When creating or adding new pipeline worker stages, follow these guidelines to prevent breaking changes:
+1. **Canonical Stage Definition**: Add the new stage identifier to `PipelineStage` in `src/types/Pipeline.ts`.
+2. **Register Phase Mapping**: Register the stage name and its numeric phase ID in `PhaseRegistry.ts` (using `PhaseRegistry.registerWorker(stageName, phaseId)` or adding to registry maps).
+3. **Dynamic Phase Assignment in Workers**: Always assign worker phase dynamically: `public readonly phase = PhaseRegistry.getPhaseNumber(stageName);` and update node state with `node.lastCompletedPhase = PhaseRegistry.getPhaseNumber(stageName);`.
+4. **Emit via Stage Names**: Forward nodes using `Supervisor.emitToPhaseName(caller, node, rollbackState, targetStageName)` rather than numeric phase arguments (`emitToPhase`).
+5. **Update Upstream / Downstream Emissions**: Update the upstream worker's `onProcessSuccess()` to emit to the new stage name, and have the new worker emit to the downstream stage name.
+6. **Avoid Hardcoded Phase Literals**: Never hardcode numeric phase IDs in worker logic, Supervisor config, or tests. Dynamic resolution ensures phase order changes or insertions do not break existing pipeline execution.
+
+### Deferred Phase Locking
+To support backward chaining when slot assembly (Phase 4) injects new nodes with source components targeting component routing, locking for both `ComponentRoutingWorker` (Phase 2) and `ComponentAssemblyWorker` (Phase 3) is deferred until `SlotAssemblyWorker` (Phase 4) completes/locks.
 
 ### Hydration & Reactivity
 On the client side, Preempt uses an **atomic node update model** driven by an internal Event Bus, rather than rebuilding the entire virtual DOM tree on every state change.

@@ -6,6 +6,7 @@ import { Payload } from "./Payload.js";
 import { StyleNode } from "./StyleNode.js";
 import { InstantiationWorker } from "./workers/InstantiationWorker.js";
 import { PlacementWorker } from "./workers/PlacementWorker.js";
+import { ComponentRoutingWorker } from "./workers/ComponentRoutingWorker.js";
 import { ComponentAssemblyWorker } from "./workers/ComponentAssemblyWorker.js";
 import { SlotAssemblyWorker } from "./workers/SlotAssemblyWorker.js";
 import { PreprocessingWorker } from "./workers/PreprocessingWorker.js";
@@ -16,6 +17,7 @@ import { ClientTreeAssemblyWorker } from "./workers/ClientTreeAssemblyWorker.js"
 import { SSRElementCreationWorker } from "./workers/SSRElementCreationWorker.js";
 import { SSRTreeAssemblyWorker } from "./workers/SSRTreeAssemblyWorker.js";
 import { PostprocessingWorker } from "./workers/PostprocessingWorker.js";
+import { PhaseRegistry } from "./PhaseRegistry.js";
 import { clientAPI } from "./ClientAPI.js";
 import { Logger } from "./utils/Logger.js";
 
@@ -66,16 +68,17 @@ export class Supervisor {
 
   /** Mapping of Node schema property names to their corresponding phase lock ID numbers. */
   public static propertyToPhaseMap: Record<string, number> = {
-    'data': 0,
-    'placement': 0,
-    'activePlacement': 1,
-    'component': 2,
-    'content': 4,
-    'children': 4,
-    'handlers': 4,
-    'props': 5,
-    'css': 5,
-    'type': 5
+    'data': PhaseRegistry.getPhaseNumber('instantiation'),
+    'placement': PhaseRegistry.getPhaseNumber('instantiation'),
+    'activePlacement': PhaseRegistry.getPhaseNumber('placement'),
+    'componentRouting': PhaseRegistry.getPhaseNumber('componentRouting'),
+    'component': PhaseRegistry.getPhaseNumber('componentAssembly'),
+    'content': PhaseRegistry.getPhaseNumber('validation'),
+    'children': PhaseRegistry.getPhaseNumber('validation'),
+    'handlers': PhaseRegistry.getPhaseNumber('validation'),
+    'props': PhaseRegistry.getPhaseNumber('validation'),
+    'css': PhaseRegistry.getPhaseNumber('validation'),
+    'type': PhaseRegistry.getPhaseNumber('validation')
   };
 
   /**
@@ -93,6 +96,7 @@ export class Supervisor {
 
   public instantiationWorker: InstantiationWorker;
   public placementWorker: PlacementWorker;
+  public componentRoutingWorker: ComponentRoutingWorker;
   public componentAssemblyWorker: ComponentAssemblyWorker;
   public slotAssemblyWorker: SlotAssemblyWorker;
   public preprocessingWorker: PreprocessingWorker;
@@ -155,6 +159,7 @@ export class Supervisor {
     Supervisor.instance = this;
     this.instantiationWorker = new InstantiationWorker(this);
     this.placementWorker = new PlacementWorker(this);
+    this.componentRoutingWorker = new ComponentRoutingWorker(this);
     this.componentAssemblyWorker = new ComponentAssemblyWorker(this);
     this.slotAssemblyWorker = new SlotAssemblyWorker(this);
     this.preprocessingWorker = new PreprocessingWorker(this);
@@ -177,7 +182,7 @@ export class Supervisor {
   /**
    * Retrieves the worker instance responsible for a given phase ID number.
    *
-   * @param phaseId Phase ID (0-8).
+   * @param phaseId Phase ID (0-9).
    * @returns Worker instance or undefined.
    * @references `Supervisor.emitToPhase()`, `Supervisor.runPipeline()`
    */
@@ -185,13 +190,14 @@ export class Supervisor {
     switch (phaseId) {
       case 0: return this.instantiationWorker;
       case 1: return this.placementWorker;
-      case 2: return this.componentAssemblyWorker;
-      case 3: return this.slotAssemblyWorker;
-      case 4: return this.preprocessingWorker;
-      case 5: return this.validationWorker;
-      case 6: return this.elementCreationWorker;
-      case 7: return this.treeAssemblyWorker;
-      case 8: return this.postprocessingWorker;
+      case 2: return this.componentRoutingWorker;
+      case 3: return this.componentAssemblyWorker;
+      case 4: return this.slotAssemblyWorker;
+      case 5: return this.preprocessingWorker;
+      case 6: return this.validationWorker;
+      case 7: return this.elementCreationWorker;
+      case 8: return this.treeAssemblyWorker;
+      case 9: return this.postprocessingWorker;
       default: return undefined;
     }
   }
@@ -252,20 +258,22 @@ export class Supervisor {
   }
 
   /**
+  /**
    * Locks a specific pipeline phase ID from receiving new node emissions.
    *
-   * @param phaseId Phase ID (0-8) to lock.
+   * @param phaseId Phase ID (0-9) to lock.
    * @references `Supervisor.runPipeline()`
    */
   public static lockPhase(phaseId: number): void {
-    if (phaseId === 2) {
-      // Phase 2 locks when Phase 3 locks
+    if (phaseId === 2 || phaseId === 3) {
+      // Phase 2 (ComponentRouting) and Phase 3 (ComponentAssembly) lock only when Phase 4 (SlotAssembly) locks/completes
       return;
     }
     Supervisor.activeLockedPhases.add(phaseId);
-    if (phaseId === 3) {
-      // Phase 3 locking also locks Phase 2
+    if (phaseId === 4) {
+      // Phase 4 locking also locks Phase 2 and Phase 3 for backward chaining completion
       Supervisor.activeLockedPhases.add(2);
+      Supervisor.activeLockedPhases.add(3);
     }
   }
 
@@ -306,6 +314,19 @@ export class Supervisor {
     } else {
       Supervisor.pendingEmits.push({ caller, node, rollbackState, phaseId });
     }
+  }
+
+  /**
+   * Emits a Node instance to a target worker phase by canonical stage name.
+   *
+   * @param caller Originating method or object.
+   * @param node Target Virtual DOM Node.
+   * @param rollbackState State snapshot for rollback recovery.
+   * @param phaseName Destination worker canonical stage name (e.g. 'validation', 'componentRouting').
+   */
+  public static emitToPhaseName(caller: any, node: Node, rollbackState: any, phaseName: PipelineStage | string): void {
+    const phaseId = PhaseRegistry.getPhaseNumber(phaseName);
+    Supervisor.emitToPhase(caller, node, rollbackState, phaseId);
   }
 
   /**
@@ -628,8 +649,8 @@ export class Supervisor {
       let queueDrained = false;
       while (!queueDrained) {
         queueDrained = true;
-        // Process in order 0 to 7
-        for (let phaseId = 0; phaseId <= 8; phaseId++) {
+        // Process in order 0 to 9
+        for (let phaseId = 0; phaseId <= 9; phaseId++) {
           const worker = this.getWorkerForPhase(phaseId);
           if (worker && worker.hasEvents()) {
             const stageName = this.getStageNameForPhase(phaseId) as PipelineStage;
@@ -718,18 +739,7 @@ export class Supervisor {
   }
 
   private getStageNameForPhase(phaseId: number): string {
-    switch (phaseId) {
-      case 0: return 'instantiation';
-      case 1: return 'placement';
-      case 2: return 'componentAssembly';
-      case 3: return 'slotAssembly';
-      case 4: return 'preprocessing';
-      case 5: return 'validation';
-      case 6: return 'elementCreation';
-      case 7: return 'treeAssembly';
-      case 8: return 'postprocessing';
-      default: return 'unknown';
-    }
+    return PhaseRegistry.getPhaseName(phaseId);
   }
 
   private async instantiate(): Promise<void> {

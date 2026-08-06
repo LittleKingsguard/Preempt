@@ -48,7 +48,7 @@ export class Placement implements PlacementConfig {
    * @param phase Execution phase ID.
    * @returns Cloned Placement instance.
    */
-  public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Placement {
+  public clone(ignoreProps: string[] = [], newParent: Node, phase: number, actor: string = 'Placement'): Placement {
     const parentNode = newParent || this.parent;
     const targetPhase = phase;
     const clonedPlacement = new Placement({
@@ -58,7 +58,7 @@ export class Placement implements PlacementConfig {
 
     if (!ignoreProps.includes('_referencingNodes')) {
       for (const refNode of this._referencingNodes) {
-        clonedPlacement._referencingNodes.add(refNode.clone(ignoreProps, [], parentNode, targetPhase));
+        clonedPlacement._referencingNodes.add(refNode.clone(ignoreProps, [], parentNode, targetPhase, false, actor));
       }
     }
 
@@ -68,9 +68,22 @@ export class Placement implements PlacementConfig {
   /**
    * Places a target Node clone into this host placement container.
    *
-   * @param node Source Node instance to reparent.
+   * @param node Target Node instance to clone into container.
+   * @returns Cloned Node instance added to tree.
+   * @useCase Inserting content nodes into template drop-zones.
+   * @processFlow Phase 1 placement mapping.
    */
-  public placeInto(node: Node): void {
+  public placeInto(node: Node): Node {
+    if (this._referencingNodes) {
+      for (const ref of this._referencingNodes) {
+        if (ref.data === node.data) {
+          return ref;
+        }
+      }
+    }
+
+    const clonedNode = node.clone([], [], this.parent, 2, false, 'Placement.placeInto');
+
     if (this.parent === node) {
       throw new Error("Cannot place node into itself");
     }
@@ -96,13 +109,13 @@ export class Placement implements PlacementConfig {
       }
     }
 
-    const clonedNode = node.clone([], [], this.parent, 2);
     this._referencingNodes.add(clonedNode);
     const idx = this.parent.nativeChildren.indexOf(clonedNode);
     if (idx !== -1) {
       this.parent.nativeChildren.splice(idx, 1);
     }
     this.parent.invalidateChildrenCache();
+    return clonedNode;
   }
 
   /**
@@ -140,7 +153,7 @@ export class Placement implements PlacementConfig {
         }
       }
       if (phase === 0) {
-        Supervisor.emitToPhase(this, this.parent, {}, 1); // Emit to PlacementWorker (Phase 1)
+        Supervisor.emitToPhaseName(this, this.parent, {}, 'placement'); // Emit to PlacementWorker (Phase 1)
       }
     }
   }

@@ -5,29 +5,28 @@ import { Supervisor } from "../Supervisor.js";
 import type { RollbackState, HandlerDef } from "../../types/NodeSchema.js";
 import { CloneUtils } from "../utils/CloneUtils.js";
 import { Css } from "../Css.js";
-
-
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
+import { WorkerMessage } from "../WorkerMessage.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 3 (Slot Assembly) of the Supervisor pipeline.
+ * Worker handling Phase 4 (Slot Assembly) of the Supervisor pipeline.
  *
  * @useCase Applies non-type component bindings (targeting props, styles, handlers, or slot contents) into target nodes.
- * @processFlow Fourth worker stage executed after Phase 2 Component Assembly.
- * @queueEmissions Events are emitted to Phase 3 queue when a non-type `Component` binding (`target !== "type"`, e.g. props, css, handlers, content) is attached to an in-tree node, when non-type component references update, or when Phase 2 Component Assembly completes.
+ * @processFlow Fourth worker stage executed after Phase 3 Component Assembly.
  */
 export class SlotAssemblyWorker extends BaseWorker {
-  /** Phase 3 identifier. */
-  public readonly phase = 3;
+  /** Phase 4 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('slotAssembly');
 
   /**
-   * Emits eligible nodes with slot component bindings or assembly handlers to Phase 3 processing.
+   * Emits eligible nodes with slot component bindings or assembly handlers to Phase 2 (ComponentRoutingWorker) processing.
    *
    * @param node Target node or tree branch root.
    * @param rollbackState Optional rollback snapshot.
    * @param recursive If `true`, recursively checks child nodes.
    * @useCase Triggering slot assembly stage for specific nodes.
-   * @processFlow Phase 3 event emission helper.
+   * @processFlow Phase 4 event emission helper.
    */
   public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
     if (!Supervisor.instance || !Supervisor.instance.slotAssemblyWorker) return;
@@ -39,8 +38,17 @@ export class SlotAssemblyWorker extends BaseWorker {
     };
     const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
     for (const match of matchingNodes) {
-      if (match.isInTree && match.lastCompletedPhase !== 3) {
-        Supervisor.emitToPhase(this, match, rollbackState, 3);
+      if (match.isInTree && match.lastCompletedPhase !== 4) {
+        const slotRefs: string[] = [];
+        if (match.targetComponents) {
+          for (const [k, v] of match.targetComponents) {
+            if (v.target !== "type") slotRefs.push(k);
+          }
+        }
+        const msg = new WorkerMessage('SlotAssemblyWorker', 'ComponentRoutingWorker');
+        msg.addInstruction('createdNew', slotRefs.length > 0 ? slotRefs : ['slot']);
+        match.addMessage(msg);
+        Supervisor.emitToPhaseName(this, match, rollbackState, 'componentRouting');
       }
     }
   }
@@ -53,27 +61,51 @@ export class SlotAssemblyWorker extends BaseWorker {
    */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
-    // Phase 3: Slot Assembly
+
+    // Phase 4: Slot Assembly
+
+    const messages = node.getMessages('SlotAssemblyWorker', true);
+    const hasInstructions = messages && messages.length > 0;
+
+    let targetKeys: Set<string> | null = null;
+    let sourceReferences: Set<string> | null = null;
+    if (hasInstructions) {
+      targetKeys = new Set<string>();
+      sourceReferences = new Set<string>();
+      for (const msg of messages) {
+        const created = msg.instructions.get('createdNew');
+        if (created) created.forEach(t => targetKeys!.add(t));
+        const updated = msg.instructions.get('updatedSource');
+        if (updated) updated.forEach(r => sourceReferences!.add(r));
+      }
+    }
 
     if (node.targetComponents.size === 0) {
       node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
+      if (messages) messages.forEach(m => m.markComplete());
       return;
     }
 
     const sortedComponents: any[] = [];
     for (const c of node.targetComponents.values()) {
-      if (c.target !== "type") {
+      if (c.target === "type") continue;
+
+      const matchesTarget = targetKeys && c.target && targetKeys.has(c.target);
+      const matchesSource = sourceReferences && c.reference && sourceReferences.has(c.reference);
+
+      if (!hasInstructions || matchesTarget || matchesSource) {
         sortedComponents.push(c);
       }
     }
 
     if (sortedComponents.length === 0) {
       node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
+      if (messages) messages.forEach(m => m.markComplete());
       return;
     }
 
     // Base collections that might be modified
-    let newCss = node.css ? node.css.clone() : new Css();
+    let newCss = node.css ? node.css.clone([], node, 'SlotAssemblyWorker') : new Css({}, node);
     let newProps = node.props ? CloneUtils.deepClone(node.props) : {};
     let newHandlers: any = {};
 
@@ -81,7 +113,7 @@ export class SlotAssemblyWorker extends BaseWorker {
       binding.rollback = {
         content: node.content,
         props: CloneUtils.deepClone(node.props),
-        css: node.css ? node.css.clone() : undefined
+        css: node.css ? node.css.clone([], node, 'SlotAssemblyWorker') : undefined
       };
 
       let { resolvedValue, resolvedBinding } = binding.resolveBinding();
@@ -106,6 +138,12 @@ export class SlotAssemblyWorker extends BaseWorker {
         }
       } else {
         console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
+      }
+    }
+
+    if (messages) {
+      for (const msg of messages) {
+        msg.markComplete();
       }
     }
 
@@ -164,13 +202,12 @@ export class SlotAssemblyWorker extends BaseWorker {
   }
 
   /**
-   * Updates `node.lastCompletedPhase` to 3 upon success.
+   * Updates `node.lastCompletedPhase` to 4 upon success.
    *
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 3;
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('slotAssembly');
   }
 }
-

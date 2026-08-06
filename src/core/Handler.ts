@@ -1,19 +1,21 @@
 import type { HandlerDef } from "../types/NodeSchema.js";
 import type { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
+import { PhaseRegistry } from "./PhaseRegistry.js";
 
 const PHASE_NAME_MAP: Record<string, number> = {
-  beforeInstantiate: 0, afterInstantiate: 0,
-  beforePlacement: 1, afterPlacement: 1,
-  beforeComponentAssembly: 2, afterComponentAssembly: 2,
-  beforeSlotAssembly: 3, afterSlotAssembly: 3,
-  beforeAssembly: 2, afterAssembly: 3,
-  beforePreprocess: 4, afterPreprocess: 4,
-  beforeValidate: 5, afterValidate: 5,
-  beforeElementCreation: 6, afterElementCreation: 6,
-  beforeRender: 6, afterRender: 6,
-  beforeTreeAssembly: 7, afterTreeAssembly: 7,
-  beforePostprocess: 8, afterPostprocess: 8
+  beforeInstantiate: PhaseRegistry.getPhaseNumber('instantiation'), afterInstantiate: PhaseRegistry.getPhaseNumber('instantiation'),
+  beforePlacement: PhaseRegistry.getPhaseNumber('placement'), afterPlacement: PhaseRegistry.getPhaseNumber('placement'),
+  beforeComponentRouting: PhaseRegistry.getPhaseNumber('componentRouting'), afterComponentRouting: PhaseRegistry.getPhaseNumber('componentRouting'),
+  beforeComponentAssembly: PhaseRegistry.getPhaseNumber('componentAssembly'), afterComponentAssembly: PhaseRegistry.getPhaseNumber('componentAssembly'),
+  beforeSlotAssembly: PhaseRegistry.getPhaseNumber('slotAssembly'), afterSlotAssembly: PhaseRegistry.getPhaseNumber('slotAssembly'),
+  beforeAssembly: PhaseRegistry.getPhaseNumber('componentAssembly'), afterAssembly: PhaseRegistry.getPhaseNumber('slotAssembly'),
+  beforePreprocess: PhaseRegistry.getPhaseNumber('preprocessing'), afterPreprocess: PhaseRegistry.getPhaseNumber('preprocessing'),
+  beforeValidate: PhaseRegistry.getPhaseNumber('validation'), afterValidate: PhaseRegistry.getPhaseNumber('validation'),
+  beforeElementCreation: PhaseRegistry.getPhaseNumber('elementCreation'), afterElementCreation: PhaseRegistry.getPhaseNumber('elementCreation'),
+  beforeRender: PhaseRegistry.getPhaseNumber('elementCreation'), afterRender: PhaseRegistry.getPhaseNumber('elementCreation'),
+  beforeTreeAssembly: PhaseRegistry.getPhaseNumber('treeAssembly'), afterTreeAssembly: PhaseRegistry.getPhaseNumber('treeAssembly'),
+  beforePostprocess: PhaseRegistry.getPhaseNumber('postprocessing'), afterPostprocess: PhaseRegistry.getPhaseNumber('postprocessing')
 };
 
 /**
@@ -228,7 +230,7 @@ export class Handler implements HandlerDef {
    * @param phase Execution phase ID.
    * @returns Cloned Handler instance.
    */
-  public clone(newParent: Node, phase: number): Handler {
+  public clone(newParent: Node, phase: number, _actor: string = 'Handler'): Handler {
     const parentNode = newParent || this.parent;
     const targetPhase = phase;
     return new Handler({

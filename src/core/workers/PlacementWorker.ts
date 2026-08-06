@@ -2,6 +2,7 @@ import { Node } from "../Node.js";
 import { Placement } from "../Placement.js";
 import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
  * Worker handling Phase 1 (Placement) of the Supervisor pipeline.
@@ -12,7 +13,7 @@ import type { RollbackState } from "../../types/NodeSchema.js";
  */
 export class PlacementWorker extends BaseWorker {
   /** Phase 1 identifier. */
-  public readonly phase = 1;
+  public readonly phase = PhaseRegistry.getPhaseNumber('placement');
 
   /**
    * Processes a node during Phase 1 placement matching and reparenting.
@@ -58,7 +59,7 @@ export class PlacementWorker extends BaseWorker {
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 1;
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('placement');
   }
 
   /**

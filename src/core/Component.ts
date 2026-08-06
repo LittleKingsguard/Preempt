@@ -1,6 +1,8 @@
 import type { ComponentBinding, HandlerDef, NodeData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
+import { WorkerMessage } from "./WorkerMessage.js";
+import { PhaseRegistry } from "./PhaseRegistry.js";
 
 /**
  * OOP representation of a reusable Component Binding in Preempt.
@@ -19,6 +21,11 @@ export class Component implements ComponentBinding {
   public parent: Node;
 
   private _sourceComponent?: Component | undefined;
+
+  /** Primary instantiated Node definition if this component represents a structural component. */
+  public get instantiatedNode(): Node | undefined {
+    return this._instantiatedNodes && this._instantiatedNodes.length > 0 ? this._instantiatedNodes[0] : undefined;
+  }
 
   /** Source component provider found by searching up the virtual DOM tree. */
   public get sourceComponent(): Component | undefined {
@@ -69,11 +76,10 @@ export class Component implements ComponentBinding {
     }
 
     if (this.parent && this.parent.isInTree && this.target && phase !== 99) {
-      if (phase < 3 && this.target === "type") {
-        Supervisor.emitToPhase(this, this.parent, {}, 2); // Phase 2: ComponentAssemblyWorker
-      } else if (phase < 4 && this.target !== "type") {
-        Supervisor.emitToPhase(this, this.parent, {}, 3); // Phase 3: SlotAssemblyWorker
-      }
+      const msg = new WorkerMessage('Component', 'ComponentRoutingWorker');
+      msg.addInstruction('createdNew', [this.target || this.reference]);
+      this.parent.addMessage(msg);
+      Supervisor.emitToPhaseName(this, this.parent, {}, 'componentRouting'); // Phase 2: ComponentRoutingWorker
     }
   }
 
@@ -82,11 +88,11 @@ export class Component implements ComponentBinding {
    *
    * @param targetNode Target Node instance.
    * @param incomingComponents Array of component bindings or Component objects.
-   * @returns Next phase ID (2 for structural type components, 3 for slot components) or undefined on lock failure.
+   * @returns Next phase ID (2 for ComponentRoutingWorker) or undefined on lock failure.
    */
   public static mergeComponents(targetNode: Node, incomingComponents: ComponentBinding[] | Component[]): number | undefined {
-    if (Supervisor.isPhaseLocked(2) || Supervisor.isPropertyLocked('component')) {
-      console.error(`[Component] Lock violation: Phase 2 or property 'component' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
+    if (Supervisor.isPhaseLocked(3) || Supervisor.isPropertyLocked('component')) {
+      console.error(`[Component] Lock violation: Phase 3 or property 'component' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
       return undefined;
     }
 
@@ -117,8 +123,12 @@ export class Component implements ComponentBinding {
     const componentInstances = incomingComponents.map(c => c instanceof Component ? c : new Component(c, targetNode, 0));
     targetNode.setComponents(componentInstances, 0);
 
-    const hasTypeComp = componentInstances.some(c => c.target === "type");
-    return hasTypeComp ? 2 : 3;
+    const targetOrRefNames = componentInstances.map(c => c.target || c.reference).filter(Boolean);
+    const msg = new WorkerMessage('Component.mergeComponents', 'ComponentRoutingWorker');
+    msg.addInstruction('createdNew', targetOrRefNames);
+    targetNode.addMessage(msg);
+
+    return PhaseRegistry.getPhaseNumber('componentRouting');
   }
 
   /**
@@ -129,7 +139,7 @@ export class Component implements ComponentBinding {
    * @param phase Execution phase ID.
    * @returns Cloned Component instance.
    */
-  public clone(ignoreProps: string[] = [], newParent: Node, phase: number): Component {
+  public clone(ignoreProps: string[] = [], newParent: Node, phase: number, actor: string = 'Component'): Component {
     const targetPhase = phase;
     const cloned = new Component({
       reference: this.reference,
@@ -148,16 +158,16 @@ export class Component implements ComponentBinding {
     }
     if (!ignoreProps.includes('_instantiatedNodes') && this._instantiatedNodes) {
       cloned._instantiatedNodes = this._instantiatedNodes.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase)
+        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase, true, actor)
       );
     }
     if (!ignoreProps.includes('_clonedChildren') && this._clonedChildren) {
       cloned._clonedChildren = this._clonedChildren.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase)
+        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase, true, actor)
       );
     }
     if (!ignoreProps.includes('rollback') && this.rollback !== undefined) {
-      cloned.rollback = typeof this.rollback?.clone === 'function' ? this.rollback.clone() : this.rollback;
+      cloned.rollback = typeof this.rollback?.clone === 'function' ? this.rollback.clone(actor) : this.rollback;
     }
 
     return cloned;

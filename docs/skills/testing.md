@@ -112,3 +112,20 @@ For full pipeline integration tests, use the `Supervisor` to process the tree:
 ```typescript
 await Supervisor.instance.process(rootNode);
 ```
+
+## 6. Phase Verification & PhaseRegistry Testing Standards
+
+To prevent silent pipeline failures caused by hardcoded phase numbers (`0-9`), test files must adhere to the following standards:
+
+1. **No Hardcoded Phase Literals**: Never pass raw phase numbers in tests. Import `PhaseRegistry` and query phase numbers dynamically:
+   ```typescript
+   import { PhaseRegistry } from '../../../src/core/PhaseRegistry.js';
+
+   const valPhase = PhaseRegistry.getPhaseNumber('validation');
+   ```
+2. **Assert `node.lastCompletedPhase`**: After a worker finishes `worker.processQueue()`, explicitly assert that `node.lastCompletedPhase` matches the expected phase number to verify event emission accuracy:
+   ```typescript
+   await worker.processQueue();
+   expect(node.lastCompletedPhase).toBe(PhaseRegistry.getPhaseNumber('validation'));
+   ```
+3. **Verify Targeted Phase Emissions**: When asserting `Supervisor.emitToPhase` or `Supervisor.emitToPhaseName` calls, assert that the emission target matches `PhaseRegistry.getPhaseNumber(targetStage)` to catch phase mismatch bugs during development.

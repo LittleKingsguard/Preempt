@@ -91,9 +91,13 @@ app.use("/api", apiRoutes);
 app.use("/api/mcp", mcpRoutes);
 app.use("/", ssrRoutes);
 
+const staticDistDir = fs.existsSync(path.join(process.cwd(), "dist"))
+  ? path.join(process.cwd(), "dist")
+  : path.join(process.cwd(), "../dist");
+
 // Serve static assets from dist (dev‑only, no cache)
 app.use(
-  express.static(path.join(process.cwd(), "../dist"), {
+  express.static(staticDistDir, {
     index: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {

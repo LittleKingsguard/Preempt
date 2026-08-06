@@ -1,6 +1,7 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
  * Worker handling Phase 0 (Instantiation) of the Supervisor pipeline.
@@ -11,7 +12,7 @@ import type { RollbackState } from "../../types/NodeSchema.js";
  */
 export class InstantiationWorker extends BaseWorker {
   /** Phase 0 identifier. */
-  public readonly phase = 0;
+  public readonly phase = PhaseRegistry.getPhaseNumber('instantiation');
 
   /**
    * Regenerates an existing Node by exporting its JSON state and re-instantiating a fresh Node in place.
@@ -54,7 +55,7 @@ export class InstantiationWorker extends BaseWorker {
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 0;
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('instantiation');
   }
 }
 

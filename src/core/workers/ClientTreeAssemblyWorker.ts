@@ -1,17 +1,18 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 7 (Tree Assembly) for Client-Side DOM hierarchy construction.
+ * Worker handling Phase 8 (Tree Assembly) for Client-Side DOM hierarchy construction.
  *
  * @useCase Mounts created elements into their parent container DOM nodes, orders child elements correctly, and removes unmounted DOM nodes.
- * @processFlow Eighth worker stage executed after Phase 6 Client Element Creation on browser runtime environments.
- * @queueEmissions Events are emitted to Phase 7 queue automatically by `ClientElementCreationWorker.onProcessSuccess()` upon completion of Phase 6 Element Creation.
+ * @processFlow Eighth worker stage executed after Phase 7 Client Element Creation on browser runtime environments.
+ * @queueEmissions Events are emitted to Phase 8 queue automatically by `ClientElementCreationWorker.onProcessSuccess()` upon completion of Phase 7 Element Creation.
  */
 export class ClientTreeAssemblyWorker extends BaseWorker {
-  /** Phase 7 identifier. */
-  public readonly phase = 7;
+  /** Phase 8 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('treeAssembly');
 
   /**
    * Processes the tree assembly worker queue sequentially.
@@ -36,7 +37,7 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
     }
     console.log(`[ClientTreeAssemblyWorker] Assembling DOM tree for node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
 
-    // Phase 7: Tree Assembly
+    // Phase 8: Tree Assembly
     if (typeof window !== 'undefined' && this.supervisor.config?.runRendering !== false) {
       this.assembleTree(node);
     }
@@ -113,7 +114,7 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 7;
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('treeAssembly');
   }
 }
 

@@ -56,12 +56,12 @@ export class Payload implements ContentPayload {
    * @param ignoreProps Property keys to exclude.
    * @returns Cloned Payload instance.
    */
-  public clone(ignoreProps: string[] = []): Payload {
+  public clone(ignoreProps: string[] = [], actor: string = 'Payload'): Payload {
     return new Payload({
       metadata: ignoreProps.includes('metadata') ? undefined : this.metadata,
       userData: ignoreProps.includes('userData') ? undefined : this.userData,
       component: ignoreProps.includes('component') ? undefined : this.component?.map(c => ({ reference: c.reference, target: c.target, value: c.value })),
-      content: ignoreProps.includes('content') ? [] : this.content.map(n => n.clone(ignoreProps, [], null, 99))
+      content: ignoreProps.includes('content') ? [] : this.content.map(n => n.clone(ignoreProps, [], null, 99, false, actor))
     });
   }
 

@@ -1,21 +1,21 @@
 /**
  * Pipeline execution configuration flags passed to `Supervisor.process()`.
  *
- * @useCase Controls which phases of the 9-worker Supervisor pipeline are executed during a processing run.
+ * @useCase Controls which phases of the 10-worker Supervisor pipeline are executed during a processing run.
  * @processFlow Evaluated by `Supervisor` and workers to determine stage execution and security restrictions (e.g. `isValidationRun` during MCP dry-runs).
  */
 export interface PipelineConfig {
   /** Phase 0: Instantiates raw JSON into OOP Node instances. */
   runInstantiation: boolean;
-  /** Phases 1-3: Resolves placement drop-zones, component bindings, and slot assemblies. */
+  /** Phases 1-4: Resolves placement drop-zones, component routing, component assembly, and slot assemblies. */
   runAssembly: boolean;
-  /** Phase 4: Executes custom preprocessing logic algorithms. */
+  /** Phase 5: Executes custom preprocessing logic algorithms. */
   runPreprocessing: boolean;
-  /** Phase 5: Executes structural schema and required property validation checks. */
+  /** Phase 6: Executes structural schema and required property validation checks. */
   runValidation: boolean;
-  /** Phases 6-7: Generates HTML string (SSR) or constructs/patches browser DOM elements. */
+  /** Phases 7-8: Generates HTML string (SSR) or constructs/patches browser DOM elements. */
   runRendering: boolean;
-  /** Phase 8: Executes post-rendering application hooks and cleanup. */
+  /** Phase 9: Executes post-rendering application hooks and cleanup. */
   runPostprocessing: boolean;
   /** Client monitoring flag for interactive reactive loop. */
   runMonitoring: boolean;
@@ -26,6 +26,7 @@ export interface PipelineConfig {
 export type PipelineStage = 
   | 'instantiation' 
   | 'placement' 
+  | 'componentRouting'
   | 'componentAssembly' 
   | 'slotAssembly' 
   | 'preprocessing' 

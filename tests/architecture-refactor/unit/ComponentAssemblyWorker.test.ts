@@ -1,46 +1,50 @@
-// @ts-nocheck
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentAssemblyWorker } from '../../../src/core/workers/ComponentAssemblyWorker';
+import { Component } from '../../../src/core/Component';
 import { Node } from '../../../src/core/Node';
+import { WorkerMessage } from '../../../src/core/WorkerMessage';
+import { Supervisor } from '../../../src/core/Supervisor';
 
 describe('ComponentAssemblyWorker', () => {
-  let worker;
-  let nodeA;
-  let nodeB;
+  let worker: ComponentAssemblyWorker;
+  let nodeA: Node;
+  let nodeB: Node;
 
   beforeEach(() => {
-    worker = new ComponentAssemblyWorker();
-    nodeA = new Node({ type: 'div', props: { someProp: 'value' } }, null, 0);
-    nodeB = new Node({ type: 'span' }, null, 0);
+    worker = new ComponentAssemblyWorker(Supervisor.instance!);
+    nodeA = new Node({ type: 'div', props: { id: 'nodeA', someProp: 'value' } }, null, 0);
+    nodeB = new Node({ type: 'span', props: { id: 'nodeB' } }, null, 0);
   });
 
-  it('uses a Map for its queue and intercepts duplicates to preserve the original RollbackState', async () => {
+  it('uses a Map for its queue and preserves original RollbackState on duplicate pushes', async () => {
     const originalRollbackState = { props: { id: 'old' } };
     const newRollbackState = { props: { id: 'intermediate' } };
 
     // First push
-    worker.push(nodeA, originalRollbackState);
-    expect(worker.queue.size).toBe(1);
-    expect(worker.queue.get(nodeA)).toBe(originalRollbackState);
+    worker.push(nodeA, originalRollbackState as any);
+    expect((worker as any).queue.size).toBe(1);
+    expect((worker as any).queue.get(nodeA)).toBe(originalRollbackState);
 
     // Second push for the same node
-    worker.push(nodeA, newRollbackState);
-    expect(worker.queue.size).toBe(1);
+    worker.push(nodeA, newRollbackState as any);
+    expect((worker as any).queue.size).toBe(1);
     // Should preserve the first rollback state
-    expect(worker.queue.get(nodeA)).toBe(originalRollbackState);
+    expect((worker as any).queue.get(nodeA)).toBe(originalRollbackState);
   });
 
-  it('cascades updates by calculating NextState for referencing nodes and pushing them to its queue', async () => {
+  it('cascades updates by applying calculated NextState directly to referencing nodes and emitting to placement stage', async () => {
     // nodeB references nodeA (e.g. nodeA is a component that nodeB uses)
-    Node.typeComponentNodes = [nodeA, nodeB];
+    const comp = new Component({ reference: 'CustomComp', target: 'type' }, nodeA, 0);
+    comp._referencingNodes = new Set([nodeB]);
+    nodeA.sourceComponents.set('CustomComp', comp);
+
     nodeA.data.type = 'CustomComp';
     nodeA.data.props = { someProp: 'value' };
     nodeA.type = 'CustomComp';
     nodeB.data.type = 'CustomComp';
     nodeB.type = 'CustomComp';
 
-    // Create a mock for receiveNextState on nodeB
-    nodeB.receiveNextState = vi.fn();
+    const emitSpy = vi.spyOn(Supervisor, 'emitToPhaseName');
 
     // Push nodeA to queue
     worker.push(nodeA, { type: 'CustomComp' });
@@ -48,19 +52,41 @@ describe('ComponentAssemblyWorker', () => {
     // Process queue
     await worker.processQueue();
 
-    // Because nodeA changed, nodeB should receive a NextState update
-    // But in ComponentAssemblyWorker, Node.typeComponentNodes is an array of Nodes.
-    expect(nodeB.receiveNextState).toHaveBeenCalled();
+    // Because nodeA changed, nodeB should be emitted to placement phase
+    expect(emitSpy).toHaveBeenCalledWith(expect.any(ComponentAssemblyWorker), nodeB, expect.any(Object), 'placement');
+    emitSpy.mockRestore();
+  });
+
+  it('emits updatedSource instructions to ComponentRoutingWorker when new source components are added from structural root node', async () => {
+    const sourceComp = new Component({ reference: 'CustomComp', target: 'type', value: { type: 'header' } }, nodeA, 0);
+    nodeA.sourceComponents.set('CustomComp', sourceComp);
+
+    const typeComp = new Component({ reference: 'CustomComp', target: 'type' }, nodeA, 0);
+    nodeA.targetComponents.set('type', typeComp);
+
+    if (sourceComp._instantiatedNodes && sourceComp._instantiatedNodes[0]) {
+      const nestedSource = new Component({ reference: 'NestedComp', value: 'NestedVal' }, sourceComp._instantiatedNodes[0], 0);
+      sourceComp._instantiatedNodes[0].sourceComponents.set('NestedComp', nestedSource);
+    }
+
+    // Push nodeA to queue
+    worker.push(nodeA, {});
+    await worker.processQueue();
+
+    // nodeA should have a routing message logged for ComponentRoutingWorker
+    const routingMsgs = nodeA.getMessages('ComponentRoutingWorker');
+    expect(routingMsgs.length).toBeGreaterThan(0);
+    expect(routingMsgs[0]!.instructions.get('updatedSource')).toContain('NestedComp');
   });
 
   it('rolls back the Node if Component Assembly processing fails structurally', async () => {
     const originalRollbackState = { type: 'ValidType' };
-    nodeA.data.type = 'BrokenType'; // Optimistic bad update
+    (nodeA as any).data = { type: 'BrokenType' };
 
     worker.push(nodeA, originalRollbackState);
 
     // Force worker processing to throw an error for nodeA
-    vi.spyOn(worker, 'processNode').mockImplementation(() => {
+    vi.spyOn(worker as any, 'processNode').mockImplementation(() => {
       throw new Error("Structural Error");
     });
 
@@ -86,46 +112,34 @@ describe('ComponentAssemblyWorker', () => {
     nodeB.data.type = 'MasterComponent';
     nodeB.type = 'MasterComponent';
 
-    Node.typeComponentNodes = [nodeA, nodeB, nodeC];
-
-    nodeB.receiveNextState = vi.fn();
-    nodeC.receiveNextState = vi.fn();
+    const comp2 = new Component({ reference: 'MasterComponent', target: 'props' }, nodeA, 0);
+    comp2._referencingNodes = new Set([nodeB, nodeC]);
+    nodeA.sourceComponents.set('MasterComponent', comp2);
 
     // Master component receives an update to add a new class
     const nextState = { props: { class: 'base-class new-modifier' } };
     nodeA.data.props = nextState.props; // optimistic update applied by Node
 
-    worker.push(nodeA, { props: { class: 'base-class' } });
+    worker.push(nodeA, { props: { class: 'base-class' } } as any);
     await worker.processQueue();
 
     // Feedback confirmation: both instances should receive the calculated NextState containing the new modifier
-    expect(nodeB.receiveNextState).toHaveBeenCalledWith(
-      expect.objectContaining({ props: expect.objectContaining({ class: 'base-class new-modifier' }) })
-    );
-    expect(nodeC.receiveNextState).toHaveBeenCalledWith(
-      expect.objectContaining({ props: expect.objectContaining({ class: 'base-class new-modifier' }) })
-    );
+    expect(nodeB.props).toEqual(expect.objectContaining({ class: 'base-class new-modifier' }));
+    expect(nodeC.props).toEqual(expect.objectContaining({ class: 'base-class new-modifier' }));
   });
 
-  it('rolls back the Node if Component Assembly processing fails structurally', async () => {
-    const originalRollbackState = { type: 'ValidType' };
-    nodeA.data.type = 'BrokenType'; // Optimistic bad update
+  it('filters component resolution based on WorkerMessage instructions', async () => {
+    const typeComp = new Component({ reference: 'MasterComponent', target: 'type', value: { type: 'header' } }, nodeA, 0);
+    nodeA.targetComponents.set('type', typeComp);
 
-    worker.push(nodeA, originalRollbackState);
+    const msg = new WorkerMessage('TestActor', 'ComponentAssemblyWorker');
+    msg.addInstruction('createdNew', ['MasterComponent']);
+    nodeA.addMessage(msg);
 
-    // Force worker processing to throw an error for nodeA
-    vi.spyOn(worker, 'processNode').mockImplementation(() => {
-      throw new Error("Structural Error");
-    });
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+    worker.push(nodeA, {});
     await worker.processQueue();
 
-    // Should catch the error and revert nodeA to the rollback state
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Worker error on node'), expect.objectContaining({ message: expect.stringContaining('Structural Error') }));
-    expect(nodeA.data.type).toBe('ValidType');
-
-    consoleSpy.mockRestore();
+    expect(nodeA.type).toBe('header');
+    expect(msg.complete).toBe(true);
   });
-
 });

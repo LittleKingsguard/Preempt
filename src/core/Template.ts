@@ -61,10 +61,10 @@ export class Template {
    * @param ignoreProps Property exclusion list.
    * @returns Cloned Template instance.
    */
-  public clone(ignoreProps: string[] = []): Template {
-    const clonedRoot = this.root.clone(ignoreProps, [], null, 99);
-    const clonedChildren = this.children.map(c => c.clone(ignoreProps, [], null, 99));
-    const clonedComponents = this.component.map(c => typeof (c as any).clone === 'function' ? (c as any).clone(ignoreProps, clonedRoot, 99) : c);
+  public clone(ignoreProps: string[] = [], actor: string = 'Template'): Template {
+    const clonedRoot = this.root.clone(ignoreProps, [], null, 99, false, actor);
+    const clonedChildren = this.children.map(c => c.clone(ignoreProps, [], null, 99, false, actor));
+    const clonedComponents = this.component.map(c => typeof (c as any).clone === 'function' ? (c as any).clone(ignoreProps, clonedRoot, 99, actor) : c);
 
     const cloned = new Template({
       root: clonedRoot,

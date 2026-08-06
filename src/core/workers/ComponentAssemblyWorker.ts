@@ -3,19 +3,19 @@ import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Handler } from "../Handler.js";
 import { Placement } from "../Placement.js";
-
-import { SlotAssemblyWorker } from "./SlotAssemblyWorker.js";
+import { Supervisor } from "../Supervisor.js";
+import { WorkerMessage } from "../WorkerMessage.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 2 (Component Assembly) of the Supervisor pipeline.
+ * Worker handling Phase 3 (Component Assembly) of the Supervisor pipeline.
  *
  * @useCase Resolves structural component bindings targeting `"type"`, deep-merging sub-tree layouts into target hosting nodes.
- * @processFlow Third worker stage executed after Phase 1 Placement. Triggers `beforeAssembly` and `afterAssembly` lifecycle handlers.
- * @queueEmissions Events are emitted to Phase 2 queue when a `Component` binding with `target === "type"` is attached to an in-tree node during construction, when structural component references update via `Component.mergeComponents()`, or upon completion of Phase 1 Placement.
+ * @processFlow Third worker stage executed after Phase 2 Component Routing. Triggers `beforeAssembly` and `afterAssembly` lifecycle handlers.
  */
 export class ComponentAssemblyWorker extends BaseWorker {
-  /** Phase 2 identifier. */
-  public readonly phase = 2;
+  /** Phase 3 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('componentAssembly');
 
   /**
    * Processes structural component resolution and deep-merging into the target node.
@@ -25,14 +25,38 @@ export class ComponentAssemblyWorker extends BaseWorker {
    */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
+
+    const messages = node.getMessages('ComponentAssemblyWorker', true);
+    const hasInstructions = messages && messages.length > 0;
+
+    let targetKeys: Set<string> | null = null;
+    let sourceReferences: Set<string> | null = null;
+    if (hasInstructions) {
+      targetKeys = new Set<string>();
+      sourceReferences = new Set<string>();
+      for (const msg of messages) {
+        const created = msg.instructions.get('createdNew');
+        if (created) created.forEach(t => targetKeys!.add(t));
+        const updated = msg.instructions.get('updatedSource');
+        if (updated) updated.forEach(r => sourceReferences!.add(r));
+      }
+    }
+
     node.executeHandlers("beforeAssembly", { supervisor: this.supervisor }, false);
 
-    // Phase 2: Component Assembly
+    // Phase 3: Component Assembly
     // This phase applies the 'type' component specifically.
 
     const typeComponent = node.targetComponents.get("type");
-    if (typeComponent) {
-      typeComponent.rollback = node.clone(['parent', 'children', '_childrenCache', 'element'], [], null, 99);
+    const matchesTarget = targetKeys && (
+      targetKeys.has("type") ||
+      (Boolean(typeComponent?.target) && targetKeys.has(typeComponent!.target!)) ||
+      (Boolean(typeComponent?.reference) && targetKeys.has(typeComponent!.reference!))
+    );
+    const matchesSource = sourceReferences && Boolean(typeComponent?.reference) && sourceReferences.has(typeComponent!.reference!);
+
+    if (typeComponent && (!hasInstructions || matchesTarget || matchesSource)) {
+      typeComponent.rollback = node.clone(['parent', 'children', '_childrenCache', 'element'], [], null, 99, false, 'ComponentAssemblyWorkerRollback');
       let newHandlers: Record<string, Handler> = {};
       if (node.handlers) {
         for (const [k, v] of Object.entries(node.handlers)) {
@@ -67,7 +91,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
             // Clone children explicitly from componentRootNode.nativeChildren
             if (componentRootNode.nativeChildren && componentRootNode.nativeChildren.length > 0) {
               for (const child of componentRootNode.nativeChildren) {
-                child.clone([], [], node, this.phase);
+                child.clone([], [], node, this.phase, false, 'ComponentAssemblyWorker');
               }
             }
 
@@ -76,11 +100,11 @@ export class ComponentAssemblyWorker extends BaseWorker {
             }
 
             if (componentRootNode.css) {
-              node.css = componentRootNode.css.clone([], node);
+              node.css = componentRootNode.css.clone([], node, 'ComponentAssemblyWorker');
             }
 
             if (componentRootNode.props) {
-              node.props = componentRootNode.props.clone([], node);
+              node.props = componentRootNode.props.clone([], node, 'ComponentAssemblyWorker');
             }
 
             if (componentRootNode.handlers && Array.isArray(componentRootNode.handlers)) {
@@ -91,28 +115,42 @@ export class ComponentAssemblyWorker extends BaseWorker {
             }
 
             if (componentRootNode.placement && Array.isArray(componentRootNode.placement)) {
-              const clonedPlacements = componentRootNode.placement.map((p: Placement) => p.clone([], node, this.phase));
+              const clonedPlacements = componentRootNode.placement.map((p: Placement) => p.clone([], node, this.phase, 'ComponentAssemblyWorker'));
               node.placement = clonedPlacements;
             }
 
-            const initialComponentCount = (node.component ? node.component.length : 0);
-
             if (componentRootNode.sourceComponents.size > 0 || componentRootNode.targetComponents.size > 0) {
-              for (const [k, v] of componentRootNode.sourceComponents) newSourceComponents.set(k, v);
+              const addedSourceNames: string[] = [];
+              const addedTargetNames: string[] = [];
+
+              for (const [k, v] of componentRootNode.sourceComponents) {
+                if (!newSourceComponents.has(k)) {
+                  addedSourceNames.push(k);
+                }
+                newSourceComponents.set(k, v);
+              }
               for (const [k, v] of componentRootNode.targetComponents) {
                 if (!newTargetComponents.has(k) || newTargetComponents.get(k) !== v) {
+                  addedTargetNames.push(k);
                   newTargetComponents.set(k, v);
                 }
               }
               node.setComponents([
                 ...Array.from(newSourceComponents.values()),
                 ...Array.from(newTargetComponents.values())
-              ], 2);
-            }
+              ], 3);
 
-            const finalComponentCount = (node.component ? node.component.length : 0);
-            if (finalComponentCount > initialComponentCount || (componentRootNode.targetComponents && componentRootNode.targetComponents.size > 0)) {
-              SlotAssemblyWorker.emitTo(node, _rollbackState || {}, false);
+              if (addedSourceNames.length > 0 || addedTargetNames.length > 0) {
+                const routingMsg = new WorkerMessage('ComponentAssemblyWorker', 'ComponentRoutingWorker');
+                if (addedTargetNames.length > 0) {
+                  routingMsg.addInstruction('createdNew', addedTargetNames);
+                }
+                if (addedSourceNames.length > 0) {
+                  routingMsg.addInstruction('updatedSource', addedSourceNames);
+                }
+                node.addMessage(routingMsg);
+                Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'componentRouting');
+              }
             }
           }
         }
@@ -122,40 +160,37 @@ export class ComponentAssemblyWorker extends BaseWorker {
         node.content = newContent;
       }
     }
+
+    if (messages) {
+      for (const msg of messages) {
+        msg.markComplete();
+      }
+    }
+
+    // Cascade updates to referencing nodes for any source components on node
+    for (const sourceComp of node.sourceComponents.values()) {
+      if (sourceComp._referencingNodes && sourceComp._referencingNodes.size > 0) {
+        const { resolvedValue } = sourceComp.resolveBinding();
+        const nextStatePayload = (typeof resolvedValue === 'object' && resolvedValue !== null)
+          ? resolvedValue
+          : { [sourceComp.target || 'content']: resolvedValue };
+        for (const refNode of sourceComp._referencingNodes) {
+          Object.assign(refNode, nextStatePayload);
+          Supervisor.emitToPhaseName(this, refNode, _rollbackState || {}, 'placement');
+        }
+      }
+    }
+
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
   /**
-   * Updates `node.lastCompletedPhase` to 2 upon success and cascades state updates to referencing nodes.
+   * Updates `node.lastCompletedPhase` to 3 upon success.
    *
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 2;
-
-    // Cascade updates to referencing nodes
-    if (_rollbackState) {
-      for (const comp of node.sourceComponents.values()) {
-        if (comp._referencingNodes && comp._referencingNodes.size > 0) {
-          const nextState: any = {};
-          if (node.data.props && _rollbackState.props !== node.data.props) {
-            nextState.props = node.data.props;
-          }
-          if (node.data.css && _rollbackState.css !== node.data.css) {
-            nextState.css = node.data.css;
-          }
-          if (node.content !== undefined && _rollbackState.content !== node.content) {
-            nextState.content = node.content;
-          }
-          if (Object.keys(nextState).length > 0) {
-            for (const refNode of comp._referencingNodes) {
-              refNode.receiveNextState(nextState, 1);
-            }
-          }
-        }
-      }
-    }
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('componentAssembly');
   }
 }
-

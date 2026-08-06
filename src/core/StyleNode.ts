@@ -5,7 +5,7 @@ import { Node } from "./Node.js";
  * Represents a CSS rule selector and declaration block (`CssDef`) dynamically inserted into browser CSSStyleSheets.
  *
  * @useCase Dynamic theme rule creation, scoped class styling, and runtime CSS modification without re-rendering HTML elements.
- * @processFlow Instantiated in Phase 6 (`ClientElementCreationWorker`), inserting rules into browser dynamic stylesheet objects.
+ * @processFlow Instantiated in Phase 7 (`ClientElementCreationWorker`), inserting rules into browser dynamic stylesheet objects.
  */
 export class StyleNode {
   /** Global map of active selector string keys to StyleNode instances. */

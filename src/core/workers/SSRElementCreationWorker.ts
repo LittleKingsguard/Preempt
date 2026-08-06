@@ -2,17 +2,18 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
+import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
- * Worker handling Phase 6 (Element Creation) for Server-Side Rendering (SSR).
+ * Worker handling Phase 7 (Element Creation) for Server-Side Rendering (SSR).
  *
  * @useCase Generates HTML opening/closing tag string representations, escapes text content, and prepares attribute strings for SSR.
- * @processFlow Seventh worker stage executed after Phase 5 Validation in SSR Node.js server environments.
- * @queueEmissions Events are emitted to Phase 6 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 5 Validation for an in-tree node. Direct pushes to Phase 6 are prohibited.
+ * @processFlow Seventh worker stage executed after Phase 6 Validation in SSR Node.js server environments.
+ * @queueEmissions Events are emitted to Phase 7 queue automatically by `ValidationWorker.onProcessSuccess()` upon successful completion of Phase 6 Validation for an in-tree node. Direct pushes to Phase 7 are prohibited.
  */
 export class SSRElementCreationWorker extends BaseWorker {
-  /** Phase 6 identifier. */
-  public readonly phase = 6;
+  /** Phase 7 identifier. */
+  public readonly phase = PhaseRegistry.getPhaseNumber('elementCreation');
 
   /**
    * Processes SSR element creation for a single Node instance.
@@ -27,7 +28,7 @@ export class SSRElementCreationWorker extends BaseWorker {
     }
     console.log(`[SSRElementCreationWorker] Processing node element: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
 
-    // Phase 6: SSR Element Creation
+    // Phase 7: SSR Element Creation
     node.executeHandlers("beforeRender", { supervisor: this.supervisor }, false);
     
     // Create element fragment representation for single node
@@ -35,14 +36,14 @@ export class SSRElementCreationWorker extends BaseWorker {
   }
 
   /**
-   * Updates `node.lastCompletedPhase` to 6 and emits node to Phase 7 (Tree Assembly).
+   * Updates `node.lastCompletedPhase` to 7 and emits node to Phase 8 (Tree Assembly).
    *
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
   protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
-    node.lastCompletedPhase = 6;
-    Supervisor.emitToPhase(this, node, _rollbackState || {}, 7);
+    node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('elementCreation');
+    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'treeAssembly');
   }
 
   /**

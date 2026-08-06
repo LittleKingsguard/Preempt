@@ -42,7 +42,7 @@ describe('Template Class & Supervisor Integration', () => {
       ]
     };
 
-    const template = new Template(nodeData);
+    const template = new Template(nodeData as any);
 
     expect(template.root.type).toBe('section');
     expect(template.root.isInTree).toBe(true);
@@ -62,7 +62,7 @@ describe('Template Class & Supervisor Integration', () => {
       ]
     };
 
-    await Supervisor.process({ runInstantiation: true, runMonitoring: true }, rawTemplateData);
+    await Supervisor.process({ runInstantiation: true, runMonitoring: true } as any, rawTemplateData as any);
 
     expect(Supervisor.instance).not.toBeNull();
     expect(Supervisor.instance!.templateData).toBeInstanceOf(Template);
