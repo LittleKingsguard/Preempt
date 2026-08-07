@@ -167,7 +167,13 @@ export class Component implements ComponentBinding {
       );
     }
     if (!ignoreProps.includes('rollback') && this.rollback !== undefined) {
-      cloned.rollback = typeof this.rollback?.clone === 'function' ? this.rollback.clone(actor) : this.rollback;
+      if (this.rollback && typeof this.rollback.clone === 'function') {
+        cloned.rollback = this.rollback.clone.length <= 1
+          ? this.rollback.clone(actor)
+          : this.rollback.clone([], [], null, targetPhase, false, actor);
+      } else {
+        cloned.rollback = this.rollback;
+      }
     }
 
     return cloned;
