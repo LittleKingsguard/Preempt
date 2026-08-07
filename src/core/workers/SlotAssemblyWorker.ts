@@ -1,10 +1,8 @@
+import { Component } from "../Component.js";
 import { Node } from "../Node.js";
-import { Handler } from "../Handler.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
-import type { RollbackState, HandlerDef } from "../../types/NodeSchema.js";
-import { CloneUtils } from "../utils/CloneUtils.js";
-import { Css } from "../Css.js";
+import type { RollbackState } from "../../types/NodeSchema.js";
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
 import { WorkerMessage } from "../WorkerMessage.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -104,44 +102,25 @@ export class SlotAssemblyWorker extends BaseWorker {
       return;
     }
 
-    // Base collections that might be modified
-    let newCss = node.css ? node.css.clone([], node, 'SlotAssemblyWorker') : new Css({}, node);
-    let newProps = node.props ? CloneUtils.deepClone(node.props) : {};
-    let newHandlers: any = {};
-
     for (const binding of sortedComponents) {
-      binding.rollback = {
-        content: node.content,
-        props: CloneUtils.deepClone(node.props),
-        css: node.css ? node.css.clone([], node, 'SlotAssemblyWorker') : undefined
-      };
+      const sourceName = `component:${binding.target || binding.reference}`;
+      node.removeLayersForSource(sourceName);
 
-      let { resolvedValue, resolvedBinding } = binding.resolveBinding();
-
-      if (resolvedValue === null) {
-        console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
-        if (hasInstructions) {
-          this.resetPropertyToOriginal(binding.target, node, newProps, newCss);
-        }
+      if (binding.target === 'children' && Component.isAppliedInAncestors(node, binding)) {
+        console.error(`[SlotAssemblyWorker] Loop safeguard: Component '${binding.reference}' targeting '${binding.target}' has already been applied by an ancestor node of '${node.css?.id || node.type}'. Terminating slot assembly for this component.`);
         continue;
       }
 
-      if (typeof resolvedValue === "string") {
-        this.applyProperty(binding.target, resolvedValue, node, newProps, newHandlers, newCss);
-      } else if (typeof resolvedValue === "object" && resolvedValue !== null && binding.target.startsWith("handlers.")) {
-        this.applyProperty(binding.target, resolvedValue as unknown as string | HandlerDef, node, newProps, newHandlers, newCss);
-      } else if (binding.target === "content") {
-        if (Array.isArray(resolvedValue) || (typeof resolvedValue === "object" && resolvedValue !== null)) {
-          node.content = undefined;
-          const clonedChildren = resolvedBinding ? resolvedBinding.cloneNode(node, 2) : [];
-          void clonedChildren;
-        } else {
-          node.content = String(resolvedValue);
-          node.children = [];
-        }
-      } else {
-        console.warn(`Target ${binding.target} expected string value but received object for reference ${binding.reference}`);
+      const { resolvedValue, resolvedBinding } = binding.resolveBinding();
+
+      if (resolvedValue === null) {
+        console.error(`Component binding failed: Could not resolve value for reference '${binding.reference}' targeting '${binding.target}'`);
+        continue;
       }
+
+      const activeComp = resolvedBinding || binding;
+      activeComp.buildLayerMap(this.phase);
+      node.addLayer(activeComp.layerMap);
     }
 
     if (messages) {
@@ -153,94 +132,7 @@ export class SlotAssemblyWorker extends BaseWorker {
     node.executeHandlers("afterAssembly", { supervisor: this.supervisor }, false);
   }
 
-  /**
-   * Helper method applying a resolved property value to a specific path target (`props.*`, `css.style.*`, `handlers.*`, `content`).
-   *
-   * @param path Target schema path string.
-   * @param value Resolved value string or handler definition.
-   * @param node Host Node instance.
-   * @param newProps Mutable props object copy.
-   * @param _newHandlers Mutable handlers dictionary.
-   * @param newCss Mutable CSS object copy.
-   */
-  private applyProperty(
-    path: string,
-    value: string | HandlerDef,
-    node: Node,
-    newProps: any,
-    _newHandlers: any,
-    newCss: any
-  ): void {
-    if (path === "content") {
-      node.content = value as string;
-    } else if (path.startsWith("props.")) {
-      const propName = path.substring(6);
-      if (node.props?.[propName] !== (value as string)) {
-        newProps[propName] = value as string;
-        node.props = newProps;
-      }
-    } else if (path.startsWith("handlers.")) {
-      if (!node.handlers) node.handlers = [];
-      node.handlers.push(Handler.fromDef(value as any, node, node.lastCompletedPhase || 0, path));
-    } else if (path.startsWith("css.style.")) {
-      const styleName = path.substring(10);
-      if (!newCss.style) newCss.style = {};
-      if (node.css?.style?.[styleName] !== (value as string)) {
-        newCss.style[styleName] = value as string;
-        node.css = newCss;
-      }
-    } else if (path.startsWith("css.classes.")) {
-      const className = path.substring(12);
-      if (!newCss.classes) newCss.classes = node.css?.classes ? [...node.css.classes] : [];
-      const hasClass = newCss.classes.includes(className);
 
-      if (value === "true" && !hasClass) {
-        newCss.classes.push(className);
-        node.css = newCss;
-      } else if (value === "false" && hasClass) {
-        newCss.classes = newCss.classes.filter((c: string) => c !== className);
-        node.css = newCss;
-      }
-    }
-  }
-
-  /**
-   * Resets a target property path to its original node.data initial value.
-   *
-   * @param path Target schema path string.
-   * @param node Host Node instance.
-   * @param newProps Mutable props object copy.
-   * @param newCss Mutable CSS object copy.
-   */
-  private resetPropertyToOriginal(path: string, node: Node, newProps: any, newCss: any): void {
-    if (path === "content") {
-      node.content = node.data.content;
-    } else if (path.startsWith("props.")) {
-      const propName = path.substring(6);
-      const originalValue = node.data.props?.[propName];
-      if (originalValue !== undefined) {
-        newProps[propName] = originalValue;
-      } else {
-        delete newProps[propName];
-      }
-      node.props = newProps;
-    } else if (path.startsWith("css.style.")) {
-      const styleName = path.substring(10);
-      const originalStyle = node.data.css?.style?.[styleName];
-      if (newCss.style) {
-        if (originalStyle !== undefined) {
-          newCss.style[styleName] = originalStyle;
-        } else {
-          delete newCss.style[styleName];
-        }
-        node.css = newCss;
-      }
-    } else if (path.startsWith("handlers.")) {
-      if (node.handlers) {
-        node.handlers = node.handlers.filter(h => h.phase !== path);
-      }
-    }
-  }
 
   /**
    * Updates `node.lastCompletedPhase` to 4 upon success.

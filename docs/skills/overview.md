@@ -19,25 +19,27 @@ This architecture enables:
 ## The Supervisor Pipeline & PhaseRegistry
 At the core of Preempt is the **Supervisor**, which orchestrates a 10-stage worker pipeline (Phases 0 through 9) using a suite of decoupled `Worker` classes:
 
-0. **InstantiationWorker** (`'instantiation'`): Converts raw JSON `NodeData` into OOP `Node` instances in memory. Eagerly parses structural component bindings into `_instantiatedNodes`.
-1. **PlacementWorker** (`'placement'`): Matches content nodes requesting target drop-zones (`targetPlacement`) to template placement wrappers.
-2. **ComponentRoutingWorker** (`'componentRouting'`): Evaluates target and source component bindings, routing structural updates to Phase 3 or Phase 4 and cascading source component updates down children.
-3. **ComponentAssemblyWorker** (`'componentAssembly'`): Deep-merges structural components targeting `"type"` into target hosting nodes.
-4. **SlotAssemblyWorker** (`'slotAssembly'`): Applies non-type component bindings (props, styles, handlers, slot contents) into target nodes.
-5. **PreprocessingWorker** (`'preprocessing'`): Executes custom preprocessing algorithms and `beforePreprocess`/`afterPreprocess` handlers.
-6. **ValidationWorker** (`'validation'`): Executes structural integrity and required property validation checks (`img.src`, `a.href`, style schemas) before rendering.
-7. **SSRElementCreationWorker / ClientElementCreationWorker** (`'elementCreation'`):
+0. **InstantiationWorker** (`'instantiation'`): Converts raw JSON `NodeData` into OOP `Node` instances in memory.
+1. **TargetPlacementResolverWorker** (`'targetPlacementResolution'`): Matches nodes with `targetPlacement` requests against available `placementName` drop-zones and assigns `activePlacement`.
+2. **PlacementAssemblyWorker** (`'placementAssembly'`): Assembles nodes into `placementName` drop-zones designating that slot as their `activePlacement`.
+3. **ComponentRoutingWorker** (`'componentRouting'`): Evaluates target and source component bindings, routing structural updates to Component Assembly or Slot Assembly.
+4. **ComponentAssemblyWorker** (`'componentAssembly'`): Applies structural component `layerMap` definitions targeting `"type"` into target hosting nodes.
+5. **SlotAssemblyWorker** (`'slotAssembly'`): Applies non-type component `layerMap` definitions (props, styles, handlers, slot contents) into target nodes.
+6. **PreprocessingWorker** (`'preprocessing'`): Executes custom preprocessing algorithms and `beforePreprocess`/`afterPreprocess` handlers.
+7. **ValidationWorker** (`'validation'`): Automatically triggers lazy `node.compile()` on node state and validates structural integrity before rendering.
+8. **SSRElementCreationWorker / ClientElementCreationWorker** (`'elementCreation'`):
    - *Server-Side (`SSRElementCreationWorker`)*: Generates raw HTML opening/closing tag string representations.
    - *Client-Side (`ClientElementCreationWorker`)*: Instantiates native browser `HTMLElement` objects and binds event listeners.
-8. **SSRTreeAssemblyWorker / ClientTreeAssemblyWorker** (`'treeAssembly'`):
+9. **SSRTreeAssemblyWorker / ClientTreeAssemblyWorker** (`'treeAssembly'`):
    - *Server-Side (`SSRTreeAssemblyWorker`)*: Compiles the full virtual DOM tree into a final SSR HTML payload prefixed with dynamic styles.
    - *Client-Side (`ClientTreeAssemblyWorker`)*: Mounts DOM elements into parent containers and applies tree patches.
-9. **PostprocessingWorker** (`'postprocessing'`): Executes post-rendering application hooks (`beforePostprocess`, `afterPostprocess`) and cleanup.
+10. **PostprocessingWorker** (`'postprocessing'`): Executes post-rendering application hooks (`beforePostprocess`, `afterPostprocess`) and cleanup.
 
 ### Dynamic Phase Resolution & Worker Emission Rules
-- **Dynamic Phase Resolution**: Phase numbers (0-9) are dynamically resolved via `PhaseRegistry.getPhaseNumber(stageName)`. Emitting events to phases is executed via `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals (`0-9`) is prohibited.
-- **Worker Emissions vs `receiveNextState`**: `node.receiveNextState()` is strictly intended for post-processing execution contexts (user event handlers, WebSocket reactivity, and `ClientAPI.modifyNode()`). Workers must **never** call `receiveNextState()`. When `receiveNextState()` runs, it automatically checks for **all** registered phase handlers on the node (`h.phase`), maps them to canonical stage names via `Handler.getStageName(h.phase)`, emits the node to all matching stage names via `Supervisor.emitToPhaseName()`, and **always emits to `ValidationWorker` (Phase 6 `'validation'`)** to guarantee nodes flow into Element Creation and Tree Assembly.
-- **Anti-Pattern: Direct Worker Class Emission**: Calling static `.emitTo()` helper methods directly on `Worker` classes (e.g. `PreprocessingWorker.emitTo()`, `PostprocessingWorker.emitTo()`) outside of `Supervisor` is an **unsupported Anti-Pattern**. Only `Supervisor` is permitted to manage worker queues and orchestrate node emissions. All pipeline node emissions must strictly be dispatched through `Supervisor.emitToPhase()` or `Supervisor.emitToPhaseName()`.
+- **Dynamic Phase Resolution**: Phase numbers are dynamically resolved via `PhaseRegistry.getPhaseNumber(stageName)`. Emitting events to phases is executed via `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals is prohibited. Use `PhaseRegistry.EMIT_NONE` (`9999`) constant to bypass emissions.
+- **Worker Emissions vs `receiveNextState`**: `node.receiveNextState()` is strictly intended for post-processing execution contexts (user event handlers, WebSocket reactivity, and `ClientAPI.modifyNode()`). Workers must **never** call `receiveNextState()`. When `receiveNextState()` runs, it automatically validates against existing assembly worker layers, creates `receiveNextState` layers, and emits to `ValidationWorker`.
+- **Anti-Pattern: Direct Node Property Mutation**: Mutating node properties directly (`node.type = ...`, `node.props = ...`) without exposing and using `node.addLayer()` is an unsupported anti-pattern. Node properties are lazy compiled getters.
+- **Anti-Pattern: Direct Worker Class Emission**: Calling static `.emitTo()` helper methods directly on `Worker` classes outside of `Supervisor` is an **unsupported Anti-Pattern**. Only `Supervisor` is permitted to manage worker queues and orchestrate node emissions. All pipeline node emissions must strictly be dispatched through `Supervisor.emitToPhase()` or `Supervisor.emitToPhaseName()`.
 - **Anti-Pattern Documentation Rule**: Whenever an anti-pattern or unsupported pattern is identified, mentioned, or discussed during development, agents must check `docs/skills/` to verify if it is documented and document it immediately if missing.
 
 ### Adding New Workers Without Breaking Changes

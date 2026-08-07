@@ -7,30 +7,36 @@ import type { PipelineStage } from "../types/Pipeline.js";
  * @processFlow Workers register their phase number on startup or instantiation. Systems query `PhaseRegistry.getPhaseNumber(stageName)`.
  */
 export class PhaseRegistry {
+  /** Named constant for bypassing auto-emissions without using magic numbers. */
+  public static readonly EMIT_NONE = 9999;
+
   private static nameToPhaseMap: Map<string, number> = new Map<string, number>([
     ['instantiation', 0],
-    ['placement', 1],
-    ['componentRouting', 2],
-    ['componentAssembly', 3],
-    ['slotAssembly', 4],
-    ['preprocessing', 5],
-    ['validation', 6],
-    ['elementCreation', 7],
-    ['treeAssembly', 8],
-    ['postprocessing', 9]
+    ['targetPlacementResolution', 1],
+    ['placementAssembly', 2],
+    ['placement', 1], // Legacy alias for targetPlacementResolution
+    ['componentRouting', 3],
+    ['componentAssembly', 4],
+    ['slotAssembly', 5],
+    ['preprocessing', 6],
+    ['validation', 7],
+    ['elementCreation', 8],
+    ['treeAssembly', 9],
+    ['postprocessing', 10]
   ]);
 
   private static phaseToNameMap: Map<number, string> = new Map<number, string>([
     [0, 'instantiation'],
-    [1, 'placement'],
-    [2, 'componentRouting'],
-    [3, 'componentAssembly'],
-    [4, 'slotAssembly'],
-    [5, 'preprocessing'],
-    [6, 'validation'],
-    [7, 'elementCreation'],
-    [8, 'treeAssembly'],
-    [9, 'postprocessing']
+    [1, 'targetPlacementResolution'],
+    [2, 'placementAssembly'],
+    [3, 'componentRouting'],
+    [4, 'componentAssembly'],
+    [5, 'slotAssembly'],
+    [6, 'preprocessing'],
+    [7, 'validation'],
+    [8, 'elementCreation'],
+    [9, 'treeAssembly'],
+    [10, 'postprocessing']
   ]);
 
   /**

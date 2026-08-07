@@ -45,3 +45,6 @@ For a real-world example of complex placement assembly, refer to the Editor syst
 - **Unsupported Anti-Patterns**:
   1. **Component Nodes Requesting `targetPlacement`**: A component payload should never define `targetPlacement` to place itself *out* of its component hierarchy into an external drop-zone.
   2. **Host Nodes Invoking `type` Components With Placement Children**: A hosting node invoking a `type` component must NOT have children that define placements of either type (`placementName` or `targetPlacement`). Re-assembling or restoring the hosting node to its `node.data` originals replaces the host node's child sub-tree, breaking any placement linkages defined on those host children.
+  3. **Ancestor Drop-Zone Duplication Loop**: Defining a `placementName` drop-zone that matches an existing `placementName` in an ancestor node's parent tree is prohibited. `Placement.constructor()` checks the ancestor chain, logs a loop safeguard error, and sets `placementName = undefined`.
+  4. **Filtering Placement Targets by `isInTree`**: Using `node.isInTree` to suppress target placement emissions is an anti-pattern because it improperly excludes floating `ContentNode` instances. Use phase parameter passing (`phase = PhaseRegistry.EMIT_NONE`) for component prototype nodes instead.
+

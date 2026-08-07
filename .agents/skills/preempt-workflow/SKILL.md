@@ -30,18 +30,19 @@ Handlers are JavaScript functions executed in the browser. To modify a node's st
   - **Temporary modifications (`persistentFlag=false`)**: Applies directly to the runtime Node and immediately re-renders (useful for UI state). Defaults to temporary if Supervisor is actively running.
   - **Persistent modifications (`persistentFlag=true`)**: Deep-merges into the underlying `node.data` JSON and completely reruns the pipeline (`Supervisor.rerun()`).
 
-## The 10-Stage Supervisor Pipeline & PhaseRegistry Rules
-The Supervisor orchestrates a 10-stage worker pipeline (Phases 0 through 9):
+## The Supervisor Pipeline & PhaseRegistry Rules
+The Supervisor orchestrates a worker pipeline:
 0. **InstantiationWorker** (`'instantiation'`): Converts raw JSON to OOP Nodes.
-1. **PlacementWorker** (`'placement'`): Maps content nodes to template drop-zones.
-2. **ComponentRoutingWorker** (`'componentRouting'`): Routes component binding updates down branches.
-3. **ComponentAssemblyWorker** (`'componentAssembly'`): Deep-merges structural sub-trees.
-4. **SlotAssemblyWorker** (`'slotAssembly'`): Merges non-type component bindings and slot content.
-5. **PreprocessingWorker** (`'preprocessing'`): Executes pre-validation custom hooks (`beforePreprocess`).
-6. **ValidationWorker** (`'validation'`): Validates required properties/attributes before rendering.
-7. **SSRElementCreationWorker / ClientElementCreationWorker** (`'elementCreation'`): Renders HTML string fragments or DOM elements.
-8. **SSRTreeAssemblyWorker / ClientTreeAssemblyWorker** (`'treeAssembly'`): Mounts DOM element tree or final SSR payload.
-9. **PostprocessingWorker** (`'postprocessing'`): Executes post-rendering cleanup hooks (`afterPostprocess`).
+1. **TargetPlacementResolverWorker** (`'targetPlacementResolution'`): Resolves `activePlacement` for targetPlacement requests.
+2. **PlacementAssemblyWorker** (`'placementAssembly'`): Assembles nodes into `placementName` drop-zones.
+3. **ComponentRoutingWorker** (`'componentRouting'`): Routes component binding updates down branches.
+4. **ComponentAssemblyWorker** (`'componentAssembly'`): Applies structural component `layerMap` definitions.
+5. **SlotAssemblyWorker** (`'slotAssembly'`): Applies non-type component `layerMap` definitions and slot contents.
+6. **PreprocessingWorker** (`'preprocessing'`): Executes pre-validation custom hooks (`beforePreprocess`).
+7. **ValidationWorker** (`'validation'`): Triggers lazy `node.compile()` and validates required properties before rendering.
+8. **SSRElementCreationWorker / ClientElementCreationWorker** (`'elementCreation'`): Renders HTML string fragments or DOM elements.
+9. **SSRTreeAssemblyWorker / ClientTreeAssemblyWorker** (`'treeAssembly'`): Mounts DOM element tree or final SSR payload.
+10. **PostprocessingWorker** (`'postprocessing'`): Executes post-rendering cleanup hooks (`afterPostprocess`).
 
 ### Critical Phase Registry & Locking Rules
 - **Dynamic Phase Lookup**: Never hardcode numeric phase literals (`0-9`) in core code or tests. Always use `PhaseRegistry.getPhaseNumber(stageName)` or `Supervisor.emitToPhaseName(caller, node, state, stageName)`. Hardcoding numeric phase literals is a phase order antipattern.

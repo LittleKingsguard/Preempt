@@ -25,7 +25,8 @@ export interface PipelineConfig {
 
 export type PipelineStage = 
   | 'instantiation' 
-  | 'placement' 
+  | 'targetPlacementResolution'
+  | 'placementAssembly'
   | 'componentRouting'
   | 'componentAssembly' 
   | 'slotAssembly' 

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Node } from '../../../src/core/Node';
+import { NodeLayer } from '../../../src/core/NodeLayer';
 
 describe('Node - Atomic Architecture', () => {
   let node;
@@ -111,5 +112,35 @@ describe('Node - Atomic Architecture', () => {
 
     expect(Node.placementArray.includes(node)).toBe(false);
     expect(Node.sourcePlacements['test-node']).toBeUndefined();
+  });
+
+  it('caches compiled state across multiple property checks and invalidates when layer stack is modified', () => {
+    const freshNode = new Node({ type: 'div', content: 'hello' }, null, 0);
+
+    // Initial compile
+    const state1 = freshNode.compiledState;
+    expect(state1.type).toBe('div');
+    expect(state1.content).toBe('hello');
+
+    // Repeated getter check should return identical cached compiledState instance
+    const state2 = freshNode.compiledState;
+    expect(state2).toBe(state1);
+
+    // Modifying layer stack invalidates cache
+    freshNode.addLayer(new NodeLayer('type', 'customComponent', 'replace', 'section', 1));
+
+    // Next getter check re-compiles and returns updated compiled state
+    const state3 = freshNode.compiledState;
+    expect(state3).not.toBe(state1);
+    expect(state3.type).toBe('section');
+
+    // Subsequent getter check reuses new cached state instance
+    expect(freshNode.compiledState).toBe(state3);
+
+    // Removing layer invalidates cache again
+    freshNode.removeLayer('type', 'customComponent');
+    const state4 = freshNode.compiledState;
+    expect(state4).not.toBe(state3);
+    expect(state4.type).toBe('div');
   });
 });

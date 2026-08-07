@@ -3,22 +3,28 @@ import { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
 import { WorkerMessage } from "./WorkerMessage.js";
 import { PhaseRegistry } from "./PhaseRegistry.js";
+import { NodeLayer } from "./NodeLayer.js";
 
 /**
  * OOP representation of a reusable Component Binding in Preempt.
  *
- * @useCase Handles component reference lookup, sub-tree instantiation, target path injection (`type`, `css.style`, `handlers.*`, `content`), and tree reference tracking.
- * @processFlow Resolved during Phase 2 (`ComponentAssemblyWorker`) for structural components and Phase 3 (`SlotAssemblyWorker`) for non-type target properties.
+ * @useCase Handles component reference lookup, sub-tree instantiation, target path injection, layer building, and tree reference tracking.
+ * @processFlow Resolved during ComponentAssemblyWorker (type components) and SlotAssemblyWorker (slot components).
  */
 export class Component implements ComponentBinding {
+  /** Static cache storing prototype structural nodes, keyed by singular hostNode instance -> component reference. */
+  public static nodeCache: Map<Node, Map<string, Node[]>> = new Map<Node, Map<string, Node[]>>();
+
   public reference: string;
   public target?: string | undefined;
   public value?: string | HandlerDef | NodeData | NodeData[] | null | undefined;
   public _referencingNodes: Set<Node> = new Set<Node>();
   public _instantiatedNodes?: Node[] | undefined;
   public _clonedChildren?: any[] | undefined;
-  public rollback?: any | undefined;
   public parent: Node;
+
+  /** Single-property layer map created by this component. */
+  public layerMap: Map<string, NodeLayer> = new Map<string, NodeLayer>();
 
   private _sourceComponent?: Component | undefined;
 
@@ -61,25 +67,168 @@ export class Component implements ComponentBinding {
     this.target = data.target;
     this.value = data.value;
 
-    if (this.value) {
-      if (Array.isArray(this.value)) {
-        const nodes: Node[] = [];
-        for (const item of this.value) {
-          if (item && typeof item === 'object' && 'type' in item) {
-            nodes.push(new Node(item as NodeData, null, 99, false));
+    const EMIT_NONE = PhaseRegistry.EMIT_NONE;
+
+    if (this.parent) {
+      let hostMap = Component.nodeCache.get(this.parent);
+      if (!hostMap) {
+        hostMap = new Map<string, Node[]>();
+        Component.nodeCache.set(this.parent, hostMap);
+      }
+
+      if (this.value) {
+        const cachedNodes: Node[] = [];
+        if (Array.isArray(this.value)) {
+          for (const item of this.value) {
+            if (item && typeof item === 'object' && 'type' in item) {
+              cachedNodes.push(new Node(item as NodeData, undefined, EMIT_NONE, false));
+            }
           }
+        } else if (typeof this.value === 'object' && 'type' in this.value) {
+          cachedNodes.push(new Node(this.value as NodeData, undefined, EMIT_NONE, false));
         }
-        if (nodes.length > 0) this._instantiatedNodes = nodes;
-      } else if (typeof this.value === 'object' && 'type' in this.value) {
-        this._instantiatedNodes = [new Node(this.value as NodeData, undefined, 99, false)];
+        hostMap.set(this.reference, cachedNodes);
+        this._instantiatedNodes = [...cachedNodes];
+      } else {
+        const cachedNodes = hostMap.get(this.reference);
+        if (cachedNodes) {
+          this._instantiatedNodes = [...cachedNodes];
+        }
       }
     }
 
-    if (this.parent && this.parent.isInTree && this.target && phase !== 99) {
+    this.buildLayerMap(phase);
+
+    if (this.parent && this.parent.isInTree && this.target && phase !== EMIT_NONE) {
       const msg = new WorkerMessage('Component', 'ComponentRoutingWorker');
       msg.addInstruction('createdNew', [this.target || this.reference]);
       this.parent.addMessage(msg);
-      Supervisor.emitToPhaseName(this, this.parent, {}, 'componentRouting'); // Phase 2: ComponentRoutingWorker
+      Supervisor.emitToPhaseName(this, this.parent, {}, 'componentRouting');
+    }
+  }
+
+  /**
+   * Helper function checking if a component reference has already been applied by an ancestor node in the tree
+   * via native children (direct sub-tree descent without crossing placement boundaries).
+   *
+   * @param node Target Node instance to evaluate.
+   * @param component Component binding instance.
+   * @returns Boolean indicating if component reference was applied by an ancestor.
+   */
+  public static isAppliedInAncestors(node: Node, component: Component): boolean {
+    if (!node || !component) return false;
+    const targetRef = component.reference;
+    let resolvedRef = targetRef;
+    try {
+      const { resolvedBinding } = component.resolveBinding();
+      if (resolvedBinding?.reference) resolvedRef = resolvedBinding.reference;
+    } catch {
+      // Fall back to targetRef if resolution fails
+    }
+
+    let isNativeDescendant = true;
+    let currNode: Node = node;
+
+    while (currNode.parent) {
+      const parentNode = currNode.parent;
+
+      // Check if currNode is a native child of parentNode
+      const isNativeChild = Array.isArray(parentNode.nativeChildren) && parentNode.nativeChildren.includes(currNode);
+      if (!isNativeChild) {
+        isNativeDescendant = false;
+      }
+
+      // If not descended strictly through native children (e.g. crossed a placement boundary),
+      // placements have their own loop blocker and components updating children can still resolve.
+      if (!isNativeDescendant) {
+        return false;
+      }
+
+      if (parentNode.targetComponents) {
+        for (const tc of parentNode.targetComponents.values()) {
+          if (tc === component) continue;
+          if (tc.reference === targetRef || tc.reference === resolvedRef) {
+            return true;
+          }
+        }
+      }
+
+      if (parentNode.sourceComponents) {
+        for (const sc of parentNode.sourceComponents.values()) {
+          if (sc.reference === targetRef || sc.reference === resolvedRef) {
+            return true;
+          }
+        }
+      }
+
+      if (parentNode.component) {
+        for (const c of parentNode.component) {
+          if (c === component) continue;
+          if (c.reference === targetRef || c.reference === resolvedRef) {
+            return true;
+          }
+        }
+      }
+
+      currNode = parentNode;
+    }
+
+    return false;
+  }
+
+  /**
+   * Builds single-property NodeLayer objects for this component's target modifications.
+   *
+   * @param phase Execution phase ID.
+   */
+  public buildLayerMap(phase: number): void {
+    this.layerMap.clear();
+    const sourceName = `component:${this.target || this.reference}`;
+    const targetProp = this.target || 'type';
+
+    if (this._instantiatedNodes && this._instantiatedNodes.length > 0) {
+      if (this.target === 'type' || !this.target) {
+        const protoNode = this._instantiatedNodes[0];
+        this.layerMap.set('type', new NodeLayer('type', sourceName, 'replace', protoNode.type, phase));
+        if (protoNode.props) {
+          const isAutoId = protoNode.props.isIdAutoGenerated;
+          for (const [pKey, pVal] of Object.entries(protoNode.props)) {
+            if (pKey === 'parent' || pKey === '_isIdAutoGenerated') continue;
+            if (pKey === 'id' && isAutoId) continue;
+            if (pVal !== undefined) {
+              const layerKey = `props.${pKey}`;
+              this.layerMap.set(layerKey, new NodeLayer(layerKey, sourceName, 'replace', pVal, phase));
+            }
+          }
+        }
+        if (protoNode.css) {
+          const isAutoId = protoNode.props?.isIdAutoGenerated;
+          if (protoNode.css.id !== undefined && !isAutoId) {
+            this.layerMap.set('css.id', new NodeLayer('css.id', sourceName, 'replace', protoNode.css.id, phase));
+          }
+          if (protoNode.css.classes !== undefined) {
+            this.layerMap.set('css.classes', new NodeLayer('css.classes', sourceName, 'replace', protoNode.css.classes, phase));
+          }
+          if (protoNode.css.style !== undefined && typeof protoNode.css.style === 'object') {
+            for (const [sKey, sVal] of Object.entries(protoNode.css.style)) {
+              if (sVal !== undefined) {
+                const layerKey = `css.style.${sKey}`;
+                this.layerMap.set(layerKey, new NodeLayer(layerKey, sourceName, 'replace', sVal, phase));
+              }
+            }
+          }
+          if (protoNode.css.styleNodes !== undefined && protoNode.css.styleNodes.length > 0) {
+            this.layerMap.set('css.styleNodes', new NodeLayer('css.styleNodes', sourceName, 'replace', protoNode.css.styleNodes, phase));
+          }
+        }
+        if (protoNode.content) {
+          this.layerMap.set('content', new NodeLayer('content', sourceName, 'replace', protoNode.content, phase));
+        }
+      } else if (this.target === 'children') {
+        this.layerMap.set('children', new NodeLayer('children', sourceName, 'replace', this._instantiatedNodes, phase));
+      }
+    } else if (this.value !== undefined && this.value !== null) {
+      this.layerMap.set(targetProp, new NodeLayer(targetProp, sourceName, 'replace', this.value, phase));
     }
   }
 
@@ -91,32 +240,8 @@ export class Component implements ComponentBinding {
    * @returns Next phase ID (2 for ComponentRoutingWorker) or undefined on lock failure.
    */
   public static mergeComponents(targetNode: Node, incomingComponents: ComponentBinding[] | Component[]): number | undefined {
-    if (Supervisor.isPhaseLocked(3) || Supervisor.isPropertyLocked('component')) {
-      console.error(`[Component] Lock violation: Phase 3 or property 'component' is currently locked for node ${targetNode.css?.id || 'unknown'}`);
-      return undefined;
-    }
-
-    const oldComponents = targetNode.component || [];
-    const newComponents = incomingComponents || [];
-
-    let sourceChanged = false;
-    const oldSource = oldComponents.filter(c => c.value !== undefined);
-    const newSource = newComponents.filter(c => c.value !== undefined);
-
-    if (oldSource.length !== newSource.length) {
-      sourceChanged = true;
-    } else {
-      for (const oldC of oldSource) {
-        const newC = newSource.find(c => c.reference === oldC.reference);
-        if (!newC || newC.target !== oldC.target || Node.generateObjectHash(newC.value) !== Node.generateObjectHash(oldC.value)) {
-          sourceChanged = true;
-          break;
-        }
-      }
-    }
-
-    if (sourceChanged) {
-      console.error(`[Component] receiveNextState rejected: Cannot modify source components via receiveNextState. Please update node.data state and pass layout change to Supervisor. Node ID: ${targetNode.css?.id || 'unknown'}`);
+    if (Supervisor.isPhaseLocked(4) || Supervisor.isPropertyLocked('component')) {
+      console.error(`[Component] Lock violation: Component assembly locked for node ${targetNode.css?.id || 'unknown'}`);
       return undefined;
     }
 
@@ -132,14 +257,15 @@ export class Component implements ComponentBinding {
   }
 
   /**
-   * Clones this Component binding instance.
+   * Clones this Component binding instance, shallow-copying cached node references.
    *
-   * @param ignoreProps Property exclusion list.
-   * @param newParent Target parent Node.
+   * @param ignoreProps Array of property keys to exclude from cloning.
+   * @param newParent Target host Node instance.
    * @param phase Execution phase ID.
+   * @param _actor Optional calling component/worker identifier.
    * @returns Cloned Component instance.
    */
-  public clone(ignoreProps: string[] = [], newParent: Node, phase: number, actor: string = 'Component'): Component {
+  public clone(ignoreProps: string[] = [], newParent: Node, phase: number, _actor: string = 'Component'): Component {
     const targetPhase = phase;
     const cloned = new Component({
       reference: this.reference,
@@ -147,33 +273,19 @@ export class Component implements ComponentBinding {
       value: this.value,
     }, newParent, targetPhase, false);
 
-    // Copy source component if present and not ignored
     if (!ignoreProps.includes('_sourceComponent') && this.sourceComponent) {
       cloned.sourceComponent = this.sourceComponent;
     }
 
-    // Copy runtime properties using clone functions/utilities rather than direct reference
     if (!ignoreProps.includes('_referencingNodes') && this._referencingNodes) {
       cloned._referencingNodes = new Set(this._referencingNodes);
     }
+    // Shallow copy cached reference array
     if (!ignoreProps.includes('_instantiatedNodes') && this._instantiatedNodes) {
-      cloned._instantiatedNodes = this._instantiatedNodes.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase, true, actor)
-      );
+      cloned._instantiatedNodes = [...this._instantiatedNodes];
     }
     if (!ignoreProps.includes('_clonedChildren') && this._clonedChildren) {
-      cloned._clonedChildren = this._clonedChildren.map((n: Node) =>
-        n.clone([], ['element', '_referencingNodes'], undefined, targetPhase, true, actor)
-      );
-    }
-    if (!ignoreProps.includes('rollback') && this.rollback !== undefined) {
-      if (this.rollback && typeof this.rollback.clone === 'function') {
-        cloned.rollback = this.rollback.clone.length <= 1
-          ? this.rollback.clone(actor)
-          : this.rollback.clone([], [], null, targetPhase, false, actor);
-      } else {
-        cloned.rollback = this.rollback;
-      }
+      cloned._clonedChildren = [...this._clonedChildren];
     }
 
     return cloned;
@@ -182,7 +294,7 @@ export class Component implements ComponentBinding {
   /**
    * Resolves component reference payload by searching up the virtual DOM tree.
    *
-   * @returns Object containing `resolvedValue` and matching `resolvedBinding` Component instance.
+   * @returns Object containing resolvedValue payload and resolvedBinding source Component instance.
    * @useCase Component resolution during Assembly phases.
    * @processFlow Upward tree search matching reference string.
    */
@@ -221,35 +333,35 @@ export class Component implements ComponentBinding {
    * @param referencingNode Target node receiving cloned sub-tree.
    * @param phase Execution phase ID.
    * @returns Array of cloned Node instances.
+   * @useCase Slot component expansion during SlotAssemblyWorker execution.
    */
   public cloneNode(referencingNode: any, phase: number): any[] {
     this._referencingNodes.add(referencingNode);
 
     if (!this._clonedChildren) this._clonedChildren = [];
-
-    if (!this._instantiatedNodes || this._instantiatedNodes.length === 0) {
-      return [];
-    }
+    if (!this._instantiatedNodes || this._instantiatedNodes.length === 0) return [];
 
     const targetPhase = phase;
-
-    const clones = this._instantiatedNodes.map(node => {
-      return node.clone(
-        [],
-        ['element', '_referencingNodes'],
-        referencingNode,
-        targetPhase
-      );
-    });
+    const clones = this._instantiatedNodes.map(node => node.clone([], ['element', '_referencingNodes'], referencingNode, targetPhase));
 
     this._clonedChildren.push(...clones);
     return clones;
   }
 
   /**
-   * Destroys component binding and releases child node references.
+   * Destroys component binding and releases applied layers and cached nodes.
+   *
+   * @useCase Component cleanup during node deletion or dynamic component removal.
+   * @processFlow Removes applied property layers, unlinks source/referencing node references, and deletes cached prototype nodes.
    */
   public delete(): void {
+    const sourceName = `component:${this.target || this.reference}`;
+    if (this.parent && typeof this.parent.removeLayer === 'function') {
+      for (const targetProp of this.layerMap.keys()) {
+        this.parent.removeLayer(targetProp, sourceName);
+      }
+    }
+
     if (this._sourceComponent && this._sourceComponent._referencingNodes) {
       this._sourceComponent._referencingNodes.delete(this.parent);
     }
@@ -262,13 +374,23 @@ export class Component implements ComponentBinding {
       this._referencingNodes.clear();
     }
 
-    if (this._instantiatedNodes) {
-      for (const node of this._instantiatedNodes) {
-        node.delete();
+    if (this.parent) {
+      const hostMap = Component.nodeCache.get(this.parent);
+      if (hostMap) {
+        const cached = hostMap.get(this.reference);
+        if (cached) {
+          for (const node of cached) {
+            node.delete();
+          }
+          hostMap.delete(this.reference);
+        }
+        if (hostMap.size === 0) {
+          Component.nodeCache.delete(this.parent);
+        }
       }
-      this._instantiatedNodes = [];
     }
 
+    this._instantiatedNodes = [];
     if (this._clonedChildren) {
       for (const node of this._clonedChildren) {
         node.delete();
@@ -277,4 +399,5 @@ export class Component implements ComponentBinding {
     }
   }
 }
+
 

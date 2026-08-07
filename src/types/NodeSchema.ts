@@ -20,6 +20,8 @@ export interface PlacementConfig {
   placementName?: string | undefined;
   /** Array of target drop-zone names requested by content. */
   targetPlacement?: string[] | undefined;
+  /** Active placement slot name designated by TargetPlacementResolverWorker. */
+  activePlacement?: string | undefined;
 }
 
 /**
@@ -152,10 +154,26 @@ export interface NodeQuery {
   format?: string | undefined;
 }
 
+export type LayerMode = 'replace' | 'append' | 'replaceAll';
+
+export interface CompiledNodeState {
+  type: string;
+  props: any;
+  css: any;
+  content?: string | any;
+  children: Node[];
+  nativeChildren: Node[];
+  handlers: any[];
+  placement: any[];
+  component?: any[];
+  isValid: boolean;
+}
+
 import type { Node } from "../core/Node.js";
 /** State update payload pushed to `Node._nextStateQueue`. */
 export type NextState = Partial<Node> | Record<string, any>;
 /** State snapshot payload saved for rollback operations. */
 export type RollbackState = Partial<Node> | Record<string, any>;
+
 
 

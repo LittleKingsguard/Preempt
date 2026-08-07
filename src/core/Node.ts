@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery, ComponentBinding, NextState, RollbackState } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ComponentBinding, NextState, RollbackState, CompiledNodeState } from "../types/NodeSchema.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
 import { NodeQueryUtils } from "./utils/NodeQueryUtils.js";
@@ -9,6 +9,7 @@ import { PhaseRegistry } from "./PhaseRegistry.js";
 import { Placement } from "./Placement.js";
 import { Props } from "./Props.js";
 import { WorkerMessage } from "./WorkerMessage.js";
+import { NodeLayer } from "./NodeLayer.js";
 
 import { CloneUtils } from "./utils/CloneUtils.js";
 
@@ -136,14 +137,272 @@ export class Node {
     if (this.parent) this.parent.invalidateChildrenCache();
   }
 
-  /** HTML tag type (e.g. 'div', 'button', 'header'). */
-  public type: string = 'div';
-  public placement: Placement[];
-  public component?: Component[] | undefined;
-  public content?: string | any | undefined;
-  public props: Props;
-  public handlers?: Handler[] | undefined;
-  public css: Css = new Css();
+  /** Layer stack keyed by targetProperty -> sourceName -> NodeLayer */
+  private _layers: Map<string, Map<string, NodeLayer>> = new Map<string, Map<string, NodeLayer>>();
+  private _compiledState: CompiledNodeState | null = null;
+  private _isDirty: boolean = true;
+  private _baseCanon: Record<string, any> = {};
+
+  /** Underlying base property fields */
+  private _rawType: string = 'div';
+  private _rawCss!: Css;
+  private _rawContent?: string | any | undefined;
+  private _rawHandlers?: Handler[] | undefined;
+  private _rawPlacement?: Placement[] | undefined;
+  private _rawComponent?: Component[] | undefined;
+
+  /**
+   * Adds or updates single-property change layer(s) on this Node.
+   *
+   * @param input A single NodeLayer instance, NodeLayer[], or Map<string, NodeLayer>.
+   */
+  public addLayer(input: NodeLayer | NodeLayer[] | Map<string, NodeLayer>): void {
+    let layersToProcess: NodeLayer[] = [];
+    if (input instanceof Map) {
+      layersToProcess = Array.from(input.values());
+    } else if (Array.isArray(input)) {
+      layersToProcess = input;
+    } else if (input instanceof NodeLayer) {
+      layersToProcess = [input];
+    }
+
+    for (const layer of layersToProcess) {
+      let targetMap = this._layers.get(layer.targetProperty);
+      if (!targetMap) {
+        targetMap = new Map<string, NodeLayer>();
+        this._layers.set(layer.targetProperty, targetMap);
+      }
+      if (targetMap.has(layer.sourceName)) {
+        const oldLayer = targetMap.get(layer.sourceName);
+        if (oldLayer && typeof oldLayer.delete === 'function') {
+          oldLayer.delete();
+        }
+        targetMap.delete(layer.sourceName);
+      }
+      targetMap.set(layer.sourceName, layer);
+      this._isDirty = true;
+      console.log(`[Node] Added layer '${layer.sourceName}' targeting '${layer.targetProperty}' (mode: ${layer.mode}) on node ${this._rawCss?.id || 'unknown'}`);
+    }
+  }
+
+  /**
+   * Removes a layer matching targetProperty and sourceName.
+   */
+  public removeLayer(targetProperty: string, sourceName: string): void {
+    const targetMap = this._layers.get(targetProperty);
+    if (targetMap && targetMap.has(sourceName)) {
+      const layer = targetMap.get(sourceName);
+      if (layer && typeof layer.delete === 'function') {
+        layer.delete();
+      }
+      targetMap.delete(sourceName);
+      this._isDirty = true;
+    }
+  }
+
+  /**
+   * Removes all layers across all target properties that match the specified sourceName.
+   */
+  public removeLayersForSource(sourceName: string): void {
+    for (const targetMap of this._layers.values()) {
+      if (targetMap.has(sourceName)) {
+        const layer = targetMap.get(sourceName);
+        if (layer && typeof layer.delete === 'function') {
+          layer.delete();
+        }
+        targetMap.delete(sourceName);
+        this._isDirty = true;
+      }
+    }
+  }
+
+  /**
+   * Evaluates and compiles node properties via full compile().
+   *
+   * @param targetProperty Target property key to retrieve from compiled state.
+   * @returns Compiled property value.
+   */
+  public compileProperty(targetProperty: string): any {
+    const compiled = this.compile();
+    if (targetProperty in compiled) {
+      return (compiled as any)[targetProperty];
+    }
+    return (this._baseCanon as any)[targetProperty];
+  }
+
+  /**
+   * Invalidates the compiled state cache, forcing re-compilation on next property read.
+   */
+  public invalidateCompileCache(): void {
+    this._isDirty = true;
+  }
+
+  /**
+   * Compiles all node properties into compiledState. Reuses cached state if not dirty.
+   */
+  public compile(): CompiledNodeState {
+    if (!this._isDirty && this._compiledState) {
+      return this._compiledState;
+    }
+
+    const compileTarget = (targetProp: string): any => {
+      const targetMap = this._layers.get(targetProp);
+      if (!targetMap || targetMap.size === 0) {
+        return (this._baseCanon as any)[targetProp];
+      }
+
+      const layers = Array.from(targetMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+
+      let lastReplaceAllIdx = -1;
+      for (let i = layers.length - 1; i >= 0; i--) {
+        if (layers[i].mode === 'replaceAll') {
+          lastReplaceAllIdx = i;
+          break;
+        }
+      }
+
+      const validLayers = lastReplaceAllIdx !== -1 ? layers.slice(lastReplaceAllIdx) : layers;
+
+      let baseVal = (this._baseCanon as any)[targetProp];
+      let lastReplaceLayer = [...validLayers].reverse().find(l => l.mode === 'replace' || l.mode === 'replaceAll');
+      if (lastReplaceLayer) {
+        baseVal = lastReplaceLayer.value;
+      }
+
+      const isCollection = Array.isArray(baseVal) || targetProp === 'children' || targetProp === 'handlers';
+      if (isCollection) {
+        let resultArr = Array.isArray(baseVal) ? [...baseVal] : [];
+        const appendStartIndex = lastReplaceLayer ? validLayers.indexOf(lastReplaceLayer) + 1 : 0;
+        for (let i = appendStartIndex; i < validLayers.length; i++) {
+          if (validLayers[i].mode === 'append') {
+            const appVal = validLayers[i].value;
+            if (Array.isArray(appVal)) {
+              resultArr.push(...appVal);
+            } else if (appVal !== undefined && appVal !== null) {
+              resultArr.push(appVal);
+            }
+          }
+        }
+        return resultArr;
+      }
+
+      return baseVal;
+    };
+
+    const compiledType = compileTarget('type') || this._rawType || 'div';
+    const compiledContent = compileTarget('content') ?? this._rawContent;
+    const compiledHandlers = compileTarget('handlers') || this._rawHandlers || [];
+    const compiledPlacement = compileTarget('placement') || this._rawPlacement || [];
+    const compiledComponent = compileTarget('component') || this._rawComponent;
+
+    // Construct fresh Props and Css OOP instances to merge sub-property layers
+    const compiledProps = new Props(this._data?.props || {}, this);
+    const compiledCss = new Css(this._data?.css || {}, this);
+
+    // Apply sub-property layers for props.* and css.*
+    for (const propKey of this._layers.keys()) {
+      if (propKey.startsWith('props.')) {
+        const subProp = propKey.slice(6);
+        (compiledProps as any)[subProp] = compileTarget(propKey);
+      } else if (propKey.startsWith('css.')) {
+        const subCss = propKey.slice(4);
+        if (subCss.startsWith('style.')) {
+          const styleProp = subCss.slice(6);
+          compiledCss.style = compiledCss.style || {};
+          compiledCss.style[styleProp] = compileTarget(propKey);
+        } else {
+          (compiledCss as any)[subCss] = compileTarget(propKey);
+        }
+      }
+    }
+
+    // Children calculation combining native & placed children
+    let compiledNativeChildren = compileTarget('children') || this.nativeChildren || [];
+    let placedChildren: Node[] = [];
+    if (compiledPlacement && Array.isArray(compiledPlacement)) {
+      for (const p of compiledPlacement) {
+        if (p && p._referencingNodes) {
+          placedChildren = placedChildren.concat(Array.from(p._referencingNodes));
+        }
+      }
+    }
+    const compiledChildren = [...compiledNativeChildren, ...placedChildren];
+
+    this._compiledState = {
+      type: compiledType,
+      props: compiledProps,
+      css: compiledCss,
+      content: compiledContent,
+      children: compiledChildren,
+      nativeChildren: compiledNativeChildren,
+      handlers: compiledHandlers,
+      placement: compiledPlacement,
+      component: compiledComponent,
+      isValid: this.isValid
+    };
+
+    this._isDirty = false;
+    return this._compiledState;
+  }
+
+  /** Read-only compiled state getter */
+  public get compiledState(): CompiledNodeState {
+    if (this._isDirty || !this._compiledState) {
+      this.compile();
+    }
+    return this._compiledState!;
+  }
+
+  // --- LAZY PROPERTY ACCESSORS ---
+  public get type(): string {
+    return this.compiledState.type;
+  }
+  public set type(_v: string) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('type', sourceName, mode, value) instead.");
+  }
+
+  public get props(): Props {
+    return this.compiledState.props;
+  }
+  public set props(_v: Props) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('props', sourceName, mode, value) instead.");
+  }
+
+  public get css(): Css {
+    return this.compiledState.css;
+  }
+  public set css(_v: Css) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('css', sourceName, mode, value) instead.");
+  }
+
+  public get content(): string | any {
+    return this.compiledState.content;
+  }
+  public set content(_v: string | any) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('content', sourceName, mode, value) instead.");
+  }
+
+  public get handlers(): Handler[] | undefined {
+    return this.compiledState.handlers;
+  }
+  public set handlers(_v: Handler[] | undefined) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('handlers', sourceName, mode, value) instead.");
+  }
+
+  public get placement(): Placement[] | undefined {
+    return this.compiledState.placement;
+  }
+  public set placement(_v: Placement[] | undefined) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('placement', sourceName, mode, value) instead.");
+  }
+
+  public get component(): Component[] | undefined {
+    return this.compiledState.component;
+  }
+  public set component(_v: Component[] | undefined) {
+    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('component', sourceName, mode, value) instead.");
+  }
+
   public versions?: any[] | undefined;
   public lastCompletedPhase?: number | undefined;
   public isInTree: boolean = false;
@@ -262,77 +521,113 @@ export class Node {
    */
   constructor(data: NodeData, parent: Node | null | undefined, phase: number, isInTree: boolean = false, isClone: boolean = false) {
     this._data = data;
+    this._baseCanon = { ...data };
     this.parent = parent;
     this.isInTree = isInTree;
 
-    this.props = new Props(this._data.props || {}, this);
-    this.css = new Css(this._data.css || {}, this);
+    const rawProps = new Props(this._data.props || {}, this);
+    const rawCss = new Css(this._data.css || {}, this);
 
     const hasExplicitPropsId = Boolean(this._data.props?.id && !String(this._data.props.id).startsWith('preempt-node-'));
     const hasExplicitCssId = Boolean(this._data.css?.id && !String(this._data.css.id).startsWith('preempt-node-'));
 
     if (!hasExplicitPropsId && !hasExplicitCssId) {
-      this.props.isIdAutoGenerated = true;
+      rawProps.isIdAutoGenerated = true;
     }
 
-    if (isClone && this.props.isIdAutoGenerated) {
+    if (isClone && rawProps.isIdAutoGenerated) {
       const freshId = Node.generateObjectHash(this._data);
-      this.props.id = freshId;
-      this.css.id = freshId;
+      rawProps.id = freshId;
+      rawCss.id = freshId;
     } else {
-      if (!this.css.id) {
-        this.css.id = this.props.id || Node.generateObjectHash(this._data);
+      if (!rawCss.id) {
+        rawCss.id = rawProps.id || Node.generateObjectHash(this._data);
       }
-      if (!this.props.id) {
-        this.props.id = this.css.id;
+      if (!rawProps.id) {
+        rawProps.id = rawCss.id;
       }
     }
 
-    if (typeof window !== 'undefined' && typeof document !== 'undefined' && this.css.id) {
-      const existingEl = document.getElementById(this.css.id);
+    if (typeof window !== 'undefined' && typeof document !== 'undefined' && rawCss.id) {
+      const existingEl = document.getElementById(rawCss.id);
       if (existingEl) {
         this.element = existingEl;
       }
     }
 
-    this.type = this._data.type;
+    this._rawType = this._data.type || 'div';
+    this._rawCss = rawCss;
+    this._rawContent = this._data.content;
 
-    if (typeof this._data.content === 'string') {
-      this.content = this._data.content;
+    const initialLayers: NodeLayer[] = [];
+    const sourceName = 'baseCanon';
+
+    initialLayers.push(new NodeLayer('type', sourceName, 'replaceAll', this._rawType, phase));
+
+    if (this._data.content !== undefined) {
+      initialLayers.push(new NodeLayer('content', sourceName, 'replaceAll', this._data.content, phase));
+    }
+
+    if (this._data.props) {
+      for (const [pKey, pVal] of Object.entries(this._data.props)) {
+        if (!rawProps.isIdAutoGenerated || pKey !== 'id') {
+          initialLayers.push(new NodeLayer(`props.${pKey}`, sourceName, 'replaceAll', pVal, phase));
+        }
+      }
+    }
+
+    if (this._data.css) {
+      if (this._data.css.id && !rawProps.isIdAutoGenerated) {
+        initialLayers.push(new NodeLayer('css.id', sourceName, 'replaceAll', this._data.css.id, phase));
+      }
+      if (this._data.css.classes && Array.isArray(this._data.css.classes)) {
+        initialLayers.push(new NodeLayer('css.classes', sourceName, 'replaceAll', [...this._data.css.classes], phase));
+      }
+      if (this._data.css.style && typeof this._data.css.style === 'object') {
+        for (const [sKey, sVal] of Object.entries(this._data.css.style)) {
+          initialLayers.push(new NodeLayer(`css.style.${sKey}`, sourceName, 'replaceAll', sVal, phase));
+        }
+      }
     }
 
     if (!isClone) {
-      if ((phase === 0 || phase === 99) && this._data.children && Array.isArray(this._data.children)) {
+      const childNodes: Node[] = [];
+      const emitNonePhase = PhaseRegistry.EMIT_NONE;
+      if ((phase === 0 || phase === 99 || phase === emitNonePhase) && this._data.children && Array.isArray(this._data.children)) {
         for (const childData of this._data.children) {
           if (childData && typeof childData === 'object') {
-            new Node(childData, this, phase, this.isInTree); //Child adds to nativeChildren via parent setter
+            const childNode = new Node(childData, this, phase, this.isInTree);
+            childNodes.push(childNode);
           }
         }
       }
+      if (childNodes.length > 0) {
+        initialLayers.push(new NodeLayer('children', sourceName, 'replaceAll', childNodes, phase));
+      }
 
       if (this._data.handlers && Array.isArray(this._data.handlers)) {
-        this.handlers = this._data.handlers.map(h => new Handler(h, this, phase));
-      } else {
-        this.handlers = [];
+        const handlersArr = this._data.handlers.map(h => new Handler(h, this, phase));
+        initialLayers.push(new NodeLayer('handlers', sourceName, 'replaceAll', handlersArr, phase));
       }
 
-      this.setComponents(this._data.component, phase);
+      if (this._data.component) {
+        this.setComponents(this._data.component, phase);
+      }
 
       if (this._data.placement && Array.isArray(this._data.placement)) {
-        this.placement = this._data.placement.map((p: any) => new Placement(p, this, phase, this.isInTree));
+        const placementArr = this._data.placement.map((p: any) => new Placement(p, this, phase, this.isInTree));
+        initialLayers.push(new NodeLayer('placement', sourceName, 'replaceAll', placementArr, phase));
       } else if (this._data.placement && typeof this._data.placement === 'object') {
-        this.placement = [new Placement(this._data.placement as any, this, phase, this.isInTree)];
-      } else {
-        this.placement = [];
+        const placementArr = [new Placement(this._data.placement as any, this, phase, this.isInTree)];
+        initialLayers.push(new NodeLayer('placement', sourceName, 'replaceAll', placementArr, phase));
       }
-    } else {
-      this.handlers = [];
-      this.placement = [];
     }
+
+    this.addLayer(initialLayers);
 
     const validationPhase = PhaseRegistry.getPhaseNumber('validation');
     if (this.isInTree && phase <= validationPhase) {
-      Supervisor.emitToPhaseName(this, this, {}, 'validation'); // Emit to ValidationWorker (Phase 6)
+      Supervisor.emitToPhaseName(this, this, {}, 'validation');
     }
 
     console.log(`[Node] Created node '${this.css?.id || this.type}' (type: ${this.type}, phase: ${phase}, isInTree: ${this.isInTree})`, this);
@@ -428,41 +723,7 @@ export class Node {
     }
   }
 
-  /**
-   * Replaces native children with new Node or NodeData entries.
-   *
-   * @param incomingNativeChildren Array of raw NodeData schemas or Node instances.
-   * @returns Phase ID 7 for tree assembly re-run.
-   * @references `Node.receiveNextState()`
-   */
-  public mergeNativeChildren(incomingNativeChildren: any[]): number | undefined {
-    if (Supervisor.isPropertyLocked('nativeChildren')) {
-      console.error(`[Node] Lock violation: Property 'nativeChildren' is currently locked for node ${this.css?.id || 'unknown'}`);
-      return undefined;
-    }
-    while (this.nativeChildren && this.nativeChildren.length > 0) {
-      const child = this.nativeChildren.pop();
-      if (child && typeof child.delete === 'function') {
-        child.delete();
-      }
-    }
 
-    const newNativeChildren: Node[] = [];
-    for (const item of incomingNativeChildren) {
-      if (item instanceof Node) {
-        item.parent = this;
-        item.isInTree = this.isInTree;
-        newNativeChildren.push(item);
-      } else if (item && typeof item === 'object') {
-        const childNode = new Node(item as NodeData, this, 0, this.isInTree);
-        newNativeChildren.push(childNode);
-      }
-    }
-    this.nativeChildren = newNativeChildren;
-    this.data.children = newNativeChildren.map(c => c.data);
-    this.invalidateChildrenCache();
-    return PhaseRegistry.getPhaseNumber('validation');
-  }
 
   /**
    * Receives atomic state updates for this Node, checks property locks, updates state, and emits node to Supervisor stage.
@@ -535,10 +796,10 @@ export class Node {
         phaseResult = Component.mergeComponents(this, nextState.component);
       } else if (key === 'handlers' && nextState.handlers !== undefined) {
         phaseResult = Handler.mergeHandlers(this, nextState.handlers);
-      } else if (key === 'children' && nextState.children !== undefined && Array.isArray(nextState.children)) {
-        phaseResult = this.mergeNativeChildren(nextState.children);
-      } else if (key === 'nativeChildren' && nextState.nativeChildren !== undefined && Array.isArray(nextState.nativeChildren)) {
-        phaseResult = this.mergeNativeChildren(nextState.nativeChildren);
+      } else if ((key === 'children' || key === 'nativeChildren') && (nextState as any)[key] !== undefined) {
+        const childrenVal = (nextState as any)[key];
+        this.addLayer(new NodeLayer('children', 'receiveNextState', 'replace', childrenVal, minTargetPhase));
+        phaseResult = validationPhase;
       } else if (key !== 'placement') {
         if (Supervisor.isPropertyLocked(key)) {
           console.error(`[Node] Lock violation: Property '${key}' is currently locked for node ${this.css?.id}`);

@@ -24,6 +24,7 @@ export class ValidationWorker extends BaseWorker {
    */
   protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
     if (!node.isInTree) return;
+    node.compile();
     console.log(`[ValidationWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
     // Phase 6: Validation
     node.executeHandlers("beforeValidate", { supervisor: this.supervisor }, false);

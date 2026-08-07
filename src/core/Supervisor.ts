@@ -5,12 +5,13 @@ import { Template } from "./Template.js";
 import { Payload } from "./Payload.js";
 import { StyleNode } from "./StyleNode.js";
 import { InstantiationWorker } from "./workers/InstantiationWorker.js";
+import { TargetPlacementResolverWorker } from "./workers/TargetPlacementResolverWorker.js";
+import { PlacementAssemblyWorker } from "./workers/PlacementAssemblyWorker.js";
 import { PlacementWorker } from "./workers/PlacementWorker.js";
 import { ComponentRoutingWorker } from "./workers/ComponentRoutingWorker.js";
 import { ComponentAssemblyWorker } from "./workers/ComponentAssemblyWorker.js";
 import { SlotAssemblyWorker } from "./workers/SlotAssemblyWorker.js";
 import { PreprocessingWorker } from "./workers/PreprocessingWorker.js";
-
 import { ValidationWorker } from "./workers/ValidationWorker.js";
 import { ClientElementCreationWorker } from "./workers/ClientElementCreationWorker.js";
 import { ClientTreeAssemblyWorker } from "./workers/ClientTreeAssemblyWorker.js";
@@ -28,6 +29,15 @@ import { Logger } from "./utils/Logger.js";
  * @processFlow Instantiated on process start or HTTP request, coordinates workers (Phases 0-8), handles phase locks, and runs the monitoring loop.
  */
 export class Supervisor {
+  public instantiationWorker: InstantiationWorker;
+  public targetPlacementResolverWorker: TargetPlacementResolverWorker;
+  public placementAssemblyWorker: PlacementAssemblyWorker;
+  public placementWorker: PlacementWorker;
+  public componentRoutingWorker: ComponentRoutingWorker;
+  public componentAssemblyWorker: ComponentAssemblyWorker;
+  public slotAssemblyWorker: SlotAssemblyWorker;
+  public preprocessingWorker: PreprocessingWorker;
+  public validationWorker: ValidationWorker;
   /** Active Supervisor singleton instance. Access via `Supervisor.instance`. */
   public static instance: Supervisor | null = null;
   /** Active pipeline observers registered for stage telemetry events. */
@@ -94,13 +104,6 @@ export class Supervisor {
     return Supervisor.isPhaseLocked(phaseId);
   }
 
-  public instantiationWorker: InstantiationWorker;
-  public placementWorker: PlacementWorker;
-  public componentRoutingWorker: ComponentRoutingWorker;
-  public componentAssemblyWorker: ComponentAssemblyWorker;
-  public slotAssemblyWorker: SlotAssemblyWorker;
-  public preprocessingWorker: PreprocessingWorker;
-  public validationWorker: ValidationWorker;
   public elementCreationWorker: any;
   public treeAssemblyWorker: any;
   public renderingWorker: any;
@@ -158,6 +161,8 @@ export class Supervisor {
     this.templateData = templateData;
     Supervisor.instance = this;
     this.instantiationWorker = new InstantiationWorker(this);
+    this.targetPlacementResolverWorker = new TargetPlacementResolverWorker(this);
+    this.placementAssemblyWorker = new PlacementAssemblyWorker(this);
     this.placementWorker = new PlacementWorker(this);
     this.componentRoutingWorker = new ComponentRoutingWorker(this);
     this.componentAssemblyWorker = new ComponentAssemblyWorker(this);

@@ -22,6 +22,7 @@ export class Placement implements PlacementConfig {
 
   public placementName?: string | undefined;
   public targetPlacement?: string[] | undefined;
+  public activePlacement?: string | undefined;
   public _referencingNodes: Set<Node> = new Set();
   public parent: Node;
 
@@ -37,6 +38,23 @@ export class Placement implements PlacementConfig {
     this.parent = parent;
     this.placementName = data.placementName;
     this.targetPlacement = data.targetPlacement ? [...data.targetPlacement] : undefined;
+    this.activePlacement = data.activePlacement;
+
+    if (this.placementName && this.parent) {
+      let ancestor: Node | null | undefined = this.parent.parent;
+      while (ancestor) {
+        if (ancestor.placement) {
+          const hasDup = ancestor.placement.some(p => p.placementName === this.placementName);
+          if (hasDup) {
+            console.error(`[Placement] Loop safeguard triggered: placementName '${this.placementName}' already exists in parent tree of node '${this.parent.css?.id || this.parent.type}'. Leaving placementName undefined.`);
+            this.placementName = undefined;
+            break;
+          }
+        }
+        ancestor = ancestor.parent;
+      }
+    }
+
     this.append(phase);
   }
 
@@ -53,7 +71,8 @@ export class Placement implements PlacementConfig {
     const targetPhase = phase;
     const clonedPlacement = new Placement({
       placementName: ignoreProps.includes('placementName') ? undefined : this.placementName,
-      targetPlacement: ignoreProps.includes('targetPlacement') ? undefined : this.targetPlacement
+      targetPlacement: ignoreProps.includes('targetPlacement') ? undefined : this.targetPlacement,
+      activePlacement: ignoreProps.includes('activePlacement') ? undefined : this.activePlacement
     }, parentNode, targetPhase, parentNode.isInTree);
 
     if (!ignoreProps.includes('_referencingNodes')) {
@@ -119,11 +138,12 @@ export class Placement implements PlacementConfig {
   }
 
   /**
-   * Registers this Placement into global tracking maps and emits node to Phase 1 (`PlacementWorker`).
+   * Registers this Placement into global tracking maps and emits node to target placement workers.
    *
    * @param phase Execution phase ID.
    */
   public append(phase: number): void {
+    const EMIT_NONE = 9999;
     if (this.placementName) {
       let list = Placement.placementMap.get(this.placementName);
       if (!list) {
@@ -132,13 +152,9 @@ export class Placement implements PlacementConfig {
       }
       if (!list.includes(this)) {
         list.push(this);
-
-        if (phase === 0) {
-          const referencingPlacements = Placement.sourcePlacements.get(this.placementName) || [];
-          for (const ref of referencingPlacements) {
-            ref.parent.receiveNextState({}, 1);
-          }
-        }
+      }
+      if (phase !== EMIT_NONE) {
+        Supervisor.emitToPhaseName(this, this.parent, {}, 'placementAssembly');
       }
     }
     if (this.targetPlacement) {
@@ -152,8 +168,8 @@ export class Placement implements PlacementConfig {
           list.push(this);
         }
       }
-      if (phase === 0) {
-        Supervisor.emitToPhaseName(this, this.parent, {}, 'placement'); // Emit to PlacementWorker (Phase 1)
+      if (phase !== EMIT_NONE) {
+        Supervisor.emitToPhaseName(this, this.parent, {}, 'targetPlacementResolution');
       }
     }
   }
