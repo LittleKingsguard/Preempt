@@ -2,7 +2,6 @@ import { Component } from "../Component.js";
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
 import { WorkerMessage } from "../WorkerMessage.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -26,7 +25,7 @@ export class SlotAssemblyWorker extends BaseWorker {
    * @useCase Triggering slot assembly stage for specific nodes.
    * @processFlow Phase 4 event emission helper.
    */
-  public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
+  public static emitTo(node: Node, recursive: boolean = false): void {
     if (!Supervisor.instance || !Supervisor.instance.slotAssemblyWorker) return;
     const isMatch = (n: Node) => {
       const hasSlotComponent = (n.targetComponents && Array.from(n.targetComponents.values()).some(c => c.target !== "type")) ||
@@ -46,7 +45,7 @@ export class SlotAssemblyWorker extends BaseWorker {
         const msg = new WorkerMessage('SlotAssemblyWorker', 'ComponentRoutingWorker');
         msg.addInstruction('createdNew', slotRefs.length > 0 ? slotRefs : ['slot']);
         match.addMessage(msg);
-        Supervisor.emitToPhaseName(this, match, rollbackState, 'componentRouting');
+        Supervisor.emitToPhaseName(this, match, 'componentRouting');
       }
     }
   }
@@ -57,7 +56,7 @@ export class SlotAssemblyWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[SlotAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
 
     // Phase 4: Slot Assembly
@@ -119,8 +118,9 @@ export class SlotAssemblyWorker extends BaseWorker {
       }
 
       const activeComp = resolvedBinding || binding;
-      activeComp.buildLayerMap(this.phase);
-      node.addLayer(activeComp.layerMap);
+      const targetProp = activeComp.target || binding.target || 'children';
+      activeComp.buildLayerMap(this.phase, targetProp);
+      node.addLayer(activeComp.layerMap, this.phase);
     }
 
     if (messages) {
@@ -140,7 +140,7 @@ export class SlotAssemblyWorker extends BaseWorker {
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('slotAssembly');
   }
 }

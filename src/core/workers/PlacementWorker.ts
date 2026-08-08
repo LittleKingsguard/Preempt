@@ -1,7 +1,6 @@
 import { Node } from "../Node.js";
 import { Placement } from "../Placement.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
@@ -19,9 +18,8 @@ export class PlacementWorker extends BaseWorker {
    * Processes a node during Phase 1 placement matching and reparenting.
    *
    * @param node Node instance to process.
-   * @param _rollbackState Optional rollback state.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[PlacementWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
     // Phase 1: Placement
 
@@ -56,9 +54,8 @@ export class PlacementWorker extends BaseWorker {
    * Updates `node.lastCompletedPhase` to 1 upon success.
    *
    * @param node Successfully processed Node.
-   * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('placement');
   }
 
@@ -67,10 +64,8 @@ export class PlacementWorker extends BaseWorker {
    *
    * @param node Target node that failed.
    * @param error Error thrown during placement.
-   * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessError(node: Node, error: Error, _rollbackState?: RollbackState): void {
+  protected onProcessError(node: Node, error: Error): void {
     console.error(`Error in Placement Phase for node ${node.css?.id}:`, error);
   }
 }
-

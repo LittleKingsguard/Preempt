@@ -47,7 +47,7 @@ When creating or adding new pipeline worker stages, follow these guidelines to p
 1. **Canonical Stage Definition**: Add the new stage identifier to `PipelineStage` in `src/types/Pipeline.ts`.
 2. **Register Phase Mapping**: Register the stage name and its numeric phase ID in `PhaseRegistry.ts` (using `PhaseRegistry.registerWorker(stageName, phaseId)` or adding to registry maps).
 3. **Dynamic Phase Assignment in Workers**: Always assign worker phase dynamically: `public readonly phase = PhaseRegistry.getPhaseNumber(stageName);` and update node state with `node.lastCompletedPhase = PhaseRegistry.getPhaseNumber(stageName);`.
-4. **Emit via Stage Names**: Forward nodes using `Supervisor.emitToPhaseName(caller, node, rollbackState, targetStageName)` rather than numeric phase arguments (`emitToPhase`).
+4. **Emit via Stage Names**: Forward nodes using `Supervisor.emitToPhaseName(caller, node, targetStageName)` rather than numeric phase arguments (`emitToPhase`).
 5. **Update Upstream / Downstream Emissions**: Update the upstream worker's `onProcessSuccess()` to emit to the new stage name, and have the new worker emit to the downstream stage name.
 6. **Avoid Hardcoded Phase Literals**: Never hardcode numeric phase IDs in worker logic, Supervisor config, or tests. Dynamic resolution ensures phase order changes or insertions do not break existing pipeline execution.
 

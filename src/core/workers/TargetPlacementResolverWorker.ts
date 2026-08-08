@@ -1,7 +1,6 @@
 import { Node } from "../Node.js";
 import { Placement } from "../Placement.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 import { Supervisor } from "../Supervisor.js";
 
@@ -20,7 +19,7 @@ export class TargetPlacementResolverWorker extends BaseWorker {
    * @param node Node instance containing targetPlacement definitions.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[TargetPlacementResolverWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
 
     if (!node.placement) return;
@@ -44,8 +43,8 @@ export class TargetPlacementResolverWorker extends BaseWorker {
    * @param node Successfully resolved Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('targetPlacementResolution');
-    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'placementAssembly');
+    Supervisor.emitToPhaseName(this, node, 'placementAssembly');
   }
 }

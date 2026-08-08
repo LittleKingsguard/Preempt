@@ -65,7 +65,6 @@ describe('PhaseRegistry', () => {
     expect(emitSpy).toHaveBeenCalledWith(
       expect.anything(),
       node,
-      expect.anything(),
       PhaseRegistry.getPhaseNumber('validation')
     );
 

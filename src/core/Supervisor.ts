@@ -187,22 +187,23 @@ export class Supervisor {
   /**
    * Retrieves the worker instance responsible for a given phase ID number.
    *
-   * @param phaseId Phase ID (0-9).
+   * @param phaseId Phase ID (0-10).
    * @returns Worker instance or undefined.
    * @references `Supervisor.emitToPhase()`, `Supervisor.runPipeline()`
    */
   public getWorkerForPhase(phaseId: number): any {
     switch (phaseId) {
       case 0: return this.instantiationWorker;
-      case 1: return this.placementWorker;
-      case 2: return this.componentRoutingWorker;
-      case 3: return this.componentAssemblyWorker;
-      case 4: return this.slotAssemblyWorker;
-      case 5: return this.preprocessingWorker;
-      case 6: return this.validationWorker;
-      case 7: return this.elementCreationWorker;
-      case 8: return this.treeAssemblyWorker;
-      case 9: return this.postprocessingWorker;
+      case 1: return this.targetPlacementResolverWorker || this.placementWorker;
+      case 2: return this.placementAssemblyWorker;
+      case 3: return this.componentRoutingWorker;
+      case 4: return this.componentAssemblyWorker;
+      case 5: return this.slotAssemblyWorker;
+      case 6: return this.preprocessingWorker;
+      case 7: return this.validationWorker;
+      case 8: return this.elementCreationWorker;
+      case 9: return this.treeAssemblyWorker;
+      case 10: return this.postprocessingWorker;
       default: return undefined;
     }
   }
@@ -210,7 +211,7 @@ export class Supervisor {
   /** Active locked phase IDs set. */
   public static activeLockedPhases: Set<number> = new Set<number>();
   /** Queue of pending emissions submitted prior to Supervisor singleton instantiation. */
-  public static pendingEmits: { caller: any; node: Node; rollbackState: any; phaseId: number }[] = [];
+  public static pendingEmits: { caller: any; node: Node; phaseId: number }[] = [];
   public static isPipelineScheduled: boolean = false;
   public static isPipelineRunning: boolean = false;
   public static pipelinePromise: Promise<string | void> | null = null;
@@ -270,15 +271,15 @@ export class Supervisor {
    * @references `Supervisor.runPipeline()`
    */
   public static lockPhase(phaseId: number): void {
-    if (phaseId === 2 || phaseId === 3) {
-      // Phase 2 (ComponentRouting) and Phase 3 (ComponentAssembly) lock only when Phase 4 (SlotAssembly) locks/completes
+    if (phaseId === 3 || phaseId === 4) {
+      // Phase 3 (componentRouting) and Phase 4 (componentAssembly) lock only when Phase 5 (slotAssembly) locks/completes
       return;
     }
     Supervisor.activeLockedPhases.add(phaseId);
-    if (phaseId === 4) {
-      // Phase 4 locking also locks Phase 2 and Phase 3 for backward chaining completion
-      Supervisor.activeLockedPhases.add(2);
+    if (phaseId === 5) {
+      // Phase 5 locking also locks Phase 3 and Phase 4 for backward chaining completion
       Supervisor.activeLockedPhases.add(3);
+      Supervisor.activeLockedPhases.add(4);
     }
   }
 
@@ -304,12 +305,12 @@ export class Supervisor {
    * @processFlow Phase event queueing and pipeline scheduling.
    * @references `BaseWorker.onProcessSuccess()`, `ClientElementCreationWorker.onProcessSuccess()`, `SSRElementCreationWorker.onProcessSuccess()`, `ValidationWorker.onProcessSuccess()`, `Node.constructor`, `Node.receiveNextState()`, `Placement.placeInto()`, `Component.resolveBinding()`
    */
-  public static emitToPhase(caller: any, node: Node, rollbackState: any, phaseId: number): void {
+  public static emitToPhase(caller: any, node: Node, phaseId: number): void {
     if (Supervisor.instance) {
       if (!Supervisor.isPhaseLocked(phaseId)) {
         const worker = Supervisor.instance.getWorkerForPhase(phaseId);
         if (worker && typeof worker.push === 'function') {
-          worker.push(node, rollbackState);
+          worker.push(node);
           console.log(`[Supervisor.emitToPhase] Phase ${phaseId} emitted for node ${node.css?.id || 'unknown'} by:`, caller);
           Supervisor.schedulePipeline();
         }
@@ -317,7 +318,7 @@ export class Supervisor {
         console.warn(`[Supervisor.emitToPhase] Failed attempt to emit to Phase ${phaseId} for node ${node.css?.id || 'unknown'} by:`, caller, `(Phase ${phaseId} is locked)`);
       }
     } else {
-      Supervisor.pendingEmits.push({ caller, node, rollbackState, phaseId });
+      Supervisor.pendingEmits.push({ caller, node, phaseId });
     }
   }
 
@@ -326,12 +327,11 @@ export class Supervisor {
    *
    * @param caller Originating method or object.
    * @param node Target Virtual DOM Node.
-   * @param rollbackState State snapshot for rollback recovery.
    * @param phaseName Destination worker canonical stage name (e.g. 'validation', 'componentRouting').
    */
-  public static emitToPhaseName(caller: any, node: Node, rollbackState: any, phaseName: PipelineStage | string): void {
+  public static emitToPhaseName(caller: any, node: Node, phaseName: PipelineStage | string): void {
     const phaseId = PhaseRegistry.getPhaseNumber(phaseName);
-    Supervisor.emitToPhase(caller, node, rollbackState, phaseId);
+    Supervisor.emitToPhase(caller, node, phaseId);
   }
 
   /**
@@ -346,7 +346,7 @@ export class Supervisor {
     const emits = [...Supervisor.pendingEmits];
     Supervisor.pendingEmits = [];
     for (const emit of emits) {
-      Supervisor.emitToPhase(emit.caller, emit.node, emit.rollbackState, emit.phaseId);
+      Supervisor.emitToPhase(emit.caller, emit.node, emit.phaseId);
     }
   }
 
@@ -654,8 +654,8 @@ export class Supervisor {
       let queueDrained = false;
       while (!queueDrained) {
         queueDrained = true;
-        // Process in order 0 to 9
-        for (let phaseId = 0; phaseId <= 9; phaseId++) {
+        // Process in order 0 to 10
+        for (let phaseId = 0; phaseId <= 10; phaseId++) {
           const worker = this.getWorkerForPhase(phaseId);
           if (worker && worker.hasEvents()) {
             const stageName = this.getStageNameForPhase(phaseId) as PipelineStage;
@@ -665,7 +665,7 @@ export class Supervisor {
             for (let p = 0; p < phaseId; p++) {
               Supervisor.lockPhase(p);
             }
-            if (phaseId === 1 || phaseId === 6 || phaseId === 7) {
+            if (phaseId === 1 || phaseId === 2 || phaseId === 7 || phaseId === 8) {
               Supervisor.lockPhase(phaseId);
             }
             try {

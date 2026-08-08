@@ -1,6 +1,5 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 
@@ -21,7 +20,7 @@ export class SSRElementCreationWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[SSRElementCreationWorker] Error: Node reached Element Creation phase with parent === undefined or isInTree === false`, node);
       return;
@@ -41,9 +40,9 @@ export class SSRElementCreationWorker extends BaseWorker {
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('elementCreation');
-    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'treeAssembly');
+    Supervisor.emitToPhaseName(this, node, 'treeAssembly');
   }
 
   /**

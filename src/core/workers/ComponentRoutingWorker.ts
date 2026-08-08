@@ -2,7 +2,6 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { WorkerMessage } from "../WorkerMessage.js";
 
 /**
@@ -21,7 +20,7 @@ export class ComponentRoutingWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     // Phase 2: Component Routing
     const messages = node.getMessages('ComponentRoutingWorker', true);
     if (!messages || messages.length === 0) {
@@ -70,7 +69,7 @@ export class ComponentRoutingWorker extends BaseWorker {
             const childMsg = new WorkerMessage('ComponentRoutingWorker', 'ComponentRoutingWorker');
             childMsg.addInstruction('updatedSource', updatedRefs);
             child.addMessage(childMsg);
-            Supervisor.emitToPhaseName(this, child, {}, 'componentRouting');
+            Supervisor.emitToPhaseName(this, child, 'componentRouting');
           }
         }
       }
@@ -88,7 +87,7 @@ export class ComponentRoutingWorker extends BaseWorker {
         assemblyMsg.addInstruction('updatedSource', Array.from(new Set(componentAssemblyReferences)));
       }
       node.addMessage(assemblyMsg);
-      Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'componentAssembly');
+      Supervisor.emitToPhaseName(this, node, 'componentAssembly');
     }
 
     // Emit to SlotAssemblyWorker (Phase 4)
@@ -101,7 +100,7 @@ export class ComponentRoutingWorker extends BaseWorker {
         slotMsg.addInstruction('updatedSource', Array.from(new Set(slotAssemblyReferences)));
       }
       node.addMessage(slotMsg);
-      Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'slotAssembly');
+      Supervisor.emitToPhaseName(this, node, 'slotAssembly');
     }
   }
 
@@ -111,7 +110,7 @@ export class ComponentRoutingWorker extends BaseWorker {
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('componentRouting');
   }
 }

@@ -2,7 +2,6 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 
 /**
  * Worker handling Phase 6 (Validation) of the Supervisor pipeline.
@@ -22,7 +21,15 @@ export class ValidationWorker extends BaseWorker {
    * @param _rollbackState Optional rollback snapshot.
    * @throws Error if node validation fails.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
+    if (node.parent) {
+      node.isInTree = node.parent.isInTree;
+    } else if (node.parent === null) {
+      node.isInTree = true;
+    } else if (node.parent === undefined) {
+      node.isInTree = false;
+    }
+
     if (!node.isInTree) return;
     node.compile();
     console.log(`[ValidationWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
@@ -43,10 +50,10 @@ export class ValidationWorker extends BaseWorker {
    * @param node Successfully validated Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     if (!node.isInTree) return;
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('validation');
-    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'elementCreation');
+    Supervisor.emitToPhaseName(this, node, 'elementCreation');
   }
 
   /**

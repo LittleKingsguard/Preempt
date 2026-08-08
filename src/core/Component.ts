@@ -1,5 +1,6 @@
 import type { ComponentBinding, HandlerDef, NodeData } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
+import { Handler } from "./Handler.js";
 import { Supervisor } from "./Supervisor.js";
 import { WorkerMessage } from "./WorkerMessage.js";
 import { PhaseRegistry } from "./PhaseRegistry.js";
@@ -97,13 +98,11 @@ export class Component implements ComponentBinding {
       }
     }
 
-    this.buildLayerMap(phase);
-
     if (this.parent && this.parent.isInTree && this.target && phase !== EMIT_NONE) {
       const msg = new WorkerMessage('Component', 'ComponentRoutingWorker');
       msg.addInstruction('createdNew', [this.target || this.reference]);
       this.parent.addMessage(msg);
-      Supervisor.emitToPhaseName(this, this.parent, {}, 'componentRouting');
+      Supervisor.emitToPhaseName(this, this.parent, 'componentRouting');
     }
   }
 
@@ -153,22 +152,6 @@ export class Component implements ComponentBinding {
         }
       }
 
-      if (parentNode.sourceComponents) {
-        for (const sc of parentNode.sourceComponents.values()) {
-          if (sc.reference === targetRef || sc.reference === resolvedRef) {
-            return true;
-          }
-        }
-      }
-
-      if (parentNode.component) {
-        for (const c of parentNode.component) {
-          if (c === component) continue;
-          if (c.reference === targetRef || c.reference === resolvedRef) {
-            return true;
-          }
-        }
-      }
 
       currNode = parentNode;
     }
@@ -180,14 +163,65 @@ export class Component implements ComponentBinding {
    * Builds single-property NodeLayer objects for this component's target modifications.
    *
    * @param phase Execution phase ID.
+   * @param target Target property path.
    */
-  public buildLayerMap(phase: number): void {
+  public buildLayerMap(phase: number, target: string): void {
     this.layerMap.clear();
-    const sourceName = `component:${this.target || this.reference}`;
-    const targetProp = this.target || 'type';
+    const effectiveTarget = target || this.target;
+    const sourceName = `component:${effectiveTarget || this.reference}`;
+    const targetProp = effectiveTarget || 'type';
+
+    if (targetProp === 'content') {
+      if (this._instantiatedNodes && this._instantiatedNodes.length > 0) {
+        this.layerMap.set('children', new NodeLayer('children', sourceName, 'replace', this._instantiatedNodes, phase));
+      } else if (this.value !== undefined && this.value !== null) {
+        this.layerMap.set('content', new NodeLayer('content', sourceName, 'replace', String(this.value), phase));
+      }
+      return;
+    }
+
+    if (targetProp === 'handlers') {
+      if (this.value !== undefined && this.value !== null) {
+        const rawHandlers = Array.isArray(this.value) ? this.value : [this.value];
+        const validHandlers: Handler[] = [];
+        for (const item of rawHandlers) {
+          if (item instanceof Handler) {
+            validHandlers.push(item);
+          } else if (item && typeof item === 'object' && ('body' in item || 'event' in item || 'phase' in item)) {
+            validHandlers.push(Handler.fromDef(item as any, this.parent, phase));
+          } else {
+            console.warn(`[Component] Type check failed for target 'handlers': Expected Handler or HandlerDef on component '${this.reference}'`, item);
+          }
+        }
+        if (validHandlers.length > 0) {
+          this.layerMap.set('handlers', new NodeLayer('handlers', sourceName, 'replace', validHandlers, phase));
+        }
+      }
+      return;
+    }
+
+    if (targetProp === 'component') {
+      if (this.value !== undefined && this.value !== null) {
+        const rawComps = Array.isArray(this.value) ? this.value : [this.value];
+        const validComponents: Component[] = [];
+        for (const item of rawComps) {
+          if (item instanceof Component) {
+            validComponents.push(item);
+          } else if (item && typeof item === 'object' && ('reference' in item || 'target' in item)) {
+            validComponents.push(new Component(item as any, this.parent, phase));
+          } else {
+            console.warn(`[Component] Type check failed for target 'component': Expected Component or ComponentBinding on component '${this.reference}'`, item);
+          }
+        }
+        if (validComponents.length > 0) {
+          this.layerMap.set('component', new NodeLayer('component', sourceName, 'replace', validComponents, phase));
+        }
+      }
+      return;
+    }
 
     if (this._instantiatedNodes && this._instantiatedNodes.length > 0) {
-      if (this.target === 'type' || !this.target) {
+      if (targetProp === 'type') {
         const protoNode = this._instantiatedNodes[0];
         this.layerMap.set('type', new NodeLayer('type', sourceName, 'replace', protoNode.type, phase));
         if (protoNode.props) {
@@ -224,7 +258,7 @@ export class Component implements ComponentBinding {
         if (protoNode.content) {
           this.layerMap.set('content', new NodeLayer('content', sourceName, 'replace', protoNode.content, phase));
         }
-      } else if (this.target === 'children') {
+      } else if (targetProp === 'children') {
         this.layerMap.set('children', new NodeLayer('children', sourceName, 'replace', this._instantiatedNodes, phase));
       }
     } else if (this.value !== undefined && this.value !== null) {

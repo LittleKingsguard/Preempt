@@ -1,4 +1,4 @@
-import type { NodeData, NodeQuery, ComponentBinding, NextState, RollbackState, CompiledNodeState } from "../types/NodeSchema.js";
+import type { NodeData, NodeQuery, ComponentBinding, NextState, CompiledNodeState } from "../types/NodeSchema.js";
 import { Supervisor } from "./Supervisor.js";
 import { clientAPI } from "./ClientAPI.js";
 import { NodeQueryUtils } from "./utils/NodeQueryUtils.js";
@@ -10,6 +10,7 @@ import { Placement } from "./Placement.js";
 import { Props } from "./Props.js";
 import { WorkerMessage } from "./WorkerMessage.js";
 import { NodeLayer } from "./NodeLayer.js";
+import { CompiledState } from "./CompiledState.js";
 
 import { CloneUtils } from "./utils/CloneUtils.js";
 
@@ -24,19 +25,28 @@ export class Node {
   public static readonly REQUIRED_PROPS_MAP: Record<string, string[]> = {
     "img": ["src", "alt"],
     "a": ["href"],
-    "iframe": ["src"],
+    "input": ["type"],
     "form": ["action"],
-    "video": ["src"],
+    "label": ["htmlFor"],
+    "optgroup": ["label"],
+    "option": ["value"],
+    "textarea": ["rows", "cols"],
     "audio": ["src"],
-    "source": ["src"]
+    "video": ["src"],
+    "source": ["src"],
+    "track": ["src", "kind"],
+    "embed": ["src"],
+    "object": ["data"],
+    "param": ["name"],
+    "iframe": ["src"]
   };
 
   private _data!: NodeData;
 
   /**
-   * Underlying raw `NodeData` JSON schema object.
+   * Immutable NodeData payload initially provided during Node creation.
    *
-   * @returns Read-only NodeData schema.
+   * @returns Read-only NodeData schema definition object.
    */
   public get data(): NodeData {
     return this._data;
@@ -46,12 +56,6 @@ export class Node {
     console.error("[Node] Error: 'data' property is read-only and cannot be mutated or reassigned.");
   }
 
-  /** Rollback snapshot saved for error recovery. */
-  public _lastValidState?: RollbackState;
-
-  /** Array of directly owned child Node instances. */
-  public nativeChildren: Node[] = [];
-  private _childrenCache: Node[] | null = null;
   private _parent?: Node | null | undefined;
 
   /**
@@ -64,37 +68,32 @@ export class Node {
   }
 
   /**
-   * Updates the parent Node reference, handling list detachment and cache invalidation.
+   * Updates the parent Node reference, attaching children via change layers.
    *
    * @param newParent Target parent Node or null/undefined.
    */
   public set parent(newParent: Node | null | undefined) {
-    if (this._parent === newParent) return;
+    const oldParent = this._parent;
+    if (oldParent === newParent) return;
 
-    if (this._parent) {
-      // Remove from former parent's nativeChildren
-      const idx = this._parent.nativeChildren.indexOf(this);
-      if (idx !== -1) {
-        this._parent.nativeChildren.splice(idx, 1);
-      }
-      // Remove from former parent's placement _referencingNodes if placed
-      if (this._parent.placement) {
-        for (const p of this._parent.placement) {
+    this._parent = newParent;
+
+    const idOrHash = this.css?.id || this.props?.id || (this as any).id || 'node';
+    const childKey = `child:${idOrHash}`;
+
+    if (oldParent) {
+      oldParent.removeLayer('children', childKey);
+      if (oldParent.placement) {
+        for (const p of oldParent.placement) {
           if (p._referencingNodes) {
             p._referencingNodes.delete(this);
           }
         }
       }
-      this._parent.invalidateChildrenCache();
     }
 
-    this._parent = newParent;
-
     if (newParent) {
-      if (!newParent.children.includes(this)) {
-        newParent.nativeChildren.push(this);
-      }
-      newParent.invalidateChildrenCache();
+      newParent.addLayer(new NodeLayer('children', childKey, 'append', [this]));
     }
   }
 
@@ -105,58 +104,26 @@ export class Node {
   public isValid: boolean = true;
 
 
-  /**
-   * Computed array combining native child nodes and placed child nodes.
-   *
-   * @returns Array of all active child Node instances.
-   */
-  public get children(): Node[] {
-    if (this._childrenCache) return this._childrenCache;
-    let placedChildren: Node[] = [];
-    if (this.placement) {
-      for (const p of this.placement) {
-        if (p._referencingNodes) {
-          placedChildren = placedChildren.concat(Array.from(p._referencingNodes));
-        }
-      }
-    }
-    this._childrenCache = [...this.nativeChildren, ...placedChildren];
-    return this._childrenCache;
-  }
 
-  public set children(val: Node[]) {
-    this.nativeChildren = val;
-    this.invalidateChildrenCache();
-  }
-
-  /**
-   * Invalidates the cached children array for this node and bubbles cache invalidation up to the parent chain.
-   */
-  public invalidateChildrenCache(): void {
-    this._childrenCache = null;
-    if (this.parent) this.parent.invalidateChildrenCache();
-  }
 
   /** Layer stack keyed by targetProperty -> sourceName -> NodeLayer */
   private _layers: Map<string, Map<string, NodeLayer>> = new Map<string, Map<string, NodeLayer>>();
-  private _compiledState: CompiledNodeState | null = null;
+  private _compiledState: CompiledState | null = null;
   private _isDirty: boolean = true;
   private _baseCanon: Record<string, any> = {};
 
-  /** Underlying base property fields */
-  private _rawType: string = 'div';
-  private _rawCss!: Css;
-  private _rawContent?: string | any | undefined;
-  private _rawHandlers?: Handler[] | undefined;
-  private _rawPlacement?: Placement[] | undefined;
-  private _rawComponent?: Component[] | undefined;
+  /** Returns original baseCanon data schema for reconstruction purposes. */
+  public get baseCanon(): Record<string, any> {
+    return this._baseCanon;
+  }
 
   /**
    * Adds or updates single-property change layer(s) on this Node.
    *
    * @param input A single NodeLayer instance, NodeLayer[], or Map<string, NodeLayer>.
+   * @param phase Optional execution phase ID.
    */
-  public addLayer(input: NodeLayer | NodeLayer[] | Map<string, NodeLayer>): void {
+  public addLayer(input: NodeLayer | NodeLayer[] | Map<string, NodeLayer>, phase?: number): void {
     let layersToProcess: NodeLayer[] = [];
     if (input instanceof Map) {
       layersToProcess = Array.from(input.values());
@@ -167,6 +134,24 @@ export class Node {
     }
 
     for (const layer of layersToProcess) {
+      if (phase !== undefined) {
+        layer.phase = phase;
+      }
+      const layerPhase = layer.phase ?? phase ?? 99;
+
+      if (layer.value instanceof Node) {
+        if (layer.value.parent !== this) {
+          layer.value = layer.value.clone([], [], this, layerPhase, false, 'addLayer');
+        }
+      } else if (Array.isArray(layer.value)) {
+        layer.value = layer.value.map(item => {
+          if (item instanceof Node && item.parent !== this) {
+            return item.clone([], [], this, layerPhase, false, 'addLayer');
+          }
+          return item;
+        });
+      }
+
       let targetMap = this._layers.get(layer.targetProperty);
       if (!targetMap) {
         targetMap = new Map<string, NodeLayer>();
@@ -181,7 +166,7 @@ export class Node {
       }
       targetMap.set(layer.sourceName, layer);
       this._isDirty = true;
-      console.log(`[Node] Added layer '${layer.sourceName}' targeting '${layer.targetProperty}' (mode: ${layer.mode}) on node ${this._rawCss?.id || 'unknown'}`);
+      console.log(`[Node] Added layer '${layer.sourceName}' targeting '${layer.targetProperty}' (mode: ${layer.mode}) on node ${this.css?.id || this.props?.id || 'unknown'}`);
     }
   }
 
@@ -216,19 +201,7 @@ export class Node {
     }
   }
 
-  /**
-   * Evaluates and compiles node properties via full compile().
-   *
-   * @param targetProperty Target property key to retrieve from compiled state.
-   * @returns Compiled property value.
-   */
-  public compileProperty(targetProperty: string): any {
-    const compiled = this.compile();
-    if (targetProperty in compiled) {
-      return (compiled as any)[targetProperty];
-    }
-    return (this._baseCanon as any)[targetProperty];
-  }
+
 
   /**
    * Invalidates the compiled state cache, forcing re-compilation on next property read.
@@ -248,7 +221,7 @@ export class Node {
     const compileTarget = (targetProp: string): any => {
       const targetMap = this._layers.get(targetProp);
       if (!targetMap || targetMap.size === 0) {
-        return (this._baseCanon as any)[targetProp];
+        return undefined;
       }
 
       const layers = Array.from(targetMap.values()).sort((a, b) => a.timestamp - b.timestamp);
@@ -263,7 +236,7 @@ export class Node {
 
       const validLayers = lastReplaceAllIdx !== -1 ? layers.slice(lastReplaceAllIdx) : layers;
 
-      let baseVal = (this._baseCanon as any)[targetProp];
+      let baseVal: any = undefined;
       let lastReplaceLayer = [...validLayers].reverse().find(l => l.mode === 'replace' || l.mode === 'replaceAll');
       if (lastReplaceLayer) {
         baseVal = lastReplaceLayer.value;
@@ -289,11 +262,11 @@ export class Node {
       return baseVal;
     };
 
-    const compiledType = compileTarget('type') || this._rawType || 'div';
-    const compiledContent = compileTarget('content') ?? this._rawContent;
-    const compiledHandlers = compileTarget('handlers') || this._rawHandlers || [];
-    const compiledPlacement = compileTarget('placement') || this._rawPlacement || [];
-    const compiledComponent = compileTarget('component') || this._rawComponent;
+    const compiledType = compileTarget('type') || this._data?.type || 'div';
+    const compiledContent = compileTarget('content') ?? this._data?.content;
+    const compiledHandlers = compileTarget('handlers') || [];
+    const compiledPlacement = compileTarget('placement') || [];
+    const compiledComponent = compileTarget('component');
 
     // Construct fresh Props and Css OOP instances to merge sub-property layers
     const compiledProps = new Props(this._data?.props || {}, this);
@@ -316,19 +289,24 @@ export class Node {
       }
     }
 
+
+
     // Children calculation combining native & placed children
-    let compiledNativeChildren = compileTarget('children') || this.nativeChildren || [];
+    let compiledNativeChildren = compileTarget('children') || [];
     let placedChildren: Node[] = [];
     if (compiledPlacement && Array.isArray(compiledPlacement)) {
       for (const p of compiledPlacement) {
-        if (p && p._referencingNodes) {
-          placedChildren = placedChildren.concat(Array.from(p._referencingNodes));
+        if (p) {
+          p.isInTree = this.isInTree;
+          if (p._referencingNodes) {
+            placedChildren = placedChildren.concat(Array.from(p._referencingNodes));
+          }
         }
       }
     }
     const compiledChildren = [...compiledNativeChildren, ...placedChildren];
 
-    this._compiledState = {
+    this._compiledState = new CompiledState({
       type: compiledType,
       props: compiledProps,
       css: compiledCss,
@@ -339,68 +317,55 @@ export class Node {
       placement: compiledPlacement,
       component: compiledComponent,
       isValid: this.isValid
-    };
+    });
 
     this._isDirty = false;
     return this._compiledState;
   }
 
   /** Read-only compiled state getter */
-  public get compiledState(): CompiledNodeState {
+  public get compiledState(): CompiledState {
     if (this._isDirty || !this._compiledState) {
       this.compile();
     }
     return this._compiledState!;
   }
 
-  // --- LAZY PROPERTY ACCESSORS ---
+  // --- LAZY PROPERTY GETTERS ---
   public get type(): string {
     return this.compiledState.type;
-  }
-  public set type(_v: string) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('type', sourceName, mode, value) instead.");
   }
 
   public get props(): Props {
     return this.compiledState.props;
   }
-  public set props(_v: Props) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('props', sourceName, mode, value) instead.");
-  }
 
   public get css(): Css {
     return this.compiledState.css;
-  }
-  public set css(_v: Css) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('css', sourceName, mode, value) instead.");
   }
 
   public get content(): string | any {
     return this.compiledState.content;
   }
-  public set content(_v: string | any) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('content', sourceName, mode, value) instead.");
+
+  public get nativeChildren(): Node[] {
+    return this.compiledState.nativeChildren;
+  }
+
+  public get children(): Node[] {
+    return this.compiledState.children;
   }
 
   public get handlers(): Handler[] | undefined {
     return this.compiledState.handlers;
   }
-  public set handlers(_v: Handler[] | undefined) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('handlers', sourceName, mode, value) instead.");
-  }
 
   public get placement(): Placement[] | undefined {
     return this.compiledState.placement;
   }
-  public set placement(_v: Placement[] | undefined) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('placement', sourceName, mode, value) instead.");
-  }
 
   public get component(): Component[] | undefined {
     return this.compiledState.component;
-  }
-  public set component(_v: Component[] | undefined) {
-    throw new Error("[Node] Direct property mutation prohibited. Use node.addLayer('component', sourceName, mode, value) instead.");
   }
 
   public versions?: any[] | undefined;
@@ -484,7 +449,7 @@ export class Node {
    */
   public setComponents(components: ComponentBinding[] | undefined, phase: number = 0): void {
     if (components === undefined) {
-      delete this.component;
+      this.removeLayer('component', 'baseCanon');
     } else {
       let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this, phase, false));
       this.sourceComponents.clear();
@@ -502,9 +467,9 @@ export class Node {
       });
 
       if (filtered.length > 0) {
-        this.component = filtered;
+        this.addLayer(new NodeLayer('component', 'baseCanon', 'replace', filtered, phase));
       } else {
-        delete this.component;
+        this.removeLayer('component', 'baseCanon');
       }
     }
   }
@@ -519,10 +484,9 @@ export class Node {
    * @param isClone Boolean flag set if node is being created as a duplicate clone.
    * @references `InstantiationWorker.regenerateNode()`, `ComponentAssemblyWorker.processNode()`, `SlotAssemblyWorker.processNode()`, `Node.mergeNativeChildren()`, `Node.clone()`, `Template.constructor`, `Payload.constructor`
    */
-  constructor(data: NodeData, parent: Node | null | undefined, phase: number, isInTree: boolean = false, isClone: boolean = false) {
+  constructor(data: NodeData, parent: Node | null | undefined, phase: number, isInTree: boolean = false, isClone: boolean = false, source: string = 'baseCanon') {
     this._data = data;
     this._baseCanon = { ...data };
-    this.parent = parent;
     this.isInTree = isInTree;
 
     const rawProps = new Props(this._data.props || {}, this);
@@ -533,12 +497,9 @@ export class Node {
 
     if (!hasExplicitPropsId && !hasExplicitCssId) {
       rawProps.isIdAutoGenerated = true;
-    }
-
-    if (isClone && rawProps.isIdAutoGenerated) {
-      const freshId = Node.generateObjectHash(this._data);
-      rawProps.id = freshId;
-      rawCss.id = freshId;
+      const generatedId = isClone ? Node.generateObjectHash(this._data) : (this._data.css?.id || this._data.props?.id || Node.generateObjectHash(this._data));
+      rawProps.id = generatedId;
+      rawCss.id = generatedId;
     } else {
       if (!rawCss.id) {
         rawCss.id = rawProps.id || Node.generateObjectHash(this._data);
@@ -555,31 +516,30 @@ export class Node {
       }
     }
 
-    this._rawType = this._data.type || 'div';
-    this._rawCss = rawCss;
-    this._rawContent = this._data.content;
-
     const initialLayers: NodeLayer[] = [];
-    const sourceName = 'baseCanon';
+    const sourceName = source;
 
-    initialLayers.push(new NodeLayer('type', sourceName, 'replaceAll', this._rawType, phase));
+    initialLayers.push(new NodeLayer('type', sourceName, 'replaceAll', this._data.type || 'div', phase));
 
     if (this._data.content !== undefined) {
       initialLayers.push(new NodeLayer('content', sourceName, 'replaceAll', this._data.content, phase));
     }
 
+    if (rawProps.id) {
+      initialLayers.push(new NodeLayer('props.id', sourceName, 'replaceAll', rawProps.id, phase));
+    }
     if (this._data.props) {
       for (const [pKey, pVal] of Object.entries(this._data.props)) {
-        if (!rawProps.isIdAutoGenerated || pKey !== 'id') {
+        if (pKey !== 'id') {
           initialLayers.push(new NodeLayer(`props.${pKey}`, sourceName, 'replaceAll', pVal, phase));
         }
       }
     }
 
+    if (rawCss.id) {
+      initialLayers.push(new NodeLayer('css.id', sourceName, 'replaceAll', rawCss.id, phase));
+    }
     if (this._data.css) {
-      if (this._data.css.id && !rawProps.isIdAutoGenerated) {
-        initialLayers.push(new NodeLayer('css.id', sourceName, 'replaceAll', this._data.css.id, phase));
-      }
       if (this._data.css.classes && Array.isArray(this._data.css.classes)) {
         initialLayers.push(new NodeLayer('css.classes', sourceName, 'replaceAll', [...this._data.css.classes], phase));
       }
@@ -596,7 +556,7 @@ export class Node {
       if ((phase === 0 || phase === 99 || phase === emitNonePhase) && this._data.children && Array.isArray(this._data.children)) {
         for (const childData of this._data.children) {
           if (childData && typeof childData === 'object') {
-            const childNode = new Node(childData, this, phase, this.isInTree);
+            const childNode = new Node(childData, this, phase, this.isInTree, false, sourceName);
             childNodes.push(childNode);
           }
         }
@@ -623,11 +583,13 @@ export class Node {
       }
     }
 
-    this.addLayer(initialLayers);
+    this.addLayer(initialLayers, phase);
+
+    this.parent = parent;
 
     const validationPhase = PhaseRegistry.getPhaseNumber('validation');
     if (this.isInTree && phase <= validationPhase) {
-      Supervisor.emitToPhaseName(this, this, {}, 'validation');
+      Supervisor.emitToPhaseName(this, this, 'validation');
     }
 
     console.log(`[Node] Created node '${this.css?.id || this.type}' (type: ${this.type}, phase: ${phase}, isInTree: ${this.isInTree})`, this);
@@ -667,13 +629,7 @@ export class Node {
    * @references `Node.clearTrackingArrays()`, `Node.mergeNativeChildren()`, `Placement.delete()`, `Component.delete()`, `Css.delete()`, `StyleNode.delete()`, `Props.delete()`, `Handler.delete()`
    */
   public delete(): void {
-    if (this.parent) {
-      const index = this.parent.nativeChildren.indexOf(this);
-      if (index > -1) {
-        this.parent.nativeChildren.splice(index, 1);
-        this.parent.invalidateChildrenCache();
-      }
-    }
+    this.parent = undefined;
 
     if (this.placement && Array.isArray(this.placement)) {
       for (const p of this.placement) {
@@ -743,7 +699,7 @@ export class Node {
           return;
         }
         this.lastCompletedPhase = explicitPhaseId > 0 ? explicitPhaseId - 1 : undefined;
-        Supervisor.emitToPhase(this, this, this._lastValidState, explicitPhaseId);
+        Supervisor.emitToPhase(this, this, explicitPhaseId);
       }
       return;
     }
@@ -767,12 +723,6 @@ export class Node {
       }
     }
 
-    // Snapshot state
-    if (!this._lastValidState) {
-      this._lastValidState = this.clone(['content', 'children', 'nativeChildren', '_childrenCache', 'parent', 'element'], [], null, 99, false, 'Snapshot');
-      this._lastValidState.nativeChildren = [...this.nativeChildren];
-    }
-
     const validationPhase = PhaseRegistry.getPhaseNumber('validation');
     let minTargetPhase: number = explicitPhaseId !== undefined ? explicitPhaseId : validationPhase;
     let lockFailed = false;
@@ -785,11 +735,9 @@ export class Node {
     for (const key of changedKeys) {
       let phaseResult: number | undefined = undefined;
       if (key === 'props' && nextState.props !== undefined) {
-        if (!this.props) this.props = new Props({}, this);
         phaseResult = this.props.merge(nextState.props);
         this.data.props = { ...this.props };
       } else if (key === 'css' && nextState.css !== undefined) {
-        if (!this.css) this.css = new Css({}, this);
         phaseResult = this.css.merge(nextState.css);
         this.data.css = { id: this.css.id, classes: this.css.classes, style: this.css.style };
       } else if (key === 'component' && nextState.component !== undefined) {
@@ -806,7 +754,6 @@ export class Node {
           lockFailed = true;
           break;
         }
-        (this as any)[key] = (nextState as any)[key];
         (this.data as any)[key] = (nextState as any)[key];
         const mappedPhase = Supervisor.propertyToPhaseMap ? Supervisor.propertyToPhaseMap[key] : validationPhase;
         if (mappedPhase !== undefined) {
@@ -838,39 +785,22 @@ export class Node {
           const stageName = Handler.getStageName(h.phase);
           if (stageName && !emittedStages.has(stageName)) {
             emittedStages.add(stageName);
-            Supervisor.emitToPhaseName(this, this, this._lastValidState, stageName);
+            Supervisor.emitToPhaseName(this, this, stageName);
           }
         }
       }
     }
 
     // Emit to primary target phase
-    Supervisor.emitToPhase(this, this, this._lastValidState, targetPhase);
+    Supervisor.emitToPhase(this, this, targetPhase);
 
     // receiveNextState must always emit to ValidationWorker (validation phase)
     if (targetPhase !== validationPhase) {
-      Supervisor.emitToPhaseName(this, this, this._lastValidState, 'validation');
+      Supervisor.emitToPhaseName(this, this, 'validation');
     }
   }
 
-  /**
-   * Restores a previously saved valid state snapshot on error.
-   *
-   * @param rollbackState Optional explicit rollback state.
-   * @references `BaseWorker.onProcessError()`
-   */
-  public rollback(rollbackState?: RollbackState): void {
-    const stateToRestore = rollbackState || this._lastValidState;
-    if (stateToRestore) {
-      if ((stateToRestore as any).data) {
-        Object.assign(this.data, (stateToRestore as any).data);
-      } else {
-        Object.assign(this.data, stateToRestore);
-      }
-      Object.assign(this, stateToRestore);
-      console.warn(`[Node] Rolled back to previous valid state for node ${this.css?.id}`);
-    }
-  }
+
 
   /**
    * Tests whether this node matches the provided query criteria.
@@ -1000,7 +930,7 @@ export class Node {
    */
   public clone(
     ignoreProps: string[] = [],
-    shallowCopyProps: string[] = [],
+    _shallowCopyProps: string[] = [],
     newParent: Node | null | undefined,
     phase: number,
     isComponent: boolean = false,
@@ -1022,28 +952,19 @@ export class Node {
     const cloneMsg = new WorkerMessage(actor);
     clonedNode.addMessage(cloneMsg);
 
-    clonedNode.type = this.type;
+    // Deep clone non-baseCanon change layers from this._layers to clonedNode
+    for (const [targetProp, sourceMap] of this._layers.entries()) {
+      if (ignoreProps.includes(targetProp)) continue;
+      if (targetProp.startsWith('props.') && ignoreProps.includes('props')) continue;
+      if (targetProp.startsWith('css.') && ignoreProps.includes('css')) continue;
+      if (targetProp.startsWith('children') && (ignoreProps.includes('children') || ignoreProps.includes('nativeChildren'))) continue;
 
-    if (!ignoreProps.includes('css')) {
-      clonedNode.css = this.css ? this.css.clone(ignoreProps, clonedNode, actor) : new Css({}, clonedNode);
-    }
-    if (!ignoreProps.includes('placement')) {
-      clonedNode.placement = this.placement ? this.placement.map(p => p.clone(ignoreProps, clonedNode, targetPhase, actor)) : [];
-    }
-    if (!ignoreProps.includes('content')) {
-      clonedNode.content = this.content ? this.content : undefined;
-    }
-    if (!ignoreProps.includes('props')) {
-      if (this.props) {
-        const clonedProps = this.props.clone(ignoreProps, clonedNode, actor);
-        clonedNode.props.merge(clonedProps);
+      for (const [sourceName, layer] of sourceMap.entries()) {
+        if (sourceName === 'baseCanon') continue;
+        clonedNode.addLayer(layer.clone(ignoreProps, _shallowCopyProps, clonedNode, targetPhase, isComponent, actor));
       }
     }
-    if (!ignoreProps.includes('handlers')) {
-      if (this.handlers && Array.isArray(this.handlers)) {
-        clonedNode.handlers = this.handlers.map(h => h.clone(clonedNode, targetPhase, actor));
-      }
-    }
+
     if (!ignoreProps.includes('component')) {
       if (this.component) {
         const clonedComponents = this.component.map(c => c.clone(ignoreProps, clonedNode, targetPhase, actor));
@@ -1061,12 +982,6 @@ export class Node {
       }
     } else if (clonedNode.props?.id && clonedNode.css && !ignoreProps.includes('css') && !ignoreProps.includes('props')) {
       clonedNode.css.id = clonedNode.props.id;
-    }
-
-    // clone native children
-    if (!ignoreProps.includes('children') && !ignoreProps.includes('nativeChildren')) {
-      const childPhase = isComponent ? 99 : targetPhase;
-      this.nativeChildren.forEach(c => c.clone(ignoreProps, shallowCopyProps, clonedNode, childPhase, false, actor));
     }
 
     return clonedNode;

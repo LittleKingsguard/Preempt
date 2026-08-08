@@ -16,20 +16,15 @@ describe('ComponentAssemblyWorker', () => {
     nodeB = new Node({ type: 'span', props: { id: 'nodeB' } }, null, 0);
   });
 
-  it('uses a Map for its queue and preserves original RollbackState on duplicate pushes', async () => {
-    const originalRollbackState = { props: { id: 'old' } };
-    const newRollbackState = { props: { id: 'intermediate' } };
-
+  it('uses a Set for its queue and prevents duplicate pushes', async () => {
     // First push
-    worker.push(nodeA, originalRollbackState as any);
+    worker.push(nodeA);
     expect((worker as any).queue.size).toBe(1);
-    expect((worker as any).queue.get(nodeA)).toBe(originalRollbackState);
+    expect((worker as any).queue.has(nodeA)).toBe(true);
 
     // Second push for the same node
-    worker.push(nodeA, newRollbackState as any);
+    worker.push(nodeA);
     expect((worker as any).queue.size).toBe(1);
-    // Should preserve the first rollback state
-    expect((worker as any).queue.get(nodeA)).toBe(originalRollbackState);
   });
 
   it('cascades updates by applying calculated NextState directly to referencing nodes and emitting to placement stage', async () => {
@@ -47,13 +42,13 @@ describe('ComponentAssemblyWorker', () => {
     const emitSpy = vi.spyOn(Supervisor, 'emitToPhaseName');
 
     // Push nodeA to queue
-    worker.push(nodeA, { type: 'CustomComp' });
+    worker.push(nodeA);
 
     // Process queue
     await worker.processQueue();
 
     // Because nodeA changed, nodeB should be emitted to placement phase
-    expect(emitSpy).toHaveBeenCalledWith(expect.any(ComponentAssemblyWorker), nodeB, expect.any(Object), 'placement');
+    expect(emitSpy).toHaveBeenCalledWith(expect.any(ComponentAssemblyWorker), nodeB, 'placement');
     emitSpy.mockRestore();
   });
 
@@ -70,7 +65,7 @@ describe('ComponentAssemblyWorker', () => {
     }
 
     // Push nodeA to queue
-    worker.push(nodeA, {});
+    worker.push(nodeA);
     await worker.processQueue();
 
     // nodeA should have a routing message logged for ComponentRoutingWorker
@@ -79,11 +74,8 @@ describe('ComponentAssemblyWorker', () => {
     expect(routingMsgs[0]!.instructions.get('updatedSource')).toContain('NestedComp');
   });
 
-  it('rolls back the Node if Component Assembly processing fails structurally', async () => {
-    const originalRollbackState = { type: 'ValidType' };
-    (nodeA as any).data = { type: 'BrokenType' };
-
-    worker.push(nodeA, originalRollbackState);
+  it('handles errors in worker queue processing', async () => {
+    worker.push(nodeA);
 
     // Force worker processing to throw an error for nodeA
     vi.spyOn(worker as any, 'processNode').mockImplementation(() => {
@@ -93,9 +85,7 @@ describe('ComponentAssemblyWorker', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
     await worker.processQueue();
 
-    // Should catch the error and revert nodeA to the rollback state
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Worker error on node'), expect.objectContaining({ message: expect.stringContaining('Structural Error') }));
-    expect(nodeA.data.type).toBe('ValidType');
 
     consoleSpy.mockRestore();
   });

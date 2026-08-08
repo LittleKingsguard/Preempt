@@ -2,7 +2,6 @@ import { Node } from "../Node.js";
 import { NodeLayer } from "../NodeLayer.js";
 import { Placement } from "../Placement.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 import { Supervisor } from "../Supervisor.js";
 
@@ -21,7 +20,7 @@ export class PlacementAssemblyWorker extends BaseWorker {
    * @param node Host Node containing placement definitions.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[PlacementAssemblyWorker] Assembling placements for node: ${node.type} | ID: ${node.props?.id}`);
 
     if (node.placement && Array.isArray(node.placement)) {
@@ -56,8 +55,8 @@ export class PlacementAssemblyWorker extends BaseWorker {
    * @param node Successfully processed host Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('placementAssembly');
-    Supervisor.emitToPhaseName(this, node, _rollbackState || {}, 'componentRouting');
+    Supervisor.emitToPhaseName(this, node, 'componentRouting');
   }
 }

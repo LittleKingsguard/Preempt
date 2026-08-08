@@ -1,7 +1,6 @@
 import { Component } from "../Component.js";
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 import { WorkerMessage } from "../WorkerMessage.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -22,7 +21,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[ComponentAssemblyWorker] Processing node: ${node.type} | ID: ${node.props?.id}`, node);
 
     const messages = node.getMessages('ComponentAssemblyWorker', true);
@@ -71,8 +70,9 @@ export class ComponentAssemblyWorker extends BaseWorker {
         console.error(`Component binding failed: Cannot resolve an array for a 'type' target component.`);
       } else {
         const activeComp = resolvedBinding || typeComponent;
-        activeComp.buildLayerMap(this.phase);
-        node.addLayer(activeComp.layerMap);
+        const targetProp = activeComp.target || typeComponent.target || 'type';
+        activeComp.buildLayerMap(this.phase, targetProp);
+        node.addLayer(activeComp.layerMap, this.phase);
       }
     }
 
@@ -94,7 +94,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
           const routingMsg = new WorkerMessage('ComponentAssemblyWorker', 'ComponentRoutingWorker');
           routingMsg.addInstruction('updatedSource', [sourceComp.reference || sourceComp.target || 'component']);
           refNode.addMessage(routingMsg);
-          Supervisor.emitToPhaseName(this, refNode, _rollbackState || {}, 'componentRouting');
+          Supervisor.emitToPhaseName(this, refNode, 'componentRouting');
         }
       }
     }
@@ -110,7 +110,7 @@ export class ComponentAssemblyWorker extends BaseWorker {
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('componentAssembly');
   }
 }

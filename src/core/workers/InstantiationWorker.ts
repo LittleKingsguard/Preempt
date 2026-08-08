@@ -1,6 +1,5 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
@@ -27,11 +26,8 @@ export class InstantiationWorker extends BaseWorker {
     const newNode = new Node(data, existingNode.parent, 0);
 
     if (existingNode.parent) {
-      const index = existingNode.parent.nativeChildren.indexOf(existingNode);
-      if (index > -1) {
-        existingNode.parent.nativeChildren[index] = newNode;
-        existingNode.parent.invalidateChildrenCache();
-      }
+      existingNode.delete();
+      existingNode.parent.invalidateCompileCache();
     }
 
     return newNode;
@@ -43,7 +39,7 @@ export class InstantiationWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     // Phase 0: Instantiation trigger
     console.log(`[InstantiationWorker] Node instantiated successfully: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
   }
@@ -52,9 +48,8 @@ export class InstantiationWorker extends BaseWorker {
    * Updates `node.lastCompletedPhase` to 0 upon success.
    *
    * @param node Successfully processed Node.
-   * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('instantiation');
   }
 }

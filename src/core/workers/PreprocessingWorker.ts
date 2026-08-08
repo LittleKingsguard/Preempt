@@ -2,7 +2,6 @@ import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
 import { Supervisor } from "../Supervisor.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
 
@@ -26,14 +25,14 @@ export class PreprocessingWorker extends BaseWorker {
    * @useCase Triggering preprocessing stage for specific nodes.
    * @processFlow Phase 5 event emission helper.
    */
-  public static emitTo(node: Node, rollbackState: RollbackState = {}, recursive: boolean = false): void {
+  public static emitTo(node: Node, recursive: boolean = false): void {
     if (!Supervisor.instance || !Supervisor.instance.preprocessingWorker) return;
     const isMatch = (n: Node): boolean => Boolean(n.handlers && n.handlers.some(h => h.phase === "beforePreprocess" || h.phase === "afterPreprocess"));
     const matchingNodes = recursive ? NodeQueryUtils.findNodes(node, isMatch) : (isMatch(node) ? [node] : []);
     const prepPhase = PhaseRegistry.getPhaseNumber('preprocessing');
     for (const match of matchingNodes) {
       if (match.isInTree && match.lastCompletedPhase !== prepPhase) {
-        Supervisor.emitToPhaseName(this, match, rollbackState, 'preprocessing');
+        Supervisor.emitToPhaseName(this, match, 'preprocessing');
       }
     }
   }
@@ -44,7 +43,7 @@ export class PreprocessingWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     console.log(`[PreprocessingWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
     // Phase 5: Preprocessing
     node.executeHandlers("beforePreprocess", { supervisor: this.supervisor });
@@ -58,7 +57,7 @@ export class PreprocessingWorker extends BaseWorker {
    * @param node Successfully processed Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('preprocessing');
   }
 }

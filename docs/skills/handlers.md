@@ -202,6 +202,11 @@ You can establish a real-time WebSocket subscription directly from a handler by 
         // You can programmatically attach the payload as a new child 
         // to the current node context or re-process it through the Supervisor.
         // e.g. window.Preempt.Supervisor.processComponent(payload, context.node);
-    });
-}"
+
+## Anti-Patterns & Unsupported Practices
+
+### Anti-Pattern: Uncompiled Handler String Resolution
+- **Prohibited Practice**: Resolving raw JavaScript code strings (instead of compiled `Handler` objects with `.compiled`) during runtime handler lookup in `ClientAPI.getHandler()`, or attempting to construct temporary fallback `Node` instances to parse handler strings on the fly.
+- **Why It Is Unsupported/Breaking**: Handlers MUST be compiled upon `Handler` construction (via `new Handler()`). Attempting to dynamically parse or construct dummy handler nodes during tree traversal creates hidden memory leaks, breaks the change layer architecture, and masks invalid component bindings.
+- **Supported Pattern**: Ensure all handlers are instantiated via `Handler` constructor (or `Handler.fromDef()`), which automatically compiles the function body into `handler.compiled`. `ClientAPI.getHandler()` expects compiled `Handler` objects and fails verbosely if an uncompiled string is encountered.
 ```

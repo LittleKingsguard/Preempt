@@ -1,6 +1,5 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { NodeQueryUtils } from "../utils/NodeQueryUtils.js";
 import { Supervisor } from "../Supervisor.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -24,7 +23,7 @@ export class PostprocessingWorker extends BaseWorker {
    * @useCase Triggering postprocessing stage for specific nodes.
    * @processFlow Phase 9 event emission helper.
    */
-  public static emitTo(node: Node, rollbackState: RollbackState = {}): void {
+  public static emitTo(node: Node): void {
     if (!Supervisor.instance || !Supervisor.instance.postprocessingWorker) return;
     const matchingNodes = NodeQueryUtils.findNodes(node, (n: Node) => {
       return Boolean(n.handlers && n.handlers.some(h => h.phase === "beforePostprocess" || h.phase === "afterPostprocess"));
@@ -32,7 +31,7 @@ export class PostprocessingWorker extends BaseWorker {
     const postPhase = PhaseRegistry.getPhaseNumber('postprocessing');
     for (const match of matchingNodes) {
       if (match.isInTree && match.lastCompletedPhase !== postPhase) {
-        Supervisor.emitToPhaseName(this, match, rollbackState, 'postprocessing');
+        Supervisor.emitToPhaseName(this, match, 'postprocessing');
       }
     }
   }
@@ -41,24 +40,17 @@ export class PostprocessingWorker extends BaseWorker {
    * Processes postprocessing handlers for a single Node instance.
    *
    * @param node Node instance to process.
-   * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
-    console.log(`[PostprocessingWorker] Processing node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node);
-    // Phase 9: Postprocessing
-    node.executeHandlers("beforePostprocess", { supervisor: this.supervisor }, false);
-    // Any postprocessing logic
-    node.executeHandlers("afterPostprocess", { supervisor: this.supervisor }, false);
+  protected async processNode(node: Node): Promise<void> {
+    console.log(`[PostprocessingWorker] Executing postprocessing for node: ${node.type} | ID: ${node.props?.id}`);
   }
 
   /**
    * Updates `node.lastCompletedPhase` to 9 upon success.
    *
    * @param node Successfully processed Node.
-   * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('postprocessing');
   }
 }
-

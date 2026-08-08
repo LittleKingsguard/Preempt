@@ -2,6 +2,7 @@ import type { HandlerDef } from "../types/NodeSchema.js";
 import type { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
 import { PhaseRegistry } from "./PhaseRegistry.js";
+import { NodeLayer } from "./NodeLayer.js";
 
 const PHASE_NAME_MAP: Record<string, number> = {
   beforeInstantiate: PhaseRegistry.getPhaseNumber('instantiation'), afterInstantiate: PhaseRegistry.getPhaseNumber('instantiation'),
@@ -54,7 +55,7 @@ export class Handler implements HandlerDef {
     if (this.phase && this.parent && this.parent.isInTree && phase !== 99) {
       const handlerPhaseId = PHASE_NAME_MAP[this.phase];
       if (handlerPhaseId !== undefined && handlerPhaseId >= phase) {
-        Supervisor.emitToPhase(this, this.parent, {}, handlerPhaseId);
+        Supervisor.emitToPhase(this, this.parent, handlerPhaseId);
       }
     }
   }
@@ -107,7 +108,7 @@ export class Handler implements HandlerDef {
       }
     }
 
-    targetNode.handlers = newHandlersList;
+    targetNode.addLayer(new NodeLayer('handlers', 'mergeHandlers', 'replace', newHandlersList));
     return minPhase;
   }
 

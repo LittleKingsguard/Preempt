@@ -1,6 +1,5 @@
 import { Supervisor } from "./Supervisor.js";
 import { Node } from "./Node.js";
-import { Handler } from "./Handler.js";
 import type { NodeData, NodeQuery, ContentPayload } from "../types/NodeSchema.js";
 import { Component } from "./Component.js";
 
@@ -83,16 +82,16 @@ export class ClientAPI {
       const componentBinding = current.sourceComponents?.get(key);
       if (componentBinding) {
         const { resolvedValue } = componentBinding.resolveBinding();
-        if (resolvedValue) {
-          if (typeof resolvedValue === 'object' && resolvedValue !== null && 'compiled' in resolvedValue) {
-            return (resolvedValue as any).compiled;
-          }
-          if (typeof resolvedValue === 'string') {
-            const tempNode = new Node({ type: 'div' }, null, 0);
-            if (!tempNode.handlers) tempNode.handlers = [];
-            tempNode.handlers.push(new Handler({ name: key, body: resolvedValue }, tempNode, 0));
-            return this.getHandler(key, current);
-          }
+        if (resolvedValue && typeof resolvedValue === 'object' && 'compiled' in resolvedValue) {
+          return (resolvedValue as any).compiled;
+        }
+        if (typeof resolvedValue === 'string') {
+          console.error(`[ClientAPI.getHandler] Resolution Error: Component binding for handler '${key}' resolved to an uncompiled string body ("${resolvedValue}") on node '${current.css?.id || current.type}'. Handlers must be compiled upon Handler construction.`, { key, resolvedValue, node: current });
+          return undefined;
+        }
+        if (resolvedValue !== undefined && resolvedValue !== null) {
+          console.error(`[ClientAPI.getHandler] Resolution Error: Component binding for handler '${key}' resolved to an invalid payload (type: ${typeof resolvedValue}) missing compiled function on node '${current.css?.id || current.type}'.`, { key, resolvedValue, node: current });
+          return undefined;
         }
       }
       

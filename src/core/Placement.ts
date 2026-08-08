@@ -1,6 +1,7 @@
 import type { PlacementConfig } from "../types/NodeSchema.js";
 import { Node } from "./Node.js";
 import { Supervisor } from "./Supervisor.js";
+import { PhaseRegistry } from "./PhaseRegistry.js";
 
 /**
  * Manages virtual DOM layout placement slots (`placementName`) and content insertion target definitions (`targetPlacement`).
@@ -129,11 +130,7 @@ export class Placement implements PlacementConfig {
     }
 
     this._referencingNodes.add(clonedNode);
-    const idx = this.parent.nativeChildren.indexOf(clonedNode);
-    if (idx !== -1) {
-      this.parent.nativeChildren.splice(idx, 1);
-    }
-    this.parent.invalidateChildrenCache();
+    this.parent.invalidateCompileCache();
     return clonedNode;
   }
 
@@ -143,7 +140,10 @@ export class Placement implements PlacementConfig {
    * @param phase Execution phase ID.
    */
   public append(phase: number): void {
-    const EMIT_NONE = 9999;
+    const targetPlacementPhase = PhaseRegistry.getPhaseNumber('targetPlacementResolution');
+    const placementAssemblyPhase = PhaseRegistry.getPhaseNumber('placementAssembly');
+    const slotAssemblyPhase = PhaseRegistry.getPhaseNumber('slotAssembly');
+
     if (this.placementName) {
       let list = Placement.placementMap.get(this.placementName);
       if (!list) {
@@ -153,8 +153,8 @@ export class Placement implements PlacementConfig {
       if (!list.includes(this)) {
         list.push(this);
       }
-      if (phase !== EMIT_NONE) {
-        Supervisor.emitToPhaseName(this, this.parent, {}, 'placementAssembly');
+      if (phase !== PhaseRegistry.EMIT_NONE && phase <= slotAssemblyPhase && !Supervisor.isPhaseLocked(placementAssemblyPhase)) {
+        Supervisor.emitToPhaseName(this, this.parent, 'placementAssembly');
       }
     }
     if (this.targetPlacement) {
@@ -168,8 +168,8 @@ export class Placement implements PlacementConfig {
           list.push(this);
         }
       }
-      if (phase !== EMIT_NONE) {
-        Supervisor.emitToPhaseName(this, this.parent, {}, 'targetPlacementResolution');
+      if (phase !== PhaseRegistry.EMIT_NONE && phase <= targetPlacementPhase && !Supervisor.isPhaseLocked(targetPlacementPhase)) {
+        Supervisor.emitToPhaseName(this, this.parent, 'targetPlacementResolution');
       }
     }
   }

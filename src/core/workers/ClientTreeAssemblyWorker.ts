@@ -1,6 +1,5 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
 
 /**
@@ -30,7 +29,7 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[ClientTreeAssemblyWorker] Error: Node reached Tree Assembly phase with parent === undefined or isInTree === false`, node);
       return;
@@ -113,7 +112,7 @@ export class ClientTreeAssemblyWorker extends BaseWorker {
    * @param node Successfully assembled Node.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('treeAssembly');
   }
 }

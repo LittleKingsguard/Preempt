@@ -1,5 +1,4 @@
 import { Node } from "../Node.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { Supervisor } from "../Supervisor.js";
 
 /**
@@ -9,7 +8,7 @@ import { Supervisor } from "../Supervisor.js";
  * @processFlow Manages queued Node instances, controls phase execution order, handles errors, and executes state rollbacks on failure.
  */
 export abstract class BaseWorker {
-  public queue: Map<Node, RollbackState | undefined> = new Map();
+  public queue: Set<Node> = new Set();
   protected isProcessing: boolean = false;
   private _supervisor?: Supervisor | undefined;
 
@@ -37,13 +36,12 @@ export abstract class BaseWorker {
    * Pushes a Node instance into this worker's processing queue.
    *
    * @param node Virtual DOM Node to process.
-   * @param rollbackState Optional rollback state snapshot to restore on error.
    * @useCase Emitting nodes to worker phases via `Supervisor.emitToPhase()`.
    * @processFlow Event queueing for stage processing.
    */
-  public push(node: Node, rollbackState?: RollbackState): void {
+  public push(node: Node): void {
     if (!this.queue.has(node)) {
-      this.queue.set(node, rollbackState);
+      this.queue.add(node);
     }
   }
 
@@ -63,7 +61,7 @@ export abstract class BaseWorker {
    *
    * @returns Promise resolving when queue is drained.
    * @useCase Executed during Supervisor stage runs.
-   * @processFlow Iterates queue, calls `processNode()`, triggers `onProcessSuccess()`, or executes `node.rollback()` on error.
+   * @processFlow Iterates queue, calls `processNode()`, and triggers `onProcessSuccess()`.
    */
   public async processQueue(): Promise<void> {
     this.isProcessing = true;
@@ -71,22 +69,21 @@ export abstract class BaseWorker {
     try {
       while (this.queue.size > 0) {
         if (++iter > 500) { console.error("INFINITE LOOP IN WORKER", this.constructor.name); break; }
-        const nextItem = this.queue.entries().next().value;
-        if (!nextItem) break;
-        const [node, rollbackState] = nextItem;
-        this.queue.delete(node);
+        const nextNode = this.queue.values().next().value;
+        if (!nextNode) break;
+        this.queue.delete(nextNode);
 
         try {
-          if (node.lastCompletedPhase === this.phase) {
-            console.log(`[${this.constructor.name}] Skipping node (already completed phase ${this.phase}): ${node.type} | ID: ${node.css?.id || 'unknown'}`);
+          if (nextNode.lastCompletedPhase === this.phase) {
+            console.log(`[${this.constructor.name}] Skipping node (already completed phase ${this.phase}): ${nextNode.type} | ID: ${nextNode.css?.id || 'unknown'}`);
             continue;
           }
-          console.log(`[${this.constructor.name}] Processing node: ${node.type} | ID: ${node.css?.id || node.props?.id || 'unknown'}`, node);
-          await this.processNode(node, rollbackState);
-          this.onProcessSuccess(node, rollbackState);
+          console.log(`[${this.constructor.name}] Processing node: ${nextNode.type} | ID: ${nextNode.css?.id || nextNode.props?.id || 'unknown'}`, nextNode);
+          await this.processNode(nextNode);
+          this.onProcessSuccess(nextNode);
         } catch (err) {
-          console.error(`[${this.constructor.name}] Worker error on node ${node.css?.id || 'unknown'}:`, err);
-          node.rollback(rollbackState);
+          console.error(`[${this.constructor.name}] Worker error on node ${nextNode.css?.id || 'unknown'}:`, err);
+          nextNode.invalidateCompileCache();
         }
       }
     } finally {
@@ -98,16 +95,14 @@ export abstract class BaseWorker {
    * Abstract method implemented by concrete worker classes to process a single node.
    *
    * @param node Node instance to process.
-   * @param rollbackState Optional rollback snapshot.
    */
-  protected abstract processNode(node: Node, rollbackState?: RollbackState): Promise<void>;
+  protected abstract processNode(node: Node): Promise<void>;
 
   /**
    * Abstract callback executed upon successful processing of a node.
    *
    * @param node Processed Node instance.
-   * @param rollbackState Optional rollback snapshot.
    */
-  protected abstract onProcessSuccess(node: Node, rollbackState?: RollbackState): void;
+  protected abstract onProcessSuccess(node: Node): void;
 }
 

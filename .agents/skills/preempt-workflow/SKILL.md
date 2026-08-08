@@ -59,7 +59,7 @@ To add a new worker stage to the pipeline without breaking existing functionalit
    - Extend `BaseWorker`.
    - Assign phase dynamically: `public readonly phase = PhaseRegistry.getPhaseNumber('myNewStage');`.
    - Update node completion status via `node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('myNewStage');`.
-   - Forward nodes downstream using `Supervisor.emitToPhaseName(this, node, rollbackState, 'nextStageName')`.
+   - Forward nodes downstream using `Supervisor.emitToPhaseName(this, node, 'nextStageName')`.
 4. **Wire Up Supervisor**:
    - Update the upstream worker's success emission to target `'myNewStage'` via `Supervisor.emitToPhaseName()`.
    - Update `Supervisor.defaultTargetPhase` mappings if property changes target the new stage.

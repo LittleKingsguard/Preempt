@@ -1,6 +1,5 @@
 import { Node } from "../Node.js";
 import { BaseWorker } from "./BaseWorker.js";
-import type { RollbackState } from "../../types/NodeSchema.js";
 import { StyleNode } from "../StyleNode.js";
 import { SSRElementCreationWorker } from "./SSRElementCreationWorker.js";
 import { PhaseRegistry } from "../PhaseRegistry.js";
@@ -46,12 +45,12 @@ export class SSRTreeAssemblyWorker extends BaseWorker {
    * @param node Node instance to process.
    * @param _rollbackState Optional rollback snapshot.
    */
-  protected async processNode(node: Node, _rollbackState?: RollbackState): Promise<void> {
+  protected async processNode(node: Node): Promise<void> {
     if (node.parent === undefined || !node.isInTree) {
       console.error(`[SSRTreeAssemblyWorker] Error: Node reached Tree Assembly phase with parent === undefined or isInTree === false`, node);
       return;
     }
-    console.log(`[SSRTreeAssemblyWorker] Assembling HTML tree for node: ${node.type} | ID: ${node.css?.id || 'unknown'}`, node.data, node);
+    console.log(`[SSRTreeAssemblyWorker] Assembling node tree: ${node.type} | ID: ${node.css?.id || 'unknown'}`);
 
     // Phase 8: SSR Tree Assembly
     node.executeHandlers("afterRender", { supervisor: this.supervisor }, false);
@@ -60,10 +59,9 @@ export class SSRTreeAssemblyWorker extends BaseWorker {
   /**
    * Updates `node.lastCompletedPhase` to 8 upon success.
    *
-   * @param node Successfully processed Node.
-   * @param _rollbackState Optional rollback snapshot.
+   * @param node Successfully assembled Node.
    */
-  protected onProcessSuccess(node: Node, _rollbackState?: RollbackState): void {
+  protected onProcessSuccess(node: Node): void {
     node.lastCompletedPhase = PhaseRegistry.getPhaseNumber('treeAssembly');
   }
 

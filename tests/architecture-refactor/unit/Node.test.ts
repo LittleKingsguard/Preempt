@@ -14,8 +14,8 @@ describe('Node - Atomic Architecture', () => {
 
     // Mock worker for routing
     mockWorker = {
-      queue: new Map(),
-      push: vi.fn((n, rollbackState) => mockWorker.queue.set(n, rollbackState))
+      queue: new Set(),
+      push: vi.fn((n) => mockWorker.queue.add(n))
     };
 
     // Mock the supervisor's worker registry
@@ -74,25 +74,19 @@ describe('Node - Atomic Architecture', () => {
     consoleSpy.mockRestore();
   });
 
-  it('stores a rollback copy without deep cloning child nodes', () => {
-    const originalId = node.data.props.id;
+  it('adds a children change layer during receiveNextState', () => {
     const childNode = new Node({ type: 'span' }, null, 0);
-    node.children = [childNode];
 
     // Mock Supervisor to allow all properties
     global.Supervisor.isPropertyLocked = vi.fn(() => false);
 
-    const nextState = { props: { id: 'updated-node' } };
+    const nextState = { children: [childNode] };
     node.receiveNextState(nextState);
 
-    // The rollback state should retain the old ID
-    expect(node._lastValidState.props.id).toBe(originalId);
-
-    // But the child nodes should be referentially identical (no deep clone)
-    expect(node._lastValidState.children[0]).toBe(childNode);
+    expect(node.children).toContain(childNode);
   });
 
-  it('pushes the node and rollback state to the correct Worker queue based on diffed properties', () => {
+  it('pushes the node to the correct Worker queue based on diffed properties', () => {
     // Mock Supervisor to allow all properties
     global.Supervisor.isPropertyLocked = vi.fn(() => false);
 
@@ -100,7 +94,7 @@ describe('Node - Atomic Architecture', () => {
     node.receiveNextState(nextState);
 
     expect(global.Supervisor.getWorkerForPhase).toHaveBeenCalled();
-    expect(mockWorker.push).toHaveBeenCalledWith(node, expect.anything());
+    expect(mockWorker.push).toHaveBeenCalledWith(node);
     expect(mockWorker.queue.has(node)).toBe(true);
   });
 

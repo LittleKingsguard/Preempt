@@ -1,4 +1,6 @@
 import type { LayerMode } from "../types/NodeSchema.js";
+import type { Node } from "./Node.js";
+import { CloneUtils } from "./utils/CloneUtils.js";
 
 /**
  * Encapsulates a single-property reversible change layer on a Node.
@@ -43,17 +45,31 @@ export class NodeLayer {
   /**
    * Deep duplicates this layer instance.
    *
+   * @param ignoreProps Property names to ignore.
+   * @param shallowCopyProps Property names to copy by reference.
+   * @param newParent Target parent Node if contained values require tree linkage.
+   * @param phase Execution phase ID.
+   * @param isComponent Boolean indicating if cloned node represents a component root.
+   * @param actor String context tag.
    * @returns Cloned NodeLayer object.
    */
-  public clone(): NodeLayer {
-    let valCopy = this.value;
-    if (Array.isArray(this.value)) {
-      valCopy = [...this.value];
-    } else if (this.value && typeof this.value === 'object' && typeof this.value.clone === 'function') {
-      valCopy = this.value.clone();
-    } else if (this.value && typeof this.value === 'object') {
-      valCopy = { ...this.value };
-    }
+  public clone(
+    ignoreProps: string[],
+    shallowCopyProps: string[],
+    newParent: Node | null | undefined,
+    phase: number,
+    isComponent: boolean = false,
+    actor: string = 'Snapshot'
+  ): NodeLayer {
+    const valCopy = CloneUtils.cloneDomainObject(
+      this.value,
+      ignoreProps,
+      shallowCopyProps,
+      newParent,
+      phase,
+      isComponent,
+      actor
+    );
 
     const cloned = new NodeLayer(this.targetProperty, this.sourceName, this.mode, valCopy, this.phase);
     cloned.id = this.id;
