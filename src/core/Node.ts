@@ -143,10 +143,24 @@ export class Node {
         if (layer.value.parent !== this) {
           layer.value = layer.value.clone([], [], this, layerPhase, false, 'addLayer');
         }
+      } else if (layer.value instanceof Component) {
+        if (layer.value.parent !== this) {
+          layer.value = layer.value.clone([], this, layerPhase, 'addLayer');
+        }
+      } else if (layer.value instanceof Handler) {
+        if (layer.value.parent !== this) {
+          layer.value = layer.value.clone(this, layerPhase, 'addLayer');
+        }
       } else if (Array.isArray(layer.value)) {
         layer.value = layer.value.map(item => {
           if (item instanceof Node && item.parent !== this) {
             return item.clone([], [], this, layerPhase, false, 'addLayer');
+          }
+          if (item instanceof Component && item.parent !== this) {
+            return item.clone([], this, layerPhase, 'addLayer');
+          }
+          if (item instanceof Handler && item.parent !== this) {
+            return item.clone(this, layerPhase, 'addLayer');
           }
           return item;
         });
@@ -267,6 +281,11 @@ export class Node {
     const compiledHandlers = compileTarget('handlers') || [];
     const compiledPlacement = compileTarget('placement') || [];
     const compiledComponent = compileTarget('component');
+    if (compiledComponent && Array.isArray(compiledComponent)) {
+      this.sortComponents(compiledComponent);
+    } else if (this._layers.has('component')) {
+      this.sortComponents();
+    }
 
     // Construct fresh Props and Css OOP instances to merge sub-property layers
     const compiledProps = new Props(this._data?.props || {}, this);
@@ -441,20 +460,16 @@ export class Node {
   }
 
   /**
-   * Parses component bindings and updates `sourceComponents` (value providers) and `targetComponents` (injection targets).
+   * Sorts and populates `sourceComponents` (value providers) and `targetComponents` (injection targets) from component bindings.
    *
-   * @param components Array of raw component bindings or Component instances.
-   * @param phase Execution phase ID.
-   * @references `Node.constructor`, `Node.clone()`, `Component.mergeComponents()`
+   * @param components Array of Component instances or ComponentBinding objects.
    */
-  public setComponents(components: ComponentBinding[] | undefined, phase: number = 0): void {
-    if (components === undefined) {
-      this.removeLayer('component', 'baseCanon');
-    } else {
-      let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this, phase, false));
-      this.sourceComponents.clear();
-      this.targetComponents.clear();
-      filtered.forEach(c => {
+  public sortComponents(components?: Component[] | ComponentBinding[]): void {
+    const compList = components || (this._compiledState ? this._compiledState.component : undefined) || [];
+    this.sourceComponents.clear();
+    this.targetComponents.clear();
+    compList.forEach(c => {
+      if (c instanceof Component) {
         if (c.target) {
           if (this.targetComponents.get(c.target) !== undefined) {
             console.error(`[Node] Duplicate target component defined for target: ${c.target} on node '${this.css?.id || this.type}'`, this);
@@ -464,13 +479,35 @@ export class Node {
         if (c.value !== undefined) {
           this.sourceComponents.set(c.reference, c);
         }
-      });
+      }
+    });
+  }
 
+  /** Alias for sortComponents. */
+  public sortedComponents(components?: Component[] | ComponentBinding[]): void {
+    this.sortComponents(components);
+  }
+
+  /**
+   * Parses component bindings and updates `sourceComponents` (value providers) and `targetComponents` (injection targets).
+   *
+   * @param components Array of raw component bindings or Component instances.
+   * @param phase Execution phase ID.
+   * @references `Node.constructor`, `Node.clone()`, `Component.mergeComponents()`
+   */
+  public setComponents(components: ComponentBinding[] | undefined, phase: number = 0): void {
+    if (components === undefined) {
+      this.removeLayer('component', 'baseCanon');
+      this.sourceComponents.clear();
+      this.targetComponents.clear();
+    } else {
+      let filtered = components.filter(c => c !== null).map(c => c instanceof Component ? (c.parent = this, c) : new Component(c, this, phase, false));
       if (filtered.length > 0) {
         this.addLayer(new NodeLayer('component', 'baseCanon', 'replace', filtered, phase));
       } else {
         this.removeLayer('component', 'baseCanon');
       }
+      this.sortComponents(filtered);
     }
   }
 

@@ -255,8 +255,21 @@ export class Component implements ComponentBinding {
             this.layerMap.set('css.styleNodes', new NodeLayer('css.styleNodes', sourceName, 'replace', protoNode.css.styleNodes, phase));
           }
         }
-        if (protoNode.content) {
+        if (protoNode.content !== undefined) {
           this.layerMap.set('content', new NodeLayer('content', sourceName, 'replace', protoNode.content, phase));
+        }
+        const protoChildren = protoNode.children || protoNode.nativeChildren;
+        if (protoChildren && protoChildren.length > 0) {
+          this.layerMap.set('children', new NodeLayer('children', sourceName, 'replace', protoChildren, phase));
+        }
+        if (protoNode.handlers && protoNode.handlers.length > 0) {
+          this.layerMap.set('handlers', new NodeLayer('handlers', sourceName, 'replace', [...protoNode.handlers], phase));
+        }
+        if (protoNode.placement && protoNode.placement.length > 0) {
+          this.layerMap.set('placement', new NodeLayer('placement', sourceName, 'replace', [...protoNode.placement], phase));
+        }
+        if (protoNode.component && protoNode.component.length > 0) {
+          this.layerMap.set('component', new NodeLayer('component', sourceName, 'replace', [...protoNode.component], phase));
         }
       } else if (targetProp === 'children') {
         this.layerMap.set('children', new NodeLayer('children', sourceName, 'replace', this._instantiatedNodes, phase));

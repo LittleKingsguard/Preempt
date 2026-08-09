@@ -85,6 +85,7 @@ For a real-world example of complex structural data injection and component-driv
 - **Component Layer Building Rules**:
   - `buildLayerMap()` is NOT called in `Component` constructor; it is called by worker stages (`ComponentAssemblyWorker` / `SlotAssemblyWorker`) during pipeline execution.
   - `buildLayerMap(phase: number, target: string)` requires a target property parameter. Worker stages (`ComponentAssemblyWorker` / `SlotAssemblyWorker`) supply the target property path during assembly.
+  - **`target === 'type'`**: Extracts all structural properties (`type`, `props.*`, `css.*`, `content`, `children`, `handlers`, `placement`, `component`) from the prototype node (`protoNode`) into corresponding `NodeLayer`s.
   - **`target === 'content'`**: String values are passed as a `content` layer. However, if `_instantiatedNodes` contains nodes, those nodes are passed as a `children` layer.
   - **Type Checks**:
     - **`target === 'handlers'`**: Requires values to be `Handler` instances or valid `HandlerDef` objects.
