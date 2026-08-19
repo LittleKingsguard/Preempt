@@ -242,7 +242,8 @@ export class Node {
 
       let lastReplaceAllIdx = -1;
       for (let i = layers.length - 1; i >= 0; i--) {
-        if (layers[i].mode === 'replaceAll') {
+        const layer = layers[i];
+        if (layer && layer.mode === 'replaceAll') {
           lastReplaceAllIdx = i;
           break;
         }
@@ -261,8 +262,9 @@ export class Node {
         let resultArr = Array.isArray(baseVal) ? [...baseVal] : [];
         const appendStartIndex = lastReplaceLayer ? validLayers.indexOf(lastReplaceLayer) + 1 : 0;
         for (let i = appendStartIndex; i < validLayers.length; i++) {
-          if (validLayers[i].mode === 'append') {
-            const appVal = validLayers[i].value;
+          const layer = validLayers[i];
+          if (layer && layer.mode === 'append') {
+            const appVal = layer.value;
             if (Array.isArray(appVal)) {
               resultArr.push(...appVal);
             } else if (appVal !== undefined && appVal !== null) {

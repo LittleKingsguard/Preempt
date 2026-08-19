@@ -22,7 +22,7 @@ export class CompiledState implements CompiledNodeState {
   public nativeChildren: Node[];
   public handlers: Handler[];
   public placement: Placement[];
-  public component?: Component[];
+  public component?: Component[] | undefined;
   public isValid: boolean;
 
   constructor(init: {
@@ -34,7 +34,7 @@ export class CompiledState implements CompiledNodeState {
     nativeChildren: Node[];
     handlers: Handler[];
     placement: Placement[];
-    component?: Component[];
+    component?: Component[] | undefined;
     isValid: boolean;
   }) {
     this.type = init.type;

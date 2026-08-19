@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ValidationWorker } from '../../../src/core/workers/ValidationWorker';
 import { Node } from '../../../src/core/Node';
-import { Props } from '../../../src/core/Props';
 import { PhaseRegistry } from '../../../src/core/PhaseRegistry';
 
 describe('ValidationWorker', () => {
@@ -14,7 +13,7 @@ describe('ValidationWorker', () => {
   });
 
   it('emits event to next phase if validation passes and sets lastCompletedPhase to validation phase', async () => {
-    worker.push(node, { props: { src: 'old.png' } } as any);
+    worker.push(node);
     
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
@@ -25,19 +24,15 @@ describe('ValidationWorker', () => {
     consoleSpy.mockRestore();
   });
 
-  it('rolls back Node state if validation fails', async () => {
-    const originalRollbackState = { props: { src: 'old.png', alt: 'old' } };
+  it('handles validation failure when required property is missing', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     
-    // Optimistic bad update missing alt tag
-    (node as any)._data = { ...node.data, props: { src: 'test.png' } };
-    node.props = new Props({ src: 'test.png' }, node); // Needed since we bypass receiveNextState in tests
-    
-    worker.push(node, originalRollbackState);
+    const invalidNode = new Node({ type: 'img', props: { src: 'test.png' } }, null, 0, true);
+    worker.push(invalidNode);
     
     await worker.processQueue();
 
-    expect(node.props.alt).toBe('old');
+    expect(invalidNode.isValid).toBe(false);
     consoleSpy.mockRestore();
   });
 });

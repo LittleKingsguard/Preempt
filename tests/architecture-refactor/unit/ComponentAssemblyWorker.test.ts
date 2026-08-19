@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentAssemblyWorker } from '../../../src/core/workers/ComponentAssemblyWorker';
 import { Component } from '../../../src/core/Component';
 import { Node } from '../../../src/core/Node';
+import { NodeLayer } from '../../../src/core/NodeLayer';
 import { WorkerMessage } from '../../../src/core/WorkerMessage';
 import { Supervisor } from '../../../src/core/Supervisor';
 
@@ -11,7 +12,7 @@ describe('ComponentAssemblyWorker', () => {
   let nodeB: Node;
 
   beforeEach(() => {
-    worker = new ComponentAssemblyWorker(Supervisor.instance!);
+    worker = new ComponentAssemblyWorker();
     nodeA = new Node({ type: 'div', props: { id: 'nodeA', someProp: 'value' } }, null, 0);
     nodeB = new Node({ type: 'span', props: { id: 'nodeB' } }, null, 0);
   });
@@ -33,11 +34,10 @@ describe('ComponentAssemblyWorker', () => {
     comp._referencingNodes = new Set([nodeB]);
     nodeA.sourceComponents.set('CustomComp', comp);
 
-    nodeA.data.type = 'CustomComp';
-    nodeA.data.props = { someProp: 'value' };
-    nodeA.type = 'CustomComp';
-    nodeB.data.type = 'CustomComp';
-    nodeB.type = 'CustomComp';
+    (nodeA as any)._data = { type: 'CustomComp', props: { someProp: 'value' } };
+    nodeA.invalidateCompileCache();
+    (nodeB as any)._data = { type: 'CustomComp' };
+    nodeB.invalidateCompileCache();
 
     const emitSpy = vi.spyOn(Supervisor, 'emitToPhaseName');
 
@@ -92,15 +92,13 @@ describe('ComponentAssemblyWorker', () => {
 
   it('confirms feedback works correctly when a component is updated, propagating the change to all instances', async () => {
     // nodeA is the master component definition
-    nodeA.data.type = 'MasterComponent';
-    nodeA.data.props = { class: 'base-class' };
+    (nodeA as any)._data = { type: 'MasterComponent', props: { class: 'base-class' } };
+    nodeA.invalidateCompileCache();
 
     // nodeB and nodeC are instances of the component
     const nodeC = new Node({ type: 'MasterComponent' }, null, 0);
-    nodeA.data.type = 'MasterComponent';
-    nodeA.type = 'MasterComponent';
-    nodeB.data.type = 'MasterComponent';
-    nodeB.type = 'MasterComponent';
+    (nodeB as any)._data = { type: 'MasterComponent' };
+    nodeB.invalidateCompileCache();
 
     const comp2 = new Component({ reference: 'MasterComponent', target: 'props' }, nodeA, 0);
     comp2._referencingNodes = new Set([nodeB, nodeC]);
@@ -108,9 +106,10 @@ describe('ComponentAssemblyWorker', () => {
 
     // Master component receives an update to add a new class
     const nextState = { props: { class: 'base-class new-modifier' } };
-    nodeA.data.props = nextState.props; // optimistic update applied by Node
+    (nodeA as any)._data.props = nextState.props;
+    nodeA.invalidateCompileCache();
 
-    worker.push(nodeA, { props: { class: 'base-class' } } as any);
+    worker.push(nodeA);
     await worker.processQueue();
 
     // Feedback confirmation: both instances should receive the calculated NextState containing the new modifier
@@ -126,7 +125,7 @@ describe('ComponentAssemblyWorker', () => {
     msg.addInstruction('createdNew', ['MasterComponent']);
     nodeA.addMessage(msg);
 
-    worker.push(nodeA, {});
+    worker.push(nodeA);
     await worker.processQueue();
 
     expect(nodeA.type).toBe('header');
@@ -134,10 +133,9 @@ describe('ComponentAssemblyWorker', () => {
   });
 
   it('resets node to node.data originals when an instructed type component resolution fails', async () => {
-    nodeA.data.type = 'div';
-    nodeA.data.content = 'Original Content';
-    nodeA.type = 'modified-type';
-    nodeA.content = 'Modified Content';
+    (nodeA as any)._data = { type: 'div', content: 'Original Content' };
+    nodeA.addLayer(new NodeLayer('type', 'test', 'replace', 'modified-type', 0));
+    nodeA.addLayer(new NodeLayer('content', 'test', 'replace', 'Modified Content', 0));
 
     const failingTypeComp = new Component({ reference: 'NonExistentComponent', target: 'type' }, nodeA, 0);
     nodeA.targetComponents.set('type', failingTypeComp);
@@ -146,7 +144,7 @@ describe('ComponentAssemblyWorker', () => {
     msg.addInstruction('createdNew', ['NonExistentComponent']);
     nodeA.addMessage(msg);
 
-    worker.push(nodeA, {});
+    worker.push(nodeA);
     await worker.processQueue();
 
     // Node should be reset back to node.data originals

@@ -165,7 +165,7 @@ export interface CompiledNodeState {
   nativeChildren: Node[];
   handlers: any[];
   placement: any[];
-  component?: any[];
+  component?: any[] | undefined;
   isValid: boolean;
 }
 
