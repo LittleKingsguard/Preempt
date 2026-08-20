@@ -69,7 +69,10 @@ function extractReferences(payload: any) {
 }
 
 export async function loadLibraryData(adminUser: any) {
-  const libraryPath = path.join(process.cwd(), 'library');
+  let libraryPath = path.join(process.cwd(), 'library');
+  if (!fs.existsSync(libraryPath)) {
+    libraryPath = path.join(process.cwd(), 'server', 'library');
+  }
   
   // Create a default TemplateGroup for the dashboard/UI
   let groupId: number;

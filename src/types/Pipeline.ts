@@ -43,7 +43,7 @@ export interface PipelineContext {
   userData?: any;
 }
 
-import type { Node } from "../core/Node.js";
+import type { Node } from "../core/node.js";
 
 export interface PipelineObserver {
   onStageStart?: (stage: PipelineStage, context: PipelineContext) => void;

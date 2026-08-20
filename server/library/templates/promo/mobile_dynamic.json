@@ -30,7 +30,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "navBar"
           }
         ]
@@ -39,7 +39,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "header"
           }
         ]
@@ -96,7 +96,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "footer"
           }
         ]
@@ -133,5 +133,69 @@
       }
     ]
   },
-  "children": []
+  "children": [
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "adminDashboardLink"
+        }
+      ],
+      "placement": [
+        {
+          "targetPlacement": [
+            "adminLinks"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "editContentLink"
+        }
+      ],
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "div",
+      "css": {
+        "style": {
+          "display": "none"
+        }
+      },
+      "component": [
+        {
+          "target": "type",
+          "reference": "createArticleLink"
+        }
+      ],
+      "placement": [
+        {
+          "targetPlacement": [
+            "contributorLinks"
+          ]
+        }
+      ]
+    }
+  ]
 }

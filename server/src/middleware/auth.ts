@@ -12,7 +12,10 @@ export function getJWTSecret(): string {
 export const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export const authenticateToken = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const token = req.cookies?.token;
+  const cookieToken = req.cookies?.token;
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const token = cookieToken ?? bearerToken;
   if (!token) {
     (req as any).user = null;
     return next();

@@ -169,7 +169,7 @@ export interface CompiledNodeState {
   isValid: boolean;
 }
 
-import type { Node } from "../core/Node.js";
+import type { Node } from "../core/node.js";
 /** State update payload pushed to `Node._nextStateQueue`. */
 export type NextState = Partial<Node> | Record<string, any>;
 /** State snapshot payload saved for rollback operations. */

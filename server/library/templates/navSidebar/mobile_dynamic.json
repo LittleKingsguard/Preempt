@@ -42,7 +42,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "navBar"
           }
         ]
@@ -51,7 +51,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "header"
           }
         ]
@@ -133,7 +133,7 @@
         "type": "div",
         "component": [
           {
-            "target": "content",
+            "target": "children",
             "reference": "footer"
           }
         ]

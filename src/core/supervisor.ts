@@ -1,0 +1,753 @@
+// src/core/supervisor.ts — the journaling mutation sink behind ClientAPI
+// (api.md §1, §8): resolves ops, journals applied ones, drives pass-2
+// compile + event emission, and supports replay/undo/redo.
+//
+// Depends on the Node class only through its public surface; `findCycle` is
+// the sole runtime import from node.js (used at call time, so the circular
+// import between the two modules is safe).
+import { findCycle } from './node.js'
+import type { Node } from './node.js'
+import { Link } from './link.js'
+import { CycleError, SingleParentError } from './errors.js'
+import { EventBridge } from './events.js'
+import { createClient } from './client.js'
+import type { ClientAPI } from './client.js'
+import { makeHandlerContext, dispatchPhase, dispatchPhaseForNodes } from './handlers.js'
+import type { HandlerContext, HandlerPhase } from './handlers.js'
+import { unregisterContentNode, resolveNodeRef } from './registry.js'
+import { placementChangeIrrelevant, activePlacementOf, hookWriteGuard } from './resolve.js'
+import { placementAttach, derivePlacementTrigger, detachNodeSafe, layerApply, rowsMint, rowsClear } from './ops.js'
+import type { Anchor, CompiledState, LinkConfigNameHub, NodeId, NodeState, PlacementTrigger, RowsMintOp } from './types.js'
+
+let journalSeq = 0
+
+/**
+ * Bounded pass-2 slice for one changed node: the node itself, its ancestor
+ * chain and its subtree — the walk path. PLUS, only when the walk path
+ * carries a target AND the tree cannot answer from its per-name component
+ * Links, the source/duplex-bearing universe (the fallback — prototype/
+ * contentNodes-owned providers must stay discoverable so arms terminate
+ * with the right drop reason).
+ *
+ * The per-name component Link IS the registry of nodes relevant for a
+ * target (anchors carry their owner backref — resolve.ts reads providers
+ * straight off the Link). A shared-hub tree therefore needs NO universe in
+ * the slice at all — sweeping every provider in the graph into every dirty
+ * node's slice is pure O(n) overhead per pass, pathological when every node
+ * is a self-providing provider (values/link-only stress pages: 4094 dirty
+ * nodes × 4095-node slices). Hub-less trees (same-name anchors on private
+ * links) keep the status-quo sweep, still gated on targets + lazily
+ * materialized.
+ */
+export function focusedSliceFor(node: Node, all: Node[] | (() => Node[])): Node[] {
+  const set = new Map<NodeId, Node>()
+  for (let cur: Node | null = node; cur; cur = cur.parent) set.set(cur.id, cur)
+  const stack: Node[] = [...node.children]
+  while (stack.length > 0) {
+    const d = stack.pop()!
+    set.set(d.id, d)
+    stack.push(...d.children)
+  }
+  const pathHasTarget = [...set.values()].some(n =>
+    n.anchors.some(a => a.role === 'target' && typeof a.target === 'string'),
+  )
+  if (pathHasTarget) {
+    const names = new Set<string>()
+    for (const n of set.values()) {
+      for (const a of n.anchors) {
+        if (a.role === 'target' && typeof a.target === 'string') names.add(a.target)
+      }
+    }
+    let hubAnswers = false
+    const hub = node.hubFor
+    if (hub) {
+      for (const name of names) {
+        if (hub.linkFor(name, 'component').anchors.length > 0) hubAnswers = true
+      }
+    }
+    if (!hubAnswers) {
+      // hub-less / unshared-link trees: the fallback can only answer from
+      // the slice — sweep the providers in (status quo, target-gated)
+      const universe = typeof all === 'function' ? all() : all
+      for (const n of universe) {
+        if (set.has(n.id)) continue
+        if (n.anchors.some(a => (a.role === 'source' || a.role === 'duplex') && typeof a.target === 'string')) {
+          set.set(n.id, n)
+        }
+      }
+    }
+  }
+  return [...set.values()]
+}
+
+export interface JournalEntry {
+  id: string
+  op: { kind: string; [key: string]: unknown }
+  result: { status: string; [key: string]: unknown }
+}
+
+export class Supervisor {
+  readonly journal: JournalEntry[] = []
+  private readonly nodes: Map<NodeId, Node>
+  private readonly hub: LinkConfigNameHub | null
+  readonly events: EventBridge | null
+  private undoStack: JournalEntry[] = []
+  private redoStack: JournalEntry[] = []
+  private client: ClientAPI | null = null
+  private handlerCtx: HandlerContext | null = null
+
+  constructor(rootOrOpts: Node | { hub?: LinkConfigNameHub; events?: EventBridge }, nodes?: Map<NodeId, Node>) {
+    this.hub = null
+    this.events = null
+    if (rootOrOpts !== null && typeof rootOrOpts === 'object' && (rootOrOpts as { isNode?: boolean }).isNode === true) {
+      const root = rootOrOpts as Node
+      this.nodes = nodes ?? new Map<NodeId, Node>()
+      this.nodes.set(root.id, root)
+    } else {
+      const opts = rootOrOpts as { hub?: LinkConfigNameHub; events?: EventBridge }
+      this.nodes = new Map<NodeId, Node>()
+      this.hub = opts.hub ?? null
+      this.events = opts.events ?? null
+    }
+  }
+
+  getNode(id: NodeId): Node | undefined {
+    return this.nodes.get(id)
+  }
+
+  allNodes(): Node[] {
+    return [...this.nodes.values()]
+  }
+
+  registerNode(node: Node): void {
+    this.nodes.set(node.id, node)
+  }
+
+  /** Lazily-built client API for handler contexts. */
+  get clientAPI(): ClientAPI {
+    this.client ??= createClient(this)
+    return this.client
+  }
+
+  /** Handler context exposing the mutation channel + tree search. */
+  get handlerContext(): HandlerContext {
+    this.handlerCtx ??= makeHandlerContext(this, this.clientAPI)
+    return this.handlerCtx
+  }
+
+  /** Run a phase's handlers on one node (or all registered nodes if omitted). */
+  runPhase(phase: HandlerPhase, nodeId?: NodeId): void {
+    if (nodeId !== undefined) {
+      const node = this.nodes.get(nodeId)
+      if (node) dispatchPhase(node, this.handlerContext, phase)
+      return
+    }
+    dispatchPhaseForNodes(this.allNodes(), this.handlerContext, phase)
+  }
+
+  /** Internal: dispatch a phase on one node (contained errors, reentrancy-guarded). */
+  private dispatchingPhases = new Set<string>()
+
+  private runPhaseOnNode(phase: HandlerPhase, node: Node): void {
+    const key = `${phase}:${node.id}`
+    if (this.dispatchingPhases.has(key)) return
+    this.dispatchingPhases.add(key)
+    try {
+      dispatchPhase(node, this.handlerContext, phase)
+    } finally {
+      this.dispatchingPhases.delete(key)
+    }
+  }
+
+  /**
+   * Bounded pass-2 slice: the changed node's walk path + (only when the path
+   * carries a target) the lazily-materialized provider universe.
+   */
+  private focusedSlice(node: Node): Node[] {
+    return focusedSliceFor(node, () => this.allNodes())
+  }
+
+  /** Compiled states produced by pass-2 since the last take — the renderer
+   *  consumes these instead of recompiling (with the flush awaited, every
+   *  dirty node's compile has already resolved). */
+  private pass2States = new Map<NodeId, CompiledState[]>()
+
+  /** Non-draining mirror of pass2States: last-known pass-2 states per node
+   *  (grouped per node, fork arms preserved). Handlers read this via
+   *  getResolvedStates / Node.resolved — it must NEVER be drained, and must
+   *  never consume the renderer's snapshot. */
+  private resolvedStates = new Map<NodeId, CompiledState[]>()
+
+  takePass2States(): Map<NodeId, CompiledState[]> {
+    const out = this.pass2States
+    this.pass2States = new Map<NodeId, CompiledState[]>()
+    return out
+  }
+
+  /** HARNESS settle-check (2026-08-16) — is the pass-2 pipeline still
+   *  holding work (a scheduled flush, dirty nodes, pending placement
+   *  triggers)? NON-draining — the renderer's takePass2States stays the
+   *  drain. Lets a page harness replace blind timer-yield bursts (8×
+   *  setTimeout(0)) with an adaptive settle loop: the flush cascade is
+   *  microtask-bound, so one task boundary drains it; the check confirms
+   *  completion without consuming state. */
+  hasPendingWork(): boolean {
+    return this.flushScheduled || this.pass2Dirty.size > 0 || this.pendingTriggers.size > 0
+  }
+
+  /** TIMING (2026-08-16) — the SYNCHRONOUS pass-2 engine work accumulated
+   *  across flushes (measured around runPass2AndFlush only, excluding the
+   *  scheduler windows a page harness's awaits occupy). A profile can split
+   *  its wall-time pass2Ms into engine work (this) vs scheduler idle
+   *  (pass2Ms − this): the fork-stress pages' flush cascades run inside the
+   *  await windows, so a wall-only number cannot tell the two apart. */
+  private flushWorkMs = 0
+
+  pass2WorkMs(): number {
+    return this.flushWorkMs
+  }
+
+  /** Group compiled states per node (fork arms preserved per node). */
+  private groupByNode(actionable: CompiledState[]): Map<NodeId, CompiledState[]> {
+    const grouped = new Map<NodeId, CompiledState[]>()
+    for (const cs of actionable) {
+      const g = grouped.get(cs.nodeId) ?? []
+      g.push(cs)
+      grouped.set(cs.nodeId, g)
+    }
+    return grouped
+  }
+
+  /** Write grouped pass-2 states into the non-draining resolved store and
+   *  through to each node's read-only `resolved` cache. */
+  private storeResolved(grouped: Map<NodeId, CompiledState[]>): void {
+    for (const [id, arr] of grouped) {
+      this.resolvedStates.set(id, arr)
+      const n = this.nodes.get(id)
+      if (n && !n.destroyed) n.__setResolved(arr)
+    }
+  }
+
+  /** Seed the resolved store from a bootstrap compile's actionable states —
+   *  the demos' bootstrap compiles the root DIRECTLY (bypassing the
+   *  supervisor), so callers must recordResolved(cr.actionable) after that
+   *  full compile. Groups per node and writes through node.resolved. This
+   *  NEVER touches pass2States and never drains. */
+  recordResolved(actionable: CompiledState[]): void {
+    this.storeResolved(this.groupByNode(actionable))
+  }
+
+  /** Non-draining getter: a node's last-known pass-2 compiled states
+   *  (grouped, fork arms preserved) or []. Returns a shallow copy so callers
+   *  cannot mutate the store. */
+  getResolvedStates(id: NodeId): CompiledState[] {
+    return [...(this.resolvedStates.get(id) ?? [])]
+  }
+
+  private eventTick = 0
+  private flushScheduled = false
+  private pass2Dirty = new Set<NodeId>()
+  /** P3 §1.2/§3.3 (C-2, 10.ac.2 #7) — the update trigger identity carried from
+   *  `supervisor.apply` into the pass-2 dispatch: which placement link changed
+   *  and how. Set by placement-affecting ops for their dirty nodes; consumed
+   *  (and cleared) by the runPass2AndFlush relevance pre-check. */
+  private pendingTriggers = new Map<NodeId, PlacementTrigger>()
+
+  private emitStructure(opKind: string, nodeId: NodeId): void {
+    if (!this.events) return
+    this.events.push('structure', { type: 'structure', op: opKind as never, nodeId })
+    this.scheduleFlush()
+  }
+
+  private markPass2(nodeId: NodeId, trigger?: PlacementTrigger): void {
+    this.pass2Dirty.add(nodeId)
+    if (trigger) this.pendingTriggers.set(nodeId, trigger)
+    this.scheduleFlush()
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushScheduled) return
+    this.flushScheduled = true
+    queueMicrotask(() => {
+      this.flushScheduled = false
+      const t0 = performance.now()
+      this.runPass2AndFlush()
+      this.flushWorkMs += performance.now() - t0
+    })
+  }
+
+  private runPass2AndFlush(): void {
+    const dirty = [...this.pass2Dirty]
+    this.pass2Dirty.clear()
+    if (dirty.length > 0) {
+      for (const nodeId of dirty) {
+        const node = this.nodes.get(nodeId)
+        if (!node || node.destroyed) {
+          this.pendingTriggers.delete(nodeId)
+          continue
+        }
+        // slice/compile-mode switch (placement-path-spec §2.1/§6.2): a dirty
+        // node that is placement-routed (carries `content` anchors) compiles
+        // through the path-enumeration mode — per-path states, node-local
+        // (E2E-2: only this node's path-states regenerate). Non-placement
+        // nodes keep the bounded focused-slice compile unchanged.
+        const placementRouted = node.anchors.some(a => a.role === 'content')
+        // P3 §1.2/§3.3 (C-2) — the silent abort, evaluated BEFORE node.compile:
+        // the update trigger identity (which placement link changed) gates
+        // placement-routed nodes — "can the changed link alter this node's
+        // first-match choice?" (chosenName from the node's LAST states'
+        // activePlacement). Irrelevant ⇒ skip the compile ENTIRELY: no state
+        // regeneration, no events, no dirty residue.
+        const trigger = this.pendingTriggers.get(nodeId)
+        this.pendingTriggers.delete(nodeId)
+        if (placementRouted && trigger && trigger.kind === 'placement') {
+          const chosenName = activePlacementOf(this.resolvedStates.get(nodeId) ?? [])
+          if (placementChangeIrrelevant(node, chosenName, trigger.linkName)) continue
+        }
+        const cr = placementRouted
+          ? node.compilePath()
+          : node.compile(this.focusedSlice(node), { focusNodeId: nodeId })
+        // hand the fresh compiled states to the renderer (no recompile there).
+        // Group fork arms per compile result, then REPLACE per node — a later
+        // dirty node's compile (e.g. a descendant's own pass) supersedes the
+        // walk-path copy produced by an ancestor's pass.
+        const grouped = this.groupByNode(cr.actionable)
+        for (const [id, arr] of grouped) this.pass2States.set(id, arr)
+        // also mirror into the non-draining resolved store (handlers/read-only
+        // access) + write through to each node's `resolved` cache
+        this.storeResolved(grouped)
+        // after-compile (before render): phase handlers see the fresh compile
+        this.runPhaseOnNode('after-compile', node)
+        if (this.events) {
+          for (const cs of cr.actionable) {
+            if (cs.nodeId !== nodeId) continue
+            let status: string = 'ok'
+            if (cs.unresolved.length > 0) status = 'unresolved-reference'
+            // §9-Q3 (R2-Q6/C-6) — the `#f` gate re-expressed: EVERY path-state
+            // (forkKey present = pathKey, set unconditionally at mint) emits
+            // for its path — {forkKey: pathKey, nodeIds: trace}; there is no
+            // `#f`-grammar dependency left (path-states' keys are placement
+            // pathKeys; the W2 (nodeId, forkKey) dedup keys are path-unique).
+            const fork = cs.forkKey !== undefined
+              ? { forkKey: cs.forkKey, nodeIds: cs.trace ?? [cs.nodeId] }
+              : undefined
+            this.events.push('state', { type: 'state', nodeId: cs.nodeId, status: status as never, fork: fork as never })
+          }
+          for (const d of cr.dropped) {
+            if (d.reason === 'loop' && d.arm[0] === nodeId) {
+              this.events.push('diagnostic', { type: 'diagnostic', code: 'circular-source', trace: (node.pathKey || node.id) as never })
+            }
+          }
+        }
+      }
+    }
+    this.eventTick++
+    this.events?.flush(this.eventTick)
+    // after-render: the tick's events have been emitted (destroyed nodes skip)
+    for (const nodeId of dirty) {
+      const node = this.nodes.get(nodeId)
+      if (node && !node.destroyed) this.runPhaseOnNode('after-render', node)
+    }
+  }
+
+  private journalIfApplied(op: { kind: string; [key: string]: unknown }, result: { status: string; [key: string]: unknown }): JournalEntry | null {
+    if (result.status !== 'applied') return null
+    const { kind, ...rest } = op
+    const entry: JournalEntry = { id: `journal-${journalSeq++}`, op: { kind, ...rest }, result }
+    this.journal.push(entry)
+    this.undoStack.push(entry)
+    this.redoStack = []
+    return entry
+  }
+
+  apply(op: { kind: string; node?: Node; [key: string]: unknown }): {
+    status: 'applied' | 'no-usable-state' | 'rejected'
+    journalId?: string
+    dirtied?: NodeId[]
+    nodeState?: string
+    error?: { code: string; detail?: unknown }
+    minted?: NodeId[]
+  } {
+    const node = op.node as Node | undefined
+    if (!node && op.kind !== 'clone-instance' && op.kind !== 'layer-apply' && op.kind !== 'rows-mint' && op.kind !== 'rows-clear') {
+      return { status: 'rejected', error: { code: 'unknown-node' } }
+    }
+
+    // before-compile: phase handlers run before the op executes (and its
+    // compile/apply happens). Errors are contained by dispatchPhase.
+    const phaseTarget = op.kind === 'layer-apply' || op.kind === 'rows-mint' || op.kind === 'rows-clear' ? (op.target as Node | undefined) : node
+    if (phaseTarget) this.runPhaseOnNode('before-compile', phaseTarget)
+
+    try {
+      if (op.kind === 'state-slice') {
+        const mutation = op.mutation as { targetProp: string; mode: string; value: unknown }[]
+        // placement/children writes are hard-blocked regardless of tree state (FS-10)
+        for (const m of mutation) {
+          if (m.targetProp.startsWith('placement') || m.targetProp === 'children') {
+            return { status: 'rejected', error: { code: 'placement-target-blocked' } }
+          }
+          // HOOKS (hooks-map-review.md §7.2 pins 1/5 — the value-provider
+          // slot): the managed-channel ENTRY gate. `hooks.<name>` writes are
+          // 'replace'-only (`hook-mode-blocked`) and resolve against the
+          // node's OWN source/duplex anchors (`hook-name-unresolved` — a
+          // bare `hooks` target has no name); a seam/def-shaped provider is
+          // the landmine — `hook-seam-exempt` warn + the mutation is an
+          // inert NO-OP (the rest of the op still applies). The same gate
+          // runs defensively inside node.applySlice (warn + skip, never
+          // throw) — this pre-check is what turns the containment into a
+          // rejected RESULT on the managed channel.
+          if (m.targetProp.startsWith('hooks.') || m.targetProp === 'hooks') {
+            const name = m.targetProp === 'hooks' ? '' : m.targetProp.slice('hooks.'.length)
+            if (name.length === 0 || m.mode !== 'replace') {
+              return {
+                status: 'rejected',
+                error: {
+                  code: m.mode !== 'replace' ? 'hook-mode-blocked' : 'hook-name-unresolved',
+                  detail: `hooks.${name}: 'replace' mode only, targeting a same-node source/duplex provider name`,
+                },
+              }
+            }
+            const guard = hookWriteGuard(node as Node, name)
+            if (!guard.ok) {
+              if (guard.code === 'hook-name-unresolved') {
+                return {
+                  status: 'rejected',
+                  error: { code: 'hook-name-unresolved', detail: `no source/duplex anchor named "${name}" on ${(node as Node).id}` },
+                }
+              }
+              console.warn(`hook-seam-exempt at ${(node as Node).id}: "${name}" is a seam/def-shaped provider; hook write skipped (a hook write would tear down the seam)`)
+              continue
+            }
+            // HOOKS-ARRAY §9.4 item 2 (CONTRACT AMENDMENT C) — the KIND gate:
+            // a scalar `hooks.<name>` VALUE write targets the VALUE-provider
+            // surface only. A name DECLARED as a non-value kind
+            // (`'component'`/`'placement'` — the minting kinds) is
+            // rejected with `hook-kind-mismatch`: those hooks mint nodes;
+            // they never take a scalar hook write. Undeclared names and
+            // explicit `'value'` kinds keep the shipped state-slice
+            // behavior.
+            const kind = ((node as Node).base.hooksKind ?? {})[name]
+            if (kind !== undefined && kind !== 'value') {
+              return {
+                status: 'rejected',
+                error: { code: 'hook-kind-mismatch', detail: `hooks.${name}: declared kind "${kind}" mints nodes — scalar value writes are rejected` },
+              }
+            }
+          }
+        }
+        const nodeState = (node as Node).state
+        // AUTH-SEAM nested (2026-08-16) — the family-adopted def child
+        // instance (runtimeMinted, delivered component data) is mutable
+        // even in a prototype chain (a nested seam consumer's adopted def
+        // children sit under a token-terminated def-root, so their state is
+        // 'prototype'); the def DATA is the authored truth, the runtime
+        // instance is the delivered component. 'unplaced'/'destroyed'
+        // rejections stay untouched.
+        if (nodeState !== 'in-tree' && !(nodeState === 'prototype' && (node as Node).runtimeMinted)) {
+          return { status: 'no-usable-state', nodeState }
+        }
+        ;(node as Node).applySlice(mutation as never)
+        const dirtied = [node!.id]
+        // P3 §3.2 (E2E-3) — component-source change: the affected set is the
+        // per-name component Link's TARGET owners (the consumers that resolve
+        // the changed name), read off the Link registry
+        // (`link.anchorsOf('target')` → `anchor.owner`), never a family walk
+        // (spec §3.2: "resolved through the graph, never by enumerating
+        // states"). A node with no source/duplex anchors keeps the node-local
+        // set (E2E-2: one node compiles). Keep-first dedup: one consumer can
+        // target several names, and a node that consumes its own name is
+        // already dirty.
+        for (const a of (node as Node).anchors) {
+          if ((a.role !== 'source' && a.role !== 'duplex') || typeof a.target !== 'string') continue
+          for (const ta of a.link.anchorsOf('target')) {
+            const consumer = ta.owner
+            if (!consumer || consumer === node || dirtied.includes(consumer.id)) continue
+            dirtied.push(consumer.id)
+            this.markPass2(consumer.id)
+          }
+        }
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied })
+        this.markPass2(node!.id)
+        return { status: 'applied', journalId: entry!.id, dirtied }
+      }
+      if (op.kind === 'destroy') {
+        // explicit destroy: the node leaves the content source of truth too,
+        // so the sweep finalizes it (content otherwise persists when detached)
+        unregisterContentNode(node as Node)
+        const target = node as Node
+        if (target.runtimeMinted) {
+          // AUTH-SEAM (2026-08-15) — RUNTIME-MINTED retention destroy: a
+          // family-adopted def child (or a clone-instance) is marked
+          // destroyed WITHOUT dissolving its family edge — the walk keeps
+          // the slot (the legacy view's children[i] positions stay stable,
+          // the sibling's shared family link is never touched) while the
+          // compile drops the node (destroyed ⇒ no state ⇒ no render).
+          target.markDestroyed()
+        } else {
+          target.destroy()
+        }
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [node!.id] })
+        this.emitStructure('destroy', node!.id); this.markPass2(node!.id)
+        return { status: 'applied', journalId: entry!.id, dirtied: [node!.id] }
+      }
+      if (op.kind === 'placement-attach') {
+        // P3 §3.3/§9-Q2 — the dedicated placement-attach op (E2E-4): registers
+        // the node if new, mints its `content` anchor(s) per `names`
+        // (preference order) + the `container` anchor on the target container
+        // node (with the §1.3 veto), and marks pass-2 dirty ONLY the container
+        // node + the added node. `attach` stays family-only; the state-slice
+        // placement block stays hard-blocked (P4). The trigger identity
+        // (which placement link changed) rides the op payload; apply derives
+        // it when the payload omits it and passes it into the pass-2 dispatch
+        // (C-2/10.ac.2 #7) — the silent-abort carrier.
+        const container = (op as { container?: Node }).container
+        if (!container) return { status: 'rejected', error: { code: 'unknown-node' } }
+        const names = (op as { names?: string[] }).names ?? []
+        this.registerNode(node as Node)
+        const hub = (node as Node).hubFor ?? container.hubFor ?? this.hub
+        if (!hub) return { status: 'rejected', error: { code: 'link-config', detail: 'no link hub for placement-attach' } }
+        const res = placementAttach(node as Node, container, names, hub)
+        const trigger = (op as { trigger?: PlacementTrigger }).trigger
+          ?? derivePlacementTrigger(res.attachZone, res.containerAnchorMinted)
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [container.id, node!.id] })
+        this.emitStructure('placement-attach', node!.id)
+        this.markPass2(container.id, trigger)
+        this.markPass2(node!.id, trigger)
+        return { status: 'applied', journalId: entry!.id, dirtied: [container.id, node!.id] }
+      }
+      if (op.kind === 'attach') {
+        if (findCycle(node as Node, op.to as Node)) throw new CycleError((node as Node).id)
+        if ((node as Node).anchors.find(a => a.role === 'child')) {
+          throw new SingleParentError((node as Node).id)
+        }
+        const link = (op.to as Node).familyLinkFor()
+        const options: { priority?: number } = {}
+        const prio = (op as { priority?: number }).priority
+        if (prio !== undefined) options.priority = prio
+        ;(node as Node).addAnchor('child', node as Node, options, link)
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [node!.id] })
+        this.emitStructure('attach', node!.id); this.markPass2(node!.id)
+        return { status: 'applied', journalId: entry!.id, dirtied: [node!.id] }
+      }
+      if (op.kind === 'detach') {
+        // DEFECT #12 — the safe per-node detach (siblings keep their edges)
+        detachNodeSafe(node as Node)
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [node!.id] })
+        this.emitStructure('detach', node!.id); this.markPass2(node!.id)
+        return { status: 'applied', journalId: entry!.id, dirtied: [node!.id] }
+      }
+      if (op.kind === 'move') {
+        const toParent = (op.to as { parent: Node }).parent
+        if (findCycle(node as Node, toParent)) throw new CycleError((node as Node).id)
+        // DEFECT #12 — safe detach of the moved node; siblings untouched
+        detachNodeSafe(node as Node)
+        const link = toParent.familyLinkFor()
+        const options: { priority?: number } = {}
+        const prio = (op.to as { priority?: number }).priority
+        if (prio !== undefined) options.priority = prio
+        ;(node as Node).addAnchor('child', node as Node, options, link)
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [node!.id] })
+        this.emitStructure('move', node!.id); this.markPass2(node!.id)
+        return { status: 'applied', journalId: entry!.id, dirtied: [node!.id] }
+      }
+      if (op.kind === 'clone-instance') {
+        // source may arrive as `source` (wire contract) or `node` (internal)
+        const source = (op.source as Node | undefined) ?? node
+        if (!source) return { status: 'rejected', error: { code: 'unknown-node' } }
+        const copy = source.clone('actor')
+        this.registerNode(copy)
+        const slot = op.slot as Node | undefined
+        if (slot) {
+          // instantiation: the instance's parent is the slot — replace any
+          // inherited parent edge from the clone (single-parent respected)
+          const inherited = copy.childAnchor()
+          if (inherited) {
+            ;(inherited.link as unknown as Link).destroy()
+            const idx = copy.anchors.indexOf(inherited)
+            if (idx !== -1) copy.anchors.splice(idx, 1)
+          }
+          const options: { priority?: number } = {}
+          const prio = (op as { priority?: number }).priority
+          if (prio !== undefined) options.priority = prio
+          const link = slot.familyLinkFor()
+          copy.addAnchor('child', copy, options, link)
+        }
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: [copy.id] })
+        this.emitStructure('clone-instance', copy.id); this.markPass2(copy.id)
+        return { status: 'applied', journalId: entry!.id, dirtied: [copy.id] }
+      }
+      if (op.kind === 'layer-apply') {
+        // ORIGIN-OWNER (archive/reviews/2026-08-16/2026-08-16-legacy-handler-reuse-review §12.4) — the atomic
+        // mint-and-wire op: mints the NodeData set as family children of the
+        // target, registers the minted set, and applies the anchor layer.
+        // Idempotent (same layerId = no-op); the journal result persists the
+        // minted ids (A3 — replay resolves them to the existing nodes).
+        const target = op.target as Node | undefined
+        if (!target) return { status: 'rejected', error: { code: 'unknown-node' } }
+        const res = layerApply(op as never, { hub: target.hubFor ?? this.hub ?? null as never, nodes: this.nodes })
+        // supervisor visibility: every minted node is registered here so
+        // getNode/allNodes/pass-2 resolve it (the minted-set registry tracks
+        // ownership for teardown; the supervisor tracks the graph)
+        for (const id of res.minted) {
+          const n = resolveNodeRef(id)
+          if (n) this.registerNode(n)
+        }
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: res.doorways, minted: res.minted })
+        this.emitStructure('layer-apply', target.id)
+        this.markPass2(target.id)
+        for (const id of res.minted) this.markPass2(id)
+        return { status: 'applied', journalId: entry!.id, dirtied: res.doorways, minted: res.minted }
+      }
+      if (op.kind === 'rows-mint') {
+        // HOOKS-ARRAY (CONTRACT AMENDMENT C §9.2 pins 2/3/5) — the rows-mint
+        // op: mint per-row nodes from a prototype by name + register the
+        // minted set (the layer-apply visibility precedent), journal the
+        // batch, and run the MINT-SIDE consumer walk (each minted row's
+        // source anchors' links' target owners markPass2 — the cascade that
+        // the scalar E2E-3 host-scoped walk does not cover, §9.2 pin 7). The
+        // KIND GATE: a declared `hooksKind[hookName]` must admit the op's
+        // kind ('component' yields the component mint; 'placement' the
+        // placement mint) — a mismatch is rejected here (the write-surface
+        // gate, pin 2).
+        const target = op.target as Node | undefined
+        if (!target) return { status: 'rejected', error: { code: 'unknown-node' } }
+        const rowsOp = op as unknown as RowsMintOp
+        const declared = (target.base.hooksKind ?? {})[rowsOp.hookName]
+        if (declared !== undefined && declared !== rowsOp.mintKind) {
+          return { status: 'rejected', error: { code: 'hook-kind-mismatch', detail: `rows-mint ${rowsOp.hookName}: declared kind "${declared}" ≠ op kind "${rowsOp.mintKind}"` } }
+        }
+        if (declared === undefined && rowsOp.mintKind !== 'component') {
+          return { status: 'rejected', error: { code: 'hook-kind-mismatch', detail: `rows-mint ${rowsOp.hookName}: undeclared hook — only 'component' is implied; declare hooksKind` } }
+        }
+        const res = rowsMint(rowsOp as never, { hub: target.hubFor ?? this.hub ?? (null as never), nodes: this.nodes })
+        for (const id of res.minted) {
+          const n = resolveNodeRef(id)
+          if (n) this.registerNode(n)
+        }
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: res.doorways, minted: res.minted })
+        // MINT-SIDE consumer walk: consumers of any minted row's source/duplex
+        // field names are dirtied + pass-2'ed (the cascade the amendment pins)
+        const consumed = new Set<string>()
+        for (const id of res.minted) {
+          const n = resolveNodeRef(id)
+          if (!n) continue
+          for (const a of n.anchors) {
+            if ((a.role !== 'source' && a.role !== 'duplex') || typeof a.target !== 'string') continue
+            for (const ta of a.link.anchorsOf('target')) {
+              const consumer = ta.owner
+              if (!consumer || consumed.has(consumer.id)) continue
+              consumed.add(consumer.id)
+              this.markPass2(consumer.id)
+            }
+          }
+        }
+        this.emitStructure('rows-mint', target.id)
+        this.markPass2(target.id)
+        // NOTE: the minted rows are NOT independently pass-2'ed — their
+        // element states are produced by the ancestor/consumer compiles that
+        // include them in the focused slice. Marking each row dirty would
+        // recompile the CONSUMER from the row's NARROW slice (only that row +
+        // its walk path), overwriting the consumer's full multi-provider arm
+        // set with a single-provider result (the pin-6 fan-out must survive
+        // the flush). The consumers marked below compile last and win.
+        const dirtied = [...new Set([...res.doorways, ...consumed])]
+        return { status: 'applied', journalId: entry!.id, dirtied, minted: res.minted }
+      }
+      if (op.kind === 'rows-clear') {
+        // HOOKS-ARRAY (§9.4 item 6) — the PAYLOAD-CONTROLLED teardown: the
+        // `batches[hookName]` record is the single handle (delete it → the
+        // no-promotion rowsTeardown via the record's layerId). The minting
+        // apparatus is never addressed directly.
+        const target = op.target as Node | undefined
+        if (!target) return { status: 'rejected', error: { code: 'unknown-node' } }
+        const res = rowsClear(op as never, { hub: target.hubFor ?? this.hub ?? (null as never), nodes: this.nodes })
+        const entry = this.journalIfApplied(op, { status: 'applied', dirtied: res.doorways })
+        this.emitStructure('rows-clear', target.id)
+        this.markPass2(target.id)
+        return entry
+          ? { status: 'applied', journalId: entry.id, dirtied: res.doorways }
+          : { status: 'applied', dirtied: res.doorways }
+      }
+
+      return { status: 'no-usable-state', nodeState: (node as Node)?.state ?? 'unplaced' }
+    } catch (e: unknown) {
+      if (e instanceof CycleError) {
+        return { status: 'rejected', error: { code: 'cycle-detected' } }
+      }
+      if (e instanceof SingleParentError) {
+        return { status: 'rejected', error: { code: 'single-parent' } }
+      }
+      if (e instanceof Error && 'code' in e) {
+        const err = e as { code: string }
+        return { status: 'rejected', error: { code: err.code } }
+      }
+      throw e
+    }
+  }
+
+  replay(): void {
+    // Snapshot the stream: `apply` journals re-applied ops, so iterating the
+    // LIVE array would keep visiting the appended entries — an infinite
+    // journal-growth loop for any op that applies successfully on replay
+    // (e.g. the idempotent placement-attach). The replayed ops are the ORIGINAL
+    // entries only.
+    for (const entry of [...this.journal]) {
+      const op = { ...entry.op } as { kind: string; node?: Node; [key: string]: unknown }
+      if (op.node) {
+        op.node = this.nodes.get((op.node as Node).id) ?? op.node
+      }
+      try {
+        this.apply(op)
+      } catch {
+        // replay reproduces same rejections silently
+      }
+    }
+  }
+
+  undo(): void {
+    if (this.undoStack.length === 0) return
+    const entry = this.undoStack.pop()!
+    this.redoStack.push(entry)
+    const kind = entry.op.kind
+    const rawNode = entry.op.node ?? entry.op.target
+    const node = rawNode as Node
+    if (!node) return
+    const resolved = this.nodes.get(node.id) ?? node
+    if (kind === 'attach') {
+      // DEFECT #12 — attach-undo uses the safe per-node detach too
+      detachNodeSafe(resolved)
+    } else if (kind === 'destroy') {
+      // destroy is terminal; undo is a no-op for destroyed nodes
+    } else if (kind === 'rows-mint') {
+      // HOOKS-ARRAY (§9.4 item 6) — undo of a rows-mint is the PAYLOAD-
+      // CONTROLLED teardown: clear the batch record + rowsTeardown via the
+      // record's layerId (the record is the undo handle; the operation is
+      // redoable by re-applying the journaled mint op).
+      const hookName = (entry.op as { hookName?: string }).hookName
+      if (hookName !== undefined) {
+        const batches = (resolved as unknown as { batches?: Record<string, { layerId: string }> }).batches ?? {}
+        const record = batches[hookName]
+        if (record) {
+          delete batches[hookName]
+          resolved.rowsTeardown(record.layerId)
+          resolved.removeLayer(record.layerId)
+        }
+      }
+    }
+  }
+
+  redo(): void {
+    if (this.redoStack.length === 0) return
+    const entry = this.redoStack.pop()!
+    this.undoStack.push(entry)
+    const op = { ...entry.op } as { kind: string; node?: Node; [key: string]: unknown }
+    if (op.node) {
+      op.node = this.nodes.get((op.node as Node).id!) ?? op.node
+    }
+    try {
+      this.apply(op)
+    } catch {
+      // redo reproduces same behavior
+    }
+  }
+}

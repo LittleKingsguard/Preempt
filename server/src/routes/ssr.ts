@@ -7,9 +7,11 @@ import { pgTemplateSource } from "../sources/templateSource.js";
 import { pgSettingSource } from "../sources/settingsSource.js";
 import { pgUserSource } from "../sources/userSource.js";
 import { Setting } from "../models/settings.js";
-import { Supervisor } from "../../../src/core/Supervisor.js";
-import { Template } from "../../../src/core/Template.js";
-import type { ContentPayload } from "../../../src/types/NodeSchema.js";
+import { translateLegacy } from "../../../src/core/translate.js";
+import { Supervisor } from "../../../src/core/supervisor.js";
+import { SSRFragmentAdapter } from "../../../src/core/adapters.js";
+import { emitElements, applyOps } from "../../../src/core/render-helpers.js";
+import { diffMinimal } from "../../../src/core/render.js";
 import path from "path";
 import fs from "fs";
 import { authenticateToken } from "../middleware/auth.js";
@@ -23,7 +25,7 @@ const serverApi = {
   getContentCount: Content.getCount
 };
 
-async function renderAndSendHtml(res: any, contentData: any) {
+async function renderAndSendHtml(res: any, contentData: any, user?: any) {
   let distPath = path.join(process.cwd(), "../dist/index.html");
   if (!fs.existsSync(distPath)) {
     distPath = path.join(process.cwd(), "dist/index.html");
@@ -32,68 +34,70 @@ async function renderAndSendHtml(res: any, contentData: any) {
     }
   }
 
-  Supervisor.resetInstantiation();
-  let serverConfig = {
-    runInstantiation: false,
-    runAssembly: false,
-    runPreprocessing: false,
-    runValidation: false,
-    runRendering: false,
-    runPostprocessing: false,
-    runMonitoring: false
+  const userData = user ?? (contentData as any).userData ?? null;
+
+  // Build ContentPayload[] (D2/F5 — Providence is array-only)
+  const rawPayload = contentData.payload;
+  let contentNodes: any[] = [];
+  if (Array.isArray(rawPayload)) {
+    contentNodes = rawPayload;
+  } else if (rawPayload && typeof rawPayload === 'object' && Array.isArray(rawPayload.content)) {
+    contentNodes = rawPayload.content;
+  } else if (rawPayload) {
+    contentNodes = [rawPayload];
+  }
+
+  const contentPayloads = [{
+    content: contentNodes,
+    metadata: (contentData as any).metadata || rawPayload?.metadata || {},
+    userData,
+  }];
+
+  const envelope = {
+    template: contentData.template_payload,
+    content: contentPayloads,
+    userData,
   };
 
-  let dbConfig = await Setting.get(pgSettingSource, 'server_config');
-  if (dbConfig) {
-    if (typeof dbConfig === 'string') {
-      try { dbConfig = JSON.parse(dbConfig); } catch (e) { }
-    }
-    if (typeof dbConfig === 'object') {
-      serverConfig = { ...serverConfig, ...dbConfig };
-    }
-  }
-
+  // SSR via Providence engine
   let htmlOutput = "";
-  let payloadObj: ContentPayload = contentData.payload;
-  if (!payloadObj || !Array.isArray(payloadObj.content)) {
-    payloadObj = {
-      content: Array.isArray(contentData.payload) ? contentData.payload : (contentData.payload ? [contentData.payload] : []),
-      metadata: (contentData as any).metadata || contentData.payload?.metadata,
-      userData: (contentData as any).userData || contentData.payload?.userData,
-      component: contentData.payload?.component
-    };
-  }
+  try {
+    const translated = translateLegacy(envelope);
+    const hub = (translated.root as any).hubFor;
+    const supervisor = new Supervisor(hub ? { hub } : {});
+    (supervisor as any).userData = userData;
 
-  if (serverConfig.runInstantiation) {
-    const rawTemplate = contentData.template_payload;
-    const templateData = (rawTemplate && typeof rawTemplate === 'object' && 'root' in rawTemplate)
-      ? rawTemplate
-      : { root: rawTemplate };
-    const template = new Template(templateData);
-    htmlOutput = (await Supervisor.process(serverConfig, template, payloadObj, serverApi)) as string || "";
+    for (const n of translated.nodes) supervisor.registerNode(n);
+    for (const n of supervisor.allNodes()) {
+      if (!n.destroyed) n.compilePath();
+    }
+    supervisor.runPhase('after-compile');
+
+    const actionable: any[] = [];
+    for (const n of supervisor.allNodes()) {
+      if (!n.destroyed && n.state === 'in-tree') {
+        actionable.push(...n.compilePath().actionable);
+      }
+    }
+
+    const nodeMap = new Map(supervisor.allNodes().map((n) => [n.id, n]));
+    const els = emitElements(actionable, nodeMap);
+
+    const adapter = new SSRFragmentAdapter();
+    applyOps(adapter, diffMinimal(new Map(), els));
+    htmlOutput = adapter.serialize();
+  } catch (ssrErr) {
+    logger.error({ ssrErr }, "Providence SSR render failed — serving shell only");
   }
 
   let html = fs.readFileSync(distPath, "utf-8");
 
-  const clientConfig = {
-    runInstantiation: true,
-    runAssembly: !serverConfig.runAssembly,
-    runPreprocessing: !serverConfig.runPreprocessing,
-    runValidation: !serverConfig.runValidation,
-    runRendering: true, // Required for hydration
-    runPostprocessing: !serverConfig.runPostprocessing,
-    runMonitoring: true
-  };
-
-  const payloadScript = `<script id="preempt-initial-data" type="application/json">${JSON.stringify({
-    template: contentData.template_payload,
-    content: payloadObj,
-    clientConfig: clientConfig
-  })}</script>`;
+  // Embed Providence envelope into #preempt-initial-data for client hydration
+  const payloadScript = `<script id="preempt-initial-data" type="application/json">${JSON.stringify(envelope)}</script>`;
 
   const headersInject = ((contentData as any).headers || "") + "\n" + payloadScript;
   html = html.replace("<!-- HEADERS_INJECT -->", headersInject);
-  if (serverConfig.runInstantiation && htmlOutput) {
+  if (htmlOutput) {
     html = html.replace('<div id="app"></div>', `<div id="app">${htmlOutput}</div>`);
   }
 
@@ -128,7 +132,7 @@ async function renderContent(contentId: number, editorMode: string | null, req: 
       contentData.payload.userData = req.user;
     }
 
-    await renderAndSendHtml(res, contentData);
+    await renderAndSendHtml(res, contentData, req.user);
   } catch (err) {
     logger.error({ err }, "An error occurred");
     res.status(500).send("Internal server error");
@@ -244,7 +248,7 @@ router.get("/user/:username", authenticateToken, async (req, res) => {
       (contentData as any).userData = user;
     }
 
-    await renderAndSendHtml(res, contentData);
+    await renderAndSendHtml(res, contentData, (req as any).user);
   } catch (err: any) {
     logger.error({ err }, "An error occurred generating user profile");
     res.status(500).send("Internal Server Error");

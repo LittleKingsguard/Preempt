@@ -42,3 +42,8 @@ Because templates are stored as JSON in the database, modifying a template requi
 ### Structural vs. Content Edits
 - **Structural edits**: Changing layouts, adding permanent sidebars, or modifying the base layout grid should be done by updating the Template payload.
 - **Content edits**: Data unique to a single page (like the text of a blog post) should not be baked into the template. Instead, they should be stored in the `Content` payload and dynamically injected into the template using **Placements**.
+
+### Placed Content in Templates: `template.children` vs. `template.root.children`
+- **Supported Pattern**: Unattached placement packets defined at the template level (such as `adminDashboardLink`, `editContentLink`, `createArticleLink` targeting `adminLinks`/`contributorLinks`) must be placed in the top-level `template.children` array. The engine attaches them to the `contentNodes` token so they route exclusively through their resolved `targetPlacement` drop-zone.
+- **Anti-Pattern: Placement Packets in `template.root.children`**: Never place nodes with `targetPlacement` directly inside `template.root.children`. Placing them in `root.children` gives them a family edge to the root node, causing the engine to find two paths to root (the direct family path and the placement path), resulting in duplicated rendering.
+

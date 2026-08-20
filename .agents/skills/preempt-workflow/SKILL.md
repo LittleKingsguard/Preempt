@@ -53,6 +53,8 @@ The Supervisor orchestrates a worker pipeline:
   - **Anti-Pattern 1**: Components defining `targetPlacement` to place themselves *out* of the component hierarchy, or host nodes invoking `type` components while having children with placements of either type.
   - **Anti-Pattern 2**: Defining duplicate target components on a single node (multiple bindings with identical `target` paths), which causes key collision in `node.targetComponents`, logging runtime errors and overwriting prior target bindings.
   - **Anti-Pattern 3**: Passing an array payload (`NodeData[]`) to a `target: "type"` component binding (requires a single prototype `NodeData` object).
+  - **Anti-Pattern 4: Placement Packets Inside `template.root.children`**: Authoring nodes with `targetPlacement` inside `template.root.children` establishes a family edge to the root element alongside their placement edge, producing duplicate elements (`root/node-X` and `root/.../placementName/.../node-X`). Template placement packets must be authored in top-level `template.children`.
+  - **Anti-Pattern 5: Omitting Def-Root CSS on SED-1 Shell Collapse**: When a host node consumes a component via `target: "type"` (SED-1 collapse), the host node must copy the def-root's CSS (`classes`, `cssDef`) onto its layer stack so that runtime hierarchy traversals and queries (e.g. `container.findNode({ classes: ['...'] })`) find the component wrapper.
 - **Phase Locking Strategy**: Locking for both `ComponentRoutingWorker` (Phase 2) and `ComponentAssemblyWorker` (Phase 3) is deferred until `SlotAssemblyWorker` (Phase 4) locks. This allows slot assembly to inject content nodes with source components that chain backward to routing without triggering lock violations.
 
 ### Adding New Workers Without Breaking Changes
